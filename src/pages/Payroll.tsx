@@ -39,13 +39,15 @@ const Payroll = () => {
           <CardTitle>Payroll List</CardTitle>
         </CardHeader>
         <CardContent>
-          <SearchFilter
-            searchValue={searchValue}
-            onSearchChange={setSearchValue}
-            statusFilter={statusFilter}
-            onStatusFilterChange={setStatusFilter}
-            placeholder="Search by employee or period..."
-          />
+          <div className="mb-6">
+            <SearchFilter
+              searchValue={searchValue}
+              onSearchChange={setSearchValue}
+              statusFilter={statusFilter}
+              onStatusFilterChange={setStatusFilter}
+              placeholder="Search by employee or period..."
+            />
+          </div>
 
           <div className="rounded-md border">
             <Table>
