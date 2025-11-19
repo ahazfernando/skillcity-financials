@@ -40,6 +40,7 @@ export interface Employee {
   salary: number;
   startDate: string;
   status: "active" | "inactive";
+  invoiceCollectionFrequency?: "Monthly" | "Fortnightly" | "Weekly";
 }
 
 export interface Site {
@@ -51,6 +52,12 @@ export interface Site {
   contactPhone: string;
   contractValue: number;
   status: "active" | "inactive";
+  workingDays?: string[]; // Array of days: ["Monday", "Tuesday", etc.]
+  invoicingWorkingHours?: number; // Hours per day for invoicing
+  hourlyRate?: number;
+  dayRate?: number;
+  invoicingFrequency?: "Monthly" | "Fortnightly" | "Weekly";
+  specialNote?: string;
 }
 
 export interface WorkSchedule {

@@ -21,7 +21,11 @@ cd finflow-central-44
 # Step 3: Install dependencies
 npm install
 
-# Step 4: Start the development server
+# Step 4: Set up Firebase
+# Create a .env.local file in the root directory with your Firebase configuration
+# See FIREBASE_SETUP.md for detailed instructions
+
+# Step 5: Start the development server
 npm run dev
 ```
 
@@ -45,6 +49,7 @@ This project is built with:
 - **Tailwind CSS** - Utility-first CSS framework
 - **TanStack Query** - Data fetching and state management
 - **Recharts** - Chart library
+- **Firebase** - Backend services (Firestore & Storage)
 
 ## Project Structure
 
