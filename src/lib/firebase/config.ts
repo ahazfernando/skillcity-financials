@@ -57,4 +57,3 @@ export const storage: FirebaseStorage = getStorage(app);
 export const auth: Auth = getAuth(app);
 
 export default app;
-

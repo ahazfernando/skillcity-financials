@@ -71,6 +71,21 @@ export interface WorkSchedule {
   notes?: string;
 }
 
+export interface WorkHours {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  siteId: string;
+  siteName: string;
+  date: string; // ISO date string (YYYY-MM-DD)
+  startTime: string; // Time string (HH:MM format)
+  endTime: string; // Time string (HH:MM format)
+  hoursWorked: number; // Calculated hours
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface Reminder {
   id: string;
   type: "invoice" | "payroll" | "payment";

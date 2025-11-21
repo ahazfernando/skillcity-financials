@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Building2, Loader2, Trash2 } from "lucide-react";
+import { Search, Building2, Loader2, Trash2, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/select";
 import { Site } from "@/types/financial";
 import { getAllSites, addSite, updateSite, deleteSite } from "@/lib/firebase/sites";
+import { getEmployeesBySite } from "@/lib/firebase/workHours";
 import { toast } from "sonner";
 
 const Sites = () => {
@@ -49,6 +50,10 @@ const Sites = () => {
   const [editingSiteId, setEditingSiteId] = useState<string | null>(null);
   const [deletingSiteId, setDeletingSiteId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isEmployeesDialogOpen, setIsEmployeesDialogOpen] = useState(false);
+  const [siteEmployees, setSiteEmployees] = useState<{ employeeId: string; employeeName: string; lastWorkDate: string }[]>([]);
+  const [selectedSiteForEmployees, setSelectedSiteForEmployees] = useState<Site | null>(null);
+  const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     address: "",
@@ -136,6 +141,21 @@ const Sites = () => {
   const handleDeleteSite = (site: Site) => {
     setDeletingSiteId(site.id);
     setIsDeleteDialogOpen(true);
+  };
+
+  const handleViewEmployees = async (site: Site) => {
+    try {
+      setIsLoadingEmployees(true);
+      setSelectedSiteForEmployees(site);
+      const employees = await getEmployeesBySite(site.id);
+      setSiteEmployees(employees);
+      setIsEmployeesDialogOpen(true);
+    } catch (error) {
+      console.error("Error loading employees:", error);
+      toast.error("Failed to load employees for this site.");
+    } finally {
+      setIsLoadingEmployees(false);
+    }
   };
 
   const handleSaveSite = async () => {
@@ -340,6 +360,15 @@ const Sites = () => {
                           <Badge className={site.status === "active" ? "bg-success" : "bg-muted"}>
                             {site.status}
                           </Badge>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleViewEmployees(site)}
+                            className="h-8 w-8 p-0"
+                            title="View employees"
+                          >
+                            <Users className="h-4 w-4" />
+                          </Button>
                           <Button
                             variant="ghost"
                             size="sm"
@@ -830,6 +859,57 @@ const Sites = () => {
               </div>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Employees Dialog */}
+      <Dialog open={isEmployeesDialogOpen} onOpenChange={setIsEmployeesDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Employees at {selectedSiteForEmployees?.name}</DialogTitle>
+            <DialogDescription>
+              Employees who have worked at this site
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            {isLoadingEmployees ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <span>Loading employees...</span>
+              </div>
+            ) : siteEmployees.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Users className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                <p>No employees have worked at this site yet.</p>
+              </div>
+            ) : (
+              <div className="rounded-md border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Employee Name</TableHead>
+                      <TableHead>Last Work Date</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {siteEmployees.map((emp) => (
+                      <TableRow key={emp.employeeId}>
+                        <TableCell className="font-medium">{emp.employeeName}</TableCell>
+                        <TableCell>
+                          {new Date(emp.lastWorkDate).toLocaleDateString()}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEmployeesDialogOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

@@ -422,8 +422,7 @@ const Employees = () => {
               </TableBody>
             </Table>
           </div>
-
-          {/* Pagination */}
+ 
           {filteredEmployees.length > 0 && totalPages > 1 && (
             <div className="mt-4">
               <Pagination>
