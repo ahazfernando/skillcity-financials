@@ -159,22 +159,17 @@ const Sites = () => {
   };
 
   const handleSaveSite = async () => {
-    if (!formData.name || !formData.clientName || !formData.address) {
-      toast.error("Please fill in all required fields (Site Name, Client, Address)");
-      return;
-    }
-
     try {
       setIsSaving(true);
 
       if (editingSiteId) {
-        // Update existing site
+        // Update existing site - allow partial updates
         await updateSite(editingSiteId, {
-          name: formData.name,
-          address: formData.address,
-          clientName: formData.clientName,
-          contactPerson: formData.contactPerson,
-          contactPhone: formData.contactPhone,
+          name: formData.name || "",
+          address: formData.address || "",
+          clientName: formData.clientName || "",
+          contactPerson: formData.contactPerson || undefined,
+          contactPhone: formData.contactPhone || undefined,
           contractValue: parseFloat(formData.contractValue) || 0,
           status: formData.status,
           workingDays: formData.workingDays,
@@ -192,13 +187,13 @@ const Sites = () => {
         toast.success("Site updated successfully!");
         setIsEditDialogOpen(false);
       } else {
-        // Add new site
+        // Add new site - allow partial fill
         const newSite: Omit<Site, "id"> = {
-          name: formData.name,
-          address: formData.address,
-          clientName: formData.clientName,
-          contactPerson: formData.contactPerson,
-          contactPhone: formData.contactPhone,
+          name: formData.name || "",
+          address: formData.address || "",
+          clientName: formData.clientName || "",
+          contactPerson: formData.contactPerson || undefined,
+          contactPhone: formData.contactPhone || undefined,
           contractValue: parseFloat(formData.contractValue) || 0,
           status: formData.status,
           workingDays: formData.workingDays,
@@ -254,9 +249,7 @@ const Sites = () => {
   };
 
   const filteredSites = sites.filter(site => {
-    return site.name.toLowerCase().includes(searchValue.toLowerCase()) ||
-      site.clientName.toLowerCase().includes(searchValue.toLowerCase()) ||
-      site.address.toLowerCase().includes(searchValue.toLowerCase());
+    return site.name.toLowerCase().includes(searchValue.toLowerCase());
   });
 
   return (
@@ -280,7 +273,7 @@ const Sites = () => {
           <div className="relative mb-6">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search by site name, client, or address..."
+              placeholder="Search by site name..."
               value={searchValue}
               onChange={(e) => setSearchValue(e.target.value)}
               className="pl-9"
@@ -292,21 +285,18 @@ const Sites = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Site Name</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Address</TableHead>
                   <TableHead>Working Days</TableHead>
                   <TableHead>Invoicing Hours</TableHead>
                   <TableHead>Hourly Rate</TableHead>
                   <TableHead>Day Rate</TableHead>
                   <TableHead>Frequency</TableHead>
-                  <TableHead>Contract Value</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8">
+                    <TableCell colSpan={7} className="text-center py-8">
                       <div className="flex items-center justify-center gap-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         <span>Loading sites...</span>
@@ -315,7 +305,7 @@ const Sites = () => {
                   </TableRow>
                 ) : filteredSites.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                       No sites found
                     </TableCell>
                   </TableRow>
@@ -327,8 +317,6 @@ const Sites = () => {
                       onClick={() => handleEditSite(site)}
                     >
                       <TableCell className="font-medium">{site.name}</TableCell>
-                      <TableCell>{site.clientName}</TableCell>
-                      <TableCell>{site.address}</TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {site.workingDays && site.workingDays.length > 0 ? (
@@ -354,7 +342,6 @@ const Sites = () => {
                       <TableCell>
                         {site.invoicingFrequency || "-"}
                       </TableCell>
-                      <TableCell className="font-semibold">${site.contractValue.toLocaleString()}</TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-2">
                           <Badge className={site.status === "active" ? "bg-success" : "bg-muted"}>
@@ -425,13 +412,13 @@ const Sites = () => {
                 <DialogHeader>
                   <DialogTitle>Add Site</DialogTitle>
                   <DialogDescription>
-                    Fill in the site details. All fields matching the table columns are available.
+                    Fill in the site details. All fields are optional and can be filled partially.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Site Name *</Label>
+                <Label htmlFor="name">Site Name</Label>
                 <Input
                   id="name"
                   value={formData.name}
@@ -440,7 +427,7 @@ const Sites = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="clientName">Client *</Label>
+                <Label htmlFor="clientName">Client</Label>
                 <Input
                   id="clientName"
                   value={formData.clientName}
@@ -451,7 +438,7 @@ const Sites = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="address">Address *</Label>
+              <Label htmlFor="address">Address</Label>
               <Input
                 id="address"
                 value={formData.address}
@@ -662,13 +649,13 @@ const Sites = () => {
                 <DialogHeader>
                   <DialogTitle>Edit Site</DialogTitle>
                   <DialogDescription>
-                    Update the site details. All fields matching the table columns are available.
+                    Update the site details. All fields are optional and can be filled partially.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="edit-name">Site Name *</Label>
+                <Label htmlFor="edit-name">Site Name</Label>
                 <Input
                   id="edit-name"
                   value={formData.name}
@@ -677,7 +664,7 @@ const Sites = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-clientName">Client *</Label>
+                <Label htmlFor="edit-clientName">Client</Label>
                 <Input
                   id="edit-clientName"
                   value={formData.clientName}
@@ -688,7 +675,7 @@ const Sites = () => {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="edit-address">Address *</Label>
+              <Label htmlFor="edit-address">Address</Label>
               <Input
                 id="edit-address"
                 value={formData.address}

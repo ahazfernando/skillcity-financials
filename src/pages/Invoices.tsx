@@ -64,10 +64,10 @@ const Invoices = () => {
     setFormData((prev) => {
       const updated = { ...prev, [field]: value };
       
-      // Auto-calculate GST (15% of amount) and Total if amount changes
+      // Auto-calculate GST (10% of amount) and Total if amount changes
       if (field === "amount" && value) {
         const amount = parseFloat(value) || 0;
-        const gst = amount * 0.15;
+        const gst = amount * 0.10;
         const total = amount + gst;
         updated.gst = gst.toFixed(2);
         updated.totalAmount = total.toFixed(2);
@@ -268,10 +268,6 @@ const Invoices = () => {
     setIsAddDialogOpen(true);
   };
 
-  const handleCreateInvoice = () => {
-    // This could generate a PDF, export invoice, or perform other actions
-    alert("Create Invoice functionality - This could generate PDF, export, or perform other invoice creation actions");
-  };
 
   const filteredInvoices = invoices.filter(invoice => {
     const matchesSearch = invoice.invoiceNumber.toLowerCase().includes(searchValue.toLowerCase()) ||
@@ -310,10 +306,6 @@ const Invoices = () => {
           <p className="text-muted-foreground">Manage client invoices and payments</p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={handleCreateInvoice}>
-            <FileText className="mr-2 h-4 w-4" />
-            Create Invoice
-          </Button>
           <Button onClick={handleAddInvoice}>
             <Plus className="mr-2 h-4 w-4" />
             Add Invoice

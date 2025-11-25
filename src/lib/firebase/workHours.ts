@@ -71,9 +71,19 @@ export const calculateHoursWorked = (startTime: string, endTime: string): number
 export const getAllWorkHours = async (): Promise<WorkHours[]> => {
   try {
     const workHoursRef = collection(db, WORK_HOURS_COLLECTION);
-    const q = query(workHoursRef, orderBy("date", "desc"), orderBy("createdAt", "desc"));
+    const q = query(workHoursRef, orderBy("date", "desc"));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(docToWorkHours);
+    const workHours = querySnapshot.docs.map(docToWorkHours);
+    
+    // Sort by date descending, then by createdAt descending for ties
+    return workHours.sort((a, b) => {
+      if (a.date !== b.date) {
+        return b.date.localeCompare(a.date);
+      }
+      const aCreated = a.createdAt || "";
+      const bCreated = b.createdAt || "";
+      return bCreated.localeCompare(aCreated);
+    });
   } catch (error) {
     console.error("Error fetching work hours:", error);
     throw error;

@@ -96,3 +96,45 @@ export interface Reminder {
   status: "pending" | "completed";
   relatedId: string;
 }
+
+export interface Client {
+  id: string;
+  name: string;
+  companyName?: string;
+  email: string;
+  phone: string;
+  address?: string;
+  contactPerson?: string;
+  status: "active" | "inactive";
+  notes?: string;
+}
+
+export interface EmployeePayRate {
+  id: string;
+  siteId: string;
+  siteName: string;
+  employeeId: string;
+  employeeName: string;
+  hourlyRate: number;
+  travelAllowance?: number; // Optional travel allowance
+  notes?: string; // For additional notes like "+ 10$ Travel Allowance"
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SiteEmployeeAllocation {
+  id: string;
+  siteId: string;
+  siteName: string;
+  employeeId: string;
+  employeeName: string;
+  employeeNumber: number; // 1, 2, 3, etc.
+  actualWorkingTime: string; // e.g., "3 Hours", "3.5 Hours"
+  hasExtraTime: boolean; // Whether employee works extra time
+  extraTime?: string; // e.g., "30 minutes", "1 hour"
+  extraTimeDay?: string; // Day of week: "Monday", "Tuesday", etc.
+  notes?: string; // Additional notes or conditions
+  allocatedHours?: string; // Legacy field for backward compatibility
+  createdAt?: string;
+  updatedAt?: string;
+}

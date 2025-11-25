@@ -234,8 +234,7 @@ const Employees = () => {
 
   const filteredEmployees = employees.filter(employee => {
     return employee.name.toLowerCase().includes(searchValue.toLowerCase()) ||
-      employee.role.toLowerCase().includes(searchValue.toLowerCase()) ||
-      employee.email.toLowerCase().includes(searchValue.toLowerCase());
+      employee.role.toLowerCase().includes(searchValue.toLowerCase());
   });
 
   // Pagination logic
@@ -350,7 +349,7 @@ const Employees = () => {
           <div className="relative mb-6">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search by name, role, or email..."
+              placeholder="Search by name or role..."
               value={searchValue}
               onChange={(e) => setSearchValue(e.target.value)}
               className="pl-9"
@@ -363,9 +362,6 @@ const Employees = () => {
                 <TableRow>
                   <TableHead>Name</TableHead>
                   <TableHead>Role</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>Salary</TableHead>
                   <TableHead>Invoice Collection Frequency</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
@@ -373,7 +369,7 @@ const Employees = () => {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
+                    <TableCell colSpan={4} className="text-center py-8">
                       <div className="flex items-center justify-center gap-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         <span>Loading employees...</span>
@@ -382,7 +378,7 @@ const Employees = () => {
                   </TableRow>
                 ) : filteredEmployees.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
                       No employees found
                     </TableCell>
                   </TableRow>
@@ -395,9 +391,6 @@ const Employees = () => {
                     >
                       <TableCell className="font-medium">{employee.name}</TableCell>
                       <TableCell>{employee.role}</TableCell>
-                      <TableCell>{employee.email}</TableCell>
-                      <TableCell>{employee.phone}</TableCell>
-                      <TableCell>${employee.salary.toLocaleString()}</TableCell>
                       <TableCell>
                         {employee.invoiceCollectionFrequency || "-"}
                       </TableCell>

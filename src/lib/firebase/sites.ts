@@ -44,8 +44,8 @@ const siteToDoc = (site: Omit<Site, "id">): any => {
     name: site.name,
     address: site.address,
     clientName: site.clientName,
-    contactPerson: site.contactPerson,
-    contactPhone: site.contactPhone,
+    contactPerson: site.contactPerson || null,
+    contactPhone: site.contactPhone || null,
     contractValue: site.contractValue,
     status: site.status,
     workingDays: site.workingDays || [],
@@ -109,9 +109,16 @@ export const updateSite = async (
   try {
     const siteRef = doc(db, SITES_COLLECTION, id);
     const updateData: any = {
-      ...updates,
       updatedAt: Timestamp.now(),
     };
+
+    // Convert undefined values to null for Firestore compatibility
+    Object.keys(updates).forEach((key) => {
+      const value = updates[key as keyof typeof updates];
+      if (value !== undefined) {
+        updateData[key] = value || null;
+      }
+    });
 
     await updateDoc(siteRef, updateData);
   } catch (error) {
