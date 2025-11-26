@@ -61,7 +61,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import { PaymentStatus, Employee, Payroll, CashFlowMode, CashFlowType, PaymentMethod } from "@/types/financial";
+import { PaymentStatus, Employee, CashFlowMode, CashFlowType, PaymentMethod, type Payroll } from "@/types/financial";
 import { getAllEmployees, addEmployee } from "@/lib/firebase/employees";
 import { getAllPayrolls, addPayroll, updatePayroll, deletePayroll } from "@/lib/firebase/payroll";
 import { getAllSites } from "@/lib/firebase/sites";
@@ -111,6 +111,7 @@ const Payroll = () => {
     paymentReceiptNumber: "",
     status: "pending" as PaymentStatus,
     notes: "",
+    receiptUrl: "",
   });
 
   // Load data from Firebase
@@ -374,6 +375,7 @@ const Payroll = () => {
       paymentReceiptNumber: "",
       status: "pending",
       notes: "",
+      receiptUrl: "",
     });
     setEditingPayrollId(null);
   };
@@ -399,6 +401,7 @@ const Payroll = () => {
       paymentReceiptNumber: payroll.paymentReceiptNumber || "",
       status: payroll.status,
       notes: payroll.notes || "",
+      receiptUrl: payroll.receiptUrl || "",
     });
     setIsAddDialogOpen(true);
   };

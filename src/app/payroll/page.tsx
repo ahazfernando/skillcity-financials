@@ -1,11 +1,5 @@
-"use client";
-
 import { Layout } from "@/components/Layout";
-import dynamic from "next/dynamic";
-
-const Payroll = dynamic(() => import("@/pages/Payroll"), {
-  ssr: false,
-});
+import Payroll from "@/pages/Payroll";
 
 export default function PayrollPage() {
   return (

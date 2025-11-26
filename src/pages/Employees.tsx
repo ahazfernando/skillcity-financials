@@ -304,7 +304,7 @@ const Employees = () => {
     if (frequencyFilter !== "all") {
       // For now, show all invoices - in production, you'd match invoices to employees
       // based on work schedules or other relationships
-      filtered = filtered;
+      // TODO: Implement frequency-based filtering
     }
 
     // Filter by month range
