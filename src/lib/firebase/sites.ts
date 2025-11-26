@@ -35,6 +35,8 @@ const docToSite = (doc: any): Site => {
     dayRate: data.dayRate || undefined,
     invoicingFrequency: data.invoicingFrequency || undefined,
     specialNote: data.specialNote || undefined,
+    latitude: data.latitude || undefined,
+    longitude: data.longitude || undefined,
   };
 };
 
@@ -54,6 +56,8 @@ const siteToDoc = (site: Omit<Site, "id">): any => {
     dayRate: site.dayRate || null,
     invoicingFrequency: site.invoicingFrequency || null,
     specialNote: site.specialNote || null,
+    latitude: site.latitude || null,
+    longitude: site.longitude || null,
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
   };

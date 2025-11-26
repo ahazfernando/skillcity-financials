@@ -1,13 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { SearchFilter } from "@/components/SearchFilter";
 import { StatusBadge } from "@/components/StatusBadge";
-import { mockPayrolls, mockEmployees } from "@/data/mockData";
-import { Download, Upload, Plus, FileText, X, Loader2 } from "lucide-react";
+import { Download, Upload, Plus, FileText, X, Loader2, Check, ChevronsUpDown, Search, Edit2, LayoutGrid, Table as TableIcon, CalendarIcon, TrendingUp, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -17,9 +16,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -27,40 +37,119 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { PaymentStatus } from "@/types/financial";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { cn } from "@/lib/utils";
+import { Calendar } from "@/components/ui/calendar";
+import { DateRange } from "react-day-picker";
+import { format } from "date-fns";
+import { Area, AreaChart, Bar, BarChart, CartesianGrid, XAxis, Pie, PieChart, LabelList } from "recharts";
+import {
+  ChartConfig,
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "@/components/ui/chart";
+import { PaymentStatus, Employee, Payroll, CashFlowMode, CashFlowType, PaymentMethod } from "@/types/financial";
+import { getAllEmployees, addEmployee } from "@/lib/firebase/employees";
+import { getAllPayrolls, addPayroll, updatePayroll, deletePayroll } from "@/lib/firebase/payroll";
+import { getAllSites } from "@/lib/firebase/sites";
 import { toast } from "sonner";
 
 const Payroll = () => {
   const [searchValue, setSearchValue] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [modeFilter, setModeFilter] = useState<"all" | "inflow" | "outflow">("all");
+  const [monthFilter, setMonthFilter] = useState("all");
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [editingPayrollId, setEditingPayrollId] = useState<string | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [payrolls, setPayrolls] = useState<Payroll[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [sites, setSites] = useState<any[]>([]);
+  const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
+  const [employeePopoverOpen, setEmployeePopoverOpen] = useState(false);
+  const [employeeSearchValue, setEmployeeSearchValue] = useState("");
+  const [isAddingEmployee, setIsAddingEmployee] = useState(false);
+  const [monthPopoverOpen, setMonthPopoverOpen] = useState(false);
+  const [formMonthPopoverOpen, setFormMonthPopoverOpen] = useState(false);
+  const [isSeeding, setIsSeeding] = useState(false);
+  const [viewMode, setViewMode] = useState<"card" | "table">("table");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [payrollToDelete, setPayrollToDelete] = useState<Payroll | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [formData, setFormData] = useState({
-    employeeId: "",
-    employeeName: "",
-    period: "",
-    basicSalary: "",
-    allowances: "",
-    deductions: "",
+    month: new Date().toLocaleString('default', { month: 'long' }),
+    date: new Date().toISOString().split('T')[0],
+    modeOfCashFlow: "outflow" as CashFlowMode,
+    typeOfCashFlow: "cleaner_payroll" as CashFlowType,
+    name: "",
+    siteOfWork: "",
+    abnRegistered: false,
+    gstRegistered: false,
+    invoiceNumber: "",
+    amountExclGst: "",
+    gstAmount: "",
     totalAmount: "",
-    status: "pending" as PaymentStatus,
+    currency: "AUD",
+    paymentMethod: "bank_transfer" as PaymentMethod,
     paymentDate: "",
+    paymentReceiptNumber: "",
+    status: "pending" as PaymentStatus,
     notes: "",
-    receiptUrl: "",
   });
 
-  const handleInputChange = (field: string, value: string) => {
+  // Load data from Firebase
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setIsLoading(true);
+        setIsLoadingEmployees(true);
+        const [fetchedPayrolls, fetchedEmployees, fetchedSites] = await Promise.all([
+          getAllPayrolls(),
+          getAllEmployees(),
+          getAllSites(),
+        ]);
+        setPayrolls(fetchedPayrolls);
+        setEmployees(fetchedEmployees.filter(emp => emp.status === "active"));
+        setSites(fetchedSites.filter(s => s.status === "active"));
+      } catch (error) {
+        console.error("Error loading data:", error);
+        toast.error("Failed to load data. Please try again.");
+      } finally {
+        setIsLoading(false);
+        setIsLoadingEmployees(false);
+      }
+    };
+
+    loadData();
+  }, []);
+
+  const handleInputChange = (field: string, value: string | boolean) => {
     setFormData((prev) => {
       const updated = { ...prev, [field]: value };
       
-      // Auto-calculate Total = Basic Salary + Allowances - Deductions
-      if (field === "basicSalary" || field === "allowances" || field === "deductions") {
-        const basicSalary = parseFloat(updated.basicSalary) || 0;
-        const allowances = parseFloat(updated.allowances) || 0;
-        const deductions = parseFloat(updated.deductions) || 0;
-        const total = basicSalary + allowances - deductions;
+      // Auto-calculate GST (10%) and Total = Amount (Excl. GST) + GST
+      if (field === "amountExclGst") {
+        const amountExclGst = parseFloat(value as string) || 0;
+        const gst = amountExclGst * 0.10; // 10% GST
+        const total = amountExclGst + gst;
+        updated.gstAmount = gst.toFixed(2);
         updated.totalAmount = total.toFixed(2);
       }
       
@@ -69,13 +158,61 @@ const Payroll = () => {
   };
 
   const handleEmployeeSelect = (employeeId: string) => {
-    const employee = mockEmployees.find(emp => emp.id === employeeId);
+    const employee = employees.find(emp => emp.id === employeeId);
     if (employee) {
       setFormData((prev) => ({
         ...prev,
-        employeeId: employee.id,
-        employeeName: employee.name,
+        name: employee.name,
       }));
+      setEmployeePopoverOpen(false);
+      setEmployeeSearchValue("");
+    }
+  };
+
+  const handleAddNewEmployee = async (name: string) => {
+    if (!name.trim()) {
+      toast.error("Please enter a name");
+      return;
+    }
+
+    // Check if employee already exists
+    const existingEmployee = employees.find(
+      emp => emp.name.toLowerCase() === name.trim().toLowerCase()
+    );
+    if (existingEmployee) {
+      handleEmployeeSelect(existingEmployee.id);
+      return;
+    }
+
+    try {
+      setIsAddingEmployee(true);
+      const newEmployeeId = await addEmployee({
+        name: name.trim(),
+        role: "",
+        email: "",
+        phone: "",
+        salary: 0,
+        startDate: new Date().toISOString().split('T')[0],
+        status: "active",
+      });
+
+      // Reload employees list
+      const updatedEmployees = await getAllEmployees();
+      setEmployees(updatedEmployees.filter(emp => emp.status === "active"));
+
+      // Select the newly added employee
+      setFormData((prev) => ({
+        ...prev,
+        name: name.trim(),
+      }));
+      setEmployeePopoverOpen(false);
+      setEmployeeSearchValue("");
+      toast.success(`Employee "${name.trim()}" added successfully!`);
+    } catch (error) {
+      console.error("Error adding employee:", error);
+      toast.error("Failed to add employee. Please try again.");
+    } finally {
+      setIsAddingEmployee(false);
     }
   };
 
@@ -137,33 +274,62 @@ const Payroll = () => {
   };
 
   const handleAddPayroll = async () => {
-    if (!formData.employeeId || !formData.period || !formData.basicSalary) {
-      toast.error("Please fill in all required fields (Employee, Period, Basic Salary)");
+    if (!formData.name || !formData.date || !formData.amountExclGst) {
+      toast.error("Please fill in all required fields (Name, Date, Amount)");
       return;
     }
 
     try {
       setIsSaving(true);
       
-      // In a real app, you would upload the receipt file and save to Firebase here
-      // For now, we'll just show a success message
+      // Convert date from YYYY-MM-DD to DD.MM.YYYY format
+      const dateParts = formData.date.split('-');
+      const formattedDate = dateParts.length === 3 
+        ? `${dateParts[2]}.${dateParts[1]}.${dateParts[0]}`
+        : formData.date;
+
+      // Convert payment date from YYYY-MM-DD to DD.MM.YYYY format if provided
+      let formattedPaymentDate = undefined;
+      if (formData.paymentDate) {
+        const paymentDateParts = formData.paymentDate.split('-');
+        formattedPaymentDate = paymentDateParts.length === 3 
+          ? `${paymentDateParts[2]}.${paymentDateParts[1]}.${paymentDateParts[0]}`
+          : formData.paymentDate;
+      }
+
+      const newPayroll: Omit<Payroll, "id"> = {
+        month: formData.month,
+        date: formattedDate,
+        modeOfCashFlow: formData.modeOfCashFlow,
+        typeOfCashFlow: formData.typeOfCashFlow,
+        name: formData.name,
+        siteOfWork: formData.siteOfWork || undefined,
+        abnRegistered: formData.abnRegistered,
+        gstRegistered: formData.gstRegistered,
+        invoiceNumber: formData.invoiceNumber || undefined,
+        amountExclGst: parseFloat(formData.amountExclGst) || 0,
+        gstAmount: parseFloat(formData.gstAmount) || 0,
+        totalAmount: parseFloat(formData.totalAmount) || 0,
+        currency: formData.currency,
+        paymentMethod: formData.paymentMethod,
+        paymentDate: formattedPaymentDate,
+        paymentReceiptNumber: formData.paymentReceiptNumber || undefined,
+        status: formData.status,
+        notes: formData.notes || undefined,
+      };
+
+      await addPayroll(newPayroll);
+      
+      // Reload payrolls
+      const updatedPayrolls = await getAllPayrolls();
+      setPayrolls(updatedPayrolls);
       
       toast.success("Payroll added successfully!");
       setIsAddDialogOpen(false);
       setReceiptFile(null);
-      setFormData({
-        employeeId: "",
-        employeeName: "",
-        period: "",
-        basicSalary: "",
-        allowances: "",
-        deductions: "",
-        totalAmount: "",
-        status: "pending",
-        paymentDate: "",
-        notes: "",
-        receiptUrl: "",
-      });
+      setEmployeePopoverOpen(false);
+      setEditingPayrollId(null);
+      resetForm();
     } catch (error) {
       console.error("Error adding payroll:", error);
       toast.error("Failed to add payroll. Please try again.");
@@ -172,93 +338,999 @@ const Payroll = () => {
     }
   };
 
-  const filteredPayrolls = mockPayrolls.filter(payroll => {
-    const matchesSearch = payroll.employeeName.toLowerCase().includes(searchValue.toLowerCase()) ||
-      payroll.period.toLowerCase().includes(searchValue.toLowerCase());
+  // Convert DD.MM.YYYY to YYYY-MM-DD for date inputs
+  const convertDateToInputFormat = (dateStr: string): string => {
+    if (!dateStr) return "";
+    // If already in DD.MM.YYYY format, convert to YYYY-MM-DD
+    if (dateStr.includes('.')) {
+      const parts = dateStr.split('.');
+      if (parts.length === 3) {
+        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+      }
+    }
+    // If already in YYYY-MM-DD format, return as is
+    if (dateStr.includes('-') && dateStr.length === 10) {
+      return dateStr;
+    }
+    return "";
+  };
+
+  const resetForm = () => {
+    setFormData({
+      month: new Date().toLocaleString('default', { month: 'long' }),
+      date: new Date().toISOString().split('T')[0],
+      modeOfCashFlow: "outflow",
+      typeOfCashFlow: "cleaner_payroll",
+      name: "",
+      siteOfWork: "",
+      abnRegistered: false,
+      gstRegistered: false,
+      invoiceNumber: "",
+      amountExclGst: "",
+      gstAmount: "",
+      totalAmount: "",
+      currency: "AUD",
+      paymentMethod: "bank_transfer",
+      paymentDate: "",
+      paymentReceiptNumber: "",
+      status: "pending",
+      notes: "",
+    });
+    setEditingPayrollId(null);
+  };
+
+  const handleEditPayroll = (payroll: Payroll) => {
+    setEditingPayrollId(payroll.id);
+    setFormData({
+      month: payroll.month,
+      date: convertDateToInputFormat(payroll.date),
+      modeOfCashFlow: payroll.modeOfCashFlow,
+      typeOfCashFlow: payroll.typeOfCashFlow,
+      name: payroll.name,
+      siteOfWork: payroll.siteOfWork || "",
+      abnRegistered: payroll.abnRegistered,
+      gstRegistered: payroll.gstRegistered,
+      invoiceNumber: payroll.invoiceNumber || "",
+      amountExclGst: payroll.amountExclGst.toString(),
+      gstAmount: payroll.gstAmount.toString(),
+      totalAmount: payroll.totalAmount.toString(),
+      currency: payroll.currency,
+      paymentMethod: payroll.paymentMethod,
+      paymentDate: payroll.paymentDate ? convertDateToInputFormat(payroll.paymentDate) : "",
+      paymentReceiptNumber: payroll.paymentReceiptNumber || "",
+      status: payroll.status,
+      notes: payroll.notes || "",
+    });
+    setIsAddDialogOpen(true);
+  };
+
+  const handleUpdatePayroll = async () => {
+    if (!editingPayrollId) return;
+    
+    if (!formData.name || !formData.date || !formData.amountExclGst) {
+      toast.error("Please fill in all required fields (Name, Date, Amount)");
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      
+      // Convert date from YYYY-MM-DD to DD.MM.YYYY format
+      const dateParts = formData.date.split('-');
+      const formattedDate = dateParts.length === 3 
+        ? `${dateParts[2]}.${dateParts[1]}.${dateParts[0]}`
+        : formData.date;
+
+      // Convert payment date from YYYY-MM-DD to DD.MM.YYYY format if provided
+      let formattedPaymentDate = undefined;
+      if (formData.paymentDate) {
+        const paymentDateParts = formData.paymentDate.split('-');
+        formattedPaymentDate = paymentDateParts.length === 3 
+          ? `${paymentDateParts[2]}.${paymentDateParts[1]}.${paymentDateParts[0]}`
+          : formData.paymentDate;
+      }
+
+      const updatedPayroll: Partial<Omit<Payroll, "id">> = {
+        month: formData.month,
+        date: formattedDate,
+        modeOfCashFlow: formData.modeOfCashFlow,
+        typeOfCashFlow: formData.typeOfCashFlow,
+        name: formData.name,
+        siteOfWork: formData.siteOfWork || undefined,
+        abnRegistered: formData.abnRegistered,
+        gstRegistered: formData.gstRegistered,
+        invoiceNumber: formData.invoiceNumber || undefined,
+        amountExclGst: parseFloat(formData.amountExclGst) || 0,
+        gstAmount: parseFloat(formData.gstAmount) || 0,
+        totalAmount: parseFloat(formData.totalAmount) || 0,
+        currency: formData.currency,
+        paymentMethod: formData.paymentMethod,
+        paymentDate: formattedPaymentDate,
+        paymentReceiptNumber: formData.paymentReceiptNumber || undefined,
+        status: formData.status,
+        notes: formData.notes || undefined,
+      };
+
+      await updatePayroll(editingPayrollId, updatedPayroll);
+      
+      // Reload payrolls
+      const updatedPayrolls = await getAllPayrolls();
+      setPayrolls(updatedPayrolls);
+      
+      toast.success("Payroll updated successfully!");
+      setIsAddDialogOpen(false);
+      setReceiptFile(null);
+      setEmployeePopoverOpen(false);
+      resetForm();
+    } catch (error) {
+      console.error("Error updating payroll:", error);
+      toast.error("Failed to update payroll. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteClick = (payroll: Payroll) => {
+    setPayrollToDelete(payroll);
+    setDeleteDialogOpen(true);
+  };
+
+  const handleDeletePayroll = async () => {
+    if (!payrollToDelete) return;
+
+    try {
+      setIsDeleting(true);
+      await deletePayroll(payrollToDelete.id);
+      
+      // Reload payrolls
+      const updatedPayrolls = await getAllPayrolls();
+      setPayrolls(updatedPayrolls);
+      
+      toast.success("Payroll deleted successfully!");
+      setDeleteDialogOpen(false);
+      setPayrollToDelete(null);
+    } catch (error) {
+      console.error("Error deleting payroll:", error);
+      toast.error("Failed to delete payroll. Please try again.");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Get unique months for filters
+  const uniqueMonths = Array.from(new Set(payrolls.map(p => p.month))).sort();
+  
+  // All months for the form dropdown
+  const allMonths = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+  ];
+
+  // Convert DD.MM.YYYY to Date object
+  const parseDate = (dateStr: string): Date | null => {
+    if (!dateStr) return null;
+    if (dateStr.includes('.')) {
+      const parts = dateStr.split('.');
+      if (parts.length === 3) {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1; // Month is 0-indexed
+        const year = parseInt(parts[2], 10);
+        return new Date(year, month, day);
+      }
+    }
+    return null;
+  };
+
+  const filteredPayrolls = payrolls.filter(payroll => {
+    const matchesSearch = payroll.name.toLowerCase().includes(searchValue.toLowerCase()) ||
+      payroll.siteOfWork?.toLowerCase().includes(searchValue.toLowerCase()) ||
+      payroll.invoiceNumber?.toLowerCase().includes(searchValue.toLowerCase());
     const matchesStatus = statusFilter === "all" || payroll.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesMode = modeFilter === "all" || payroll.modeOfCashFlow === modeFilter;
+    const matchesMonth = monthFilter === "all" || payroll.month === monthFilter;
+    
+    // Date range filtering
+    let matchesDate = true;
+    if (dateRange?.from || dateRange?.to) {
+      const payrollDate = parseDate(payroll.date);
+      if (payrollDate) {
+        if (dateRange.from && dateRange.to) {
+          // Both dates selected - check if payroll date is within range
+          matchesDate = payrollDate >= dateRange.from && payrollDate <= dateRange.to;
+        } else if (dateRange.from) {
+          // Only from date selected
+          matchesDate = payrollDate >= dateRange.from;
+        } else if (dateRange.to) {
+          // Only to date selected
+          matchesDate = payrollDate <= dateRange.to;
+        }
+      } else {
+        matchesDate = false;
+      }
+    }
+    
+    return matchesSearch && matchesStatus && matchesMode && matchesMonth && matchesDate;
   });
+
+  // Calculate chart data
+  // Area Chart: Monthly inflow and outflow totals
+  const monthlyData = payrolls.reduce((acc, payroll) => {
+    const month = payroll.month;
+    if (!acc[month]) {
+      acc[month] = { month, inflow: 0, outflow: 0 };
+    }
+    if (payroll.modeOfCashFlow === "inflow") {
+      acc[month].inflow += payroll.totalAmount;
+    } else {
+      acc[month].outflow += payroll.totalAmount;
+    }
+    return acc;
+  }, {} as Record<string, { month: string; inflow: number; outflow: number }>);
+
+  const areaChartData = Object.values(monthlyData)
+    .sort((a, b) => {
+      const monthOrder = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+      return monthOrder.indexOf(a.month) - monthOrder.indexOf(b.month);
+    })
+    .map(item => ({
+      month: item.month,
+      inflow: Math.round(item.inflow),
+      outflow: Math.round(item.outflow),
+    }));
+
+  // Pie Chart: Total inflow vs outflow
+  const totalInflow = payrolls
+    .filter(p => p.modeOfCashFlow === "inflow")
+    .reduce((sum, p) => sum + p.totalAmount, 0);
+  const totalOutflow = payrolls
+    .filter(p => p.modeOfCashFlow === "outflow")
+    .reduce((sum, p) => sum + p.totalAmount, 0);
+
+  const pieChartData = [
+    { 
+      type: "inflow", 
+      amount: Math.round(totalInflow), 
+      fill: "hsl(var(--chart-1))" 
+    },
+    { 
+      type: "outflow", 
+      amount: Math.round(totalOutflow), 
+      fill: "hsl(var(--chart-2))" 
+    },
+  ].filter(item => item.amount > 0);
+
+  // Bar Chart: Monthly net cash flow (inflow - outflow)
+  const barChartData = areaChartData.map(item => ({
+    month: item.month,
+    net: Math.round(item.inflow - item.outflow),
+  }));
+
+  const areaChartConfig = {
+    inflow: {
+      label: "Inflow",
+      color: "hsl(var(--chart-1))",
+    },
+    outflow: {
+      label: "Outflow",
+      color: "hsl(var(--chart-2))",
+    },
+  } satisfies ChartConfig;
+
+  const pieChartConfig = {
+    amount: {
+      label: "Amount",
+    },
+    inflow: {
+      label: "Inflow",
+      color: "hsl(var(--chart-1))",
+    },
+    outflow: {
+      label: "Outflow",
+      color: "hsl(var(--chart-2))",
+    },
+  } satisfies ChartConfig;
+
+  const barChartConfig = {
+    net: {
+      label: "Net Cash Flow",
+      color: "hsl(var(--chart-1))",
+    },
+  } satisfies ChartConfig;
+
+  // Format date from DD.MM.YYYY or ISO to display format
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "-";
+    // If already in DD.MM.YYYY format, return as is
+    if (dateStr.includes('.')) return dateStr;
+    // Otherwise convert from ISO (YYYY-MM-DD) to DD.MM.YYYY
+    try {
+      const date = new Date(dateStr);
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}.${month}.${year}`;
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const handleSeedData = async () => {
+    if (!confirm("This will add 12 sample payroll records to the database. Continue?")) {
+      return;
+    }
+
+    try {
+      setIsSeeding(true);
+      const response = await fetch("/api/seed-payroll", {
+        method: "POST",
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        toast.success(`Successfully added ${result.results.length} payroll records!`);
+        // Reload payrolls
+        const updatedPayrolls = await getAllPayrolls();
+        setPayrolls(updatedPayrolls);
+      } else {
+        toast.error(`Failed to seed data: ${result.error}`);
+      }
+    } catch (error) {
+      console.error("Error seeding data:", error);
+      toast.error("Failed to seed data. Please try again.");
+    } finally {
+      setIsSeeding(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Payroll</h2>
-          <p className="text-muted-foreground">Manage employee payroll (GST exempt)</p>
+          <p className="text-muted-foreground">Manage employee payroll (includes 10% GST)</p>
         </div>
-        <Button onClick={() => setIsAddDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Payroll
-        </Button>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            onClick={handleSeedData}
+            disabled={isSeeding}
+          >
+            {isSeeding ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Seeding...
+              </>
+            ) : (
+              <>
+                <Upload className="mr-2 h-4 w-4" />
+                Seed Sample Data
+              </>
+            )}
+          </Button>
+          <Button onClick={() => setIsAddDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Payroll
+          </Button>
+        </div>
+      </div>
+
+      {/* Charts Section */}
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+        {/* Area Chart - Monthly Inflow/Outflow Trends */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Cash Flow Trends</CardTitle>
+            <CardDescription className="text-xs">
+              Monthly inflow and outflow totals
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="px-1 pr-2">
+            {!isLoading && payrolls.length > 0 && areaChartData.length > 0 ? (
+              <ChartContainer config={areaChartConfig} className="h-[180px] w-full -mx-1">
+                <AreaChart
+                  accessibilityLayer
+                  data={areaChartData}
+                  margin={{
+                    left: 4,
+                    right: 4,
+                    top: 8,
+                    bottom: 8,
+                  }}
+                >
+                  <CartesianGrid vertical={false} />
+                  <XAxis
+                    dataKey="month"
+                    tickLine={false}
+                    axisLine={false}
+                    tickMargin={8}
+                    tickFormatter={(value) => value.slice(0, 3)}
+                    fontSize={10}
+                  />
+                  <ChartTooltip cursor={false} content={<ChartTooltipContent />} />
+                  <defs>
+                    <linearGradient id="fillInflow" x1="0" y1="0" x2="0" y2="1">
+                      <stop
+                        offset="5%"
+                        stopColor="var(--color-inflow)"
+                        stopOpacity={0.8}
+                      />
+                      <stop
+                        offset="95%"
+                        stopColor="var(--color-inflow)"
+                        stopOpacity={0.1}
+                      />
+                    </linearGradient>
+                    <linearGradient id="fillOutflow" x1="0" y1="0" x2="0" y2="1">
+                      <stop
+                        offset="5%"
+                        stopColor="var(--color-outflow)"
+                        stopOpacity={0.8}
+                      />
+                      <stop
+                        offset="95%"
+                        stopColor="var(--color-outflow)"
+                        stopOpacity={0.1}
+                      />
+                    </linearGradient>
+                  </defs>
+                  <Area
+                    dataKey="outflow"
+                    type="natural"
+                    fill="url(#fillOutflow)"
+                    fillOpacity={0.4}
+                    stroke="var(--color-outflow)"
+                    stackId="a"
+                  />
+                  <Area
+                    dataKey="inflow"
+                    type="natural"
+                    fill="url(#fillInflow)"
+                    fillOpacity={0.4}
+                    stroke="var(--color-inflow)"
+                    stackId="a"
+                  />
+                </AreaChart>
+              </ChartContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[180px] text-muted-foreground text-sm">
+                No data available
+              </div>
+            )}
+          </CardContent>
+          <CardFooter className="pt-2">
+            <div className="flex w-full items-start gap-2 text-xs">
+              <div className="grid gap-1">
+                <div className="leading-none font-medium">
+                  Inflow: ${totalInflow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+                <div className="text-muted-foreground leading-none">
+                  Outflow: ${totalOutflow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+              </div>
+            </div>
+          </CardFooter>
+        </Card>
+
+        {/* Pie Chart - Inflow vs Outflow Distribution */}
+        <Card className="flex flex-col">
+          <CardHeader className="items-center pb-3">
+            <CardTitle className="text-lg">Cash Flow Distribution</CardTitle>
+            <CardDescription className="text-xs">Inflow vs Outflow</CardDescription>
+          </CardHeader>
+          <CardContent className="flex-1 pb-0">
+            {!isLoading && payrolls.length > 0 && pieChartData.length > 0 && pieChartData.some(d => d.amount > 0) ? (
+              <ChartContainer
+                config={pieChartConfig}
+                className="mx-auto aspect-square h-[180px]"
+              >
+                <PieChart>
+                  <ChartTooltip
+                    cursor={false}
+                    content={<ChartTooltipContent hideLabel />}
+                  />
+                  <Pie 
+                    data={pieChartData} 
+                    dataKey="amount" 
+                    nameKey="type"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={65}
+                    innerRadius={0}
+                    label={({ type, amount }) => `${type}: $${amount.toLocaleString()}`}
+                    labelLine={false}
+                  />
+                </PieChart>
+              </ChartContainer>
+            ) : isLoading ? (
+              <div className="flex items-center justify-center h-[180px]">
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <span className="text-muted-foreground text-sm">Loading...</span>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-[180px] text-muted-foreground text-sm">
+                No data available
+              </div>
+            )}
+          </CardContent>
+          <CardFooter className="flex-col gap-1 text-xs pt-2">
+            <div className="leading-none font-medium">
+              Net: ${(totalInflow - totalOutflow).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
+            <div className="text-muted-foreground leading-none">
+              {totalInflow > totalOutflow ? "Positive" : "Negative"}
+            </div>
+          </CardFooter>
+        </Card>
+
+        {/* Bar Chart - Monthly Net Cash Flow */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg">Monthly Net Cash Flow</CardTitle>
+            <CardDescription className="text-xs">
+              Inflow minus Outflow by month
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="px-1 pr-2">
+            {!isLoading && payrolls.length > 0 && barChartData.length > 0 ? (
+              <ChartContainer config={barChartConfig} className="h-[180px] w-full -mx-1">
+                <BarChart
+                  accessibilityLayer
+                  data={barChartData}
+                  margin={{
+                    top: 8,
+                    left: 4,
+                    right: 4,
+                    bottom: 8,
+                  }}
+                >
+                  <CartesianGrid vertical={false} />
+                  <XAxis
+                    dataKey="month"
+                    tickLine={false}
+                    tickMargin={8}
+                    axisLine={false}
+                    tickFormatter={(value) => value.slice(0, 3)}
+                    fontSize={10}
+                  />
+                  <ChartTooltip
+                    cursor={false}
+                    content={<ChartTooltipContent hideLabel />}
+                  />
+                  <Bar 
+                    dataKey="net" 
+                    fill="var(--color-net)"
+                    radius={8}
+                  >
+                    <LabelList
+                      position="top"
+                      offset={8}
+                      className="fill-foreground"
+                      fontSize={10}
+                      formatter={(value: number) => `$${value.toLocaleString()}`}
+                    />
+                  </Bar>
+                </BarChart>
+              </ChartContainer>
+            ) : isLoading ? (
+              <div className="flex items-center justify-center h-[180px]">
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                <span className="text-muted-foreground text-sm">Loading...</span>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center h-[180px] text-muted-foreground text-sm">
+                No data available
+              </div>
+            )}
+          </CardContent>
+          <CardFooter className="flex-col items-start gap-1 text-xs pt-2">
+            <div className="flex gap-2 leading-none font-medium">
+              {totalInflow > totalOutflow ? (
+                <>
+                  Positive <TrendingUp className="h-3 w-3" />
+                </>
+              ) : (
+                "Negative"
+              )}
+            </div>
+            <div className="text-muted-foreground leading-none">
+              Net cash flow
+            </div>
+          </CardFooter>
+        </Card>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Payroll List</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Payroll List</CardTitle>
+            <div className="flex items-center gap-2">
+              <Button
+                variant={viewMode === "card" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("card")}
+              >
+                <LayoutGrid className="h-4 w-4 mr-2" />
+                Card View
+              </Button>
+              <Button
+                variant={viewMode === "table" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("table")}
+              >
+                <TableIcon className="h-4 w-4 mr-2" />
+                Table View
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="mb-6">
-            <SearchFilter
-              searchValue={searchValue}
-              onSearchChange={setSearchValue}
-              statusFilter={statusFilter}
-              onStatusFilterChange={setStatusFilter}
-              placeholder="Search by employee or period..."
-            />
+            <div className="flex gap-4 flex-wrap">
+              <div className="relative flex-1 min-w-[200px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by name, site, or invoice..."
+                  value={searchValue}
+                  onChange={(e) => setSearchValue(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+              <Popover open={monthPopoverOpen} onOpenChange={setMonthPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={monthPopoverOpen}
+                    className="w-[150px] justify-between"
+                  >
+                    {monthFilter === "all" ? "All Months" : monthFilter}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[200px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search month..." />
+                    <CommandList>
+                      <CommandEmpty>No month found.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="all"
+                          onSelect={() => {
+                            setMonthFilter("all");
+                            setMonthPopoverOpen(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              monthFilter === "all" ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          All Months
+                        </CommandItem>
+                        {uniqueMonths.map((month) => (
+                          <CommandItem
+                            key={month}
+                            value={month}
+                            onSelect={() => {
+                              setMonthFilter(month);
+                              setMonthPopoverOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                monthFilter === month ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {month}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-[280px] justify-start text-left font-normal"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateRange?.from ? (
+                      dateRange.to ? (
+                        <>
+                          {format(dateRange.from, "dd.MM.yyyy")} -{" "}
+                          {format(dateRange.to, "dd.MM.yyyy")}
+                        </>
+                      ) : (
+                        format(dateRange.from, "dd.MM.yyyy")
+                      )
+                    ) : (
+                      <span>Pick a date range</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={dateRange?.from}
+                    selected={dateRange}
+                    onSelect={setDateRange}
+                    numberOfMonths={2}
+                  />
+                </PopoverContent>
+              </Popover>
+              <Select value={modeFilter} onValueChange={(value) => setModeFilter(value as "all" | "inflow" | "outflow")}>
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder="All Modes" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Modes</SelectItem>
+                  <SelectItem value="inflow">Inflow</SelectItem>
+                  <SelectItem value="outflow">Outflow</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[150px]">
+                  <SelectValue placeholder="All Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="received">Received</SelectItem>
+                  <SelectItem value="paid">Paid</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
-          <div className="rounded-md border">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              <span>Loading payrolls...</span>
+            </div>
+          ) : filteredPayrolls.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              No payroll records found
+            </div>
+          ) : viewMode === "table" ? (
+          <div className="rounded-md border overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Employee</TableHead>
-                  <TableHead>Period</TableHead>
-                  <TableHead>Basic Salary</TableHead>
-                  <TableHead>Allowances</TableHead>
-                  <TableHead>Deductions</TableHead>
-                  <TableHead>Total</TableHead>
-                  <TableHead>Status</TableHead>
+                <TableRow className="bg-green-50 dark:bg-green-950">
+                  <TableHead className="w-[50px]">ID</TableHead>
+                  <TableHead>Mode</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Site of Work</TableHead>
+                  <TableHead>ABN</TableHead>
+                  <TableHead>GST</TableHead>
+                  <TableHead>Invoice #</TableHead>
+                  <TableHead>Amount (Excl. GST)</TableHead>
+                  <TableHead>GST Amount</TableHead>
+                  <TableHead>Total Amount</TableHead>
+                  <TableHead>Currency</TableHead>
+                  <TableHead>Payment Method</TableHead>
                   <TableHead>Payment Date</TableHead>
-                  <TableHead>Receipt</TableHead>
+                  <TableHead>Receipt #</TableHead>
+                  <TableHead>Status</TableHead>
                   <TableHead>Notes</TableHead>
+                  <TableHead className="w-[100px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredPayrolls.map((payroll) => (
-                  <TableRow key={payroll.id}>
-                    <TableCell className="font-medium">{payroll.employeeName}</TableCell>
-                    <TableCell>{payroll.period}</TableCell>
-                    <TableCell>${payroll.basicSalary.toLocaleString()}</TableCell>
-                    <TableCell className="text-success">${payroll.allowances.toLocaleString()}</TableCell>
-                    <TableCell className="text-destructive">-${payroll.deductions.toLocaleString()}</TableCell>
-                    <TableCell className="font-semibold">${payroll.totalAmount.toLocaleString()}</TableCell>
-                    <TableCell>
-                      <StatusBadge status={payroll.status} />
-                    </TableCell>
-                    <TableCell>
-                      {payroll.paymentDate ? new Date(payroll.paymentDate).toLocaleDateString() : "-"}
-                    </TableCell>
-                    <TableCell>
-                      {payroll.receiptUrl ? (
-                        <Button variant="ghost" size="sm">
-                          <Download className="h-4 w-4" />
-                        </Button>
-                      ) : (
-                        <Badge variant="outline">No receipt</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="max-w-[200px] truncate">
-                      {payroll.notes || "-"}
-                    </TableCell>
-                  </TableRow>
-                ))}
+                  {filteredPayrolls.map((payroll, index) => (
+                    <TableRow key={payroll.id}>
+                      <TableCell className="font-medium">{index + 1}</TableCell>
+                      <TableCell>
+                        <Badge variant={payroll.modeOfCashFlow === "inflow" ? "default" : "destructive"}>
+                          {payroll.modeOfCashFlow === "inflow" ? "Inflow" : "Outflow"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {payroll.typeOfCashFlow === "invoice" ? "Invoice" : 
+                         payroll.typeOfCashFlow === "internal_payroll" ? "Internal Payroll" : 
+                         "Cleaner Payroll"}
+                      </TableCell>
+                      <TableCell>{formatDate(payroll.date)}</TableCell>
+                      <TableCell className="font-medium">{payroll.name}</TableCell>
+                      <TableCell>{payroll.siteOfWork || "-"}</TableCell>
+                      <TableCell>
+                        <Badge variant={payroll.abnRegistered ? "default" : "destructive"}>
+                          {payroll.abnRegistered ? "Yes" : "No"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={payroll.gstRegistered ? "default" : "destructive"}>
+                          {payroll.gstRegistered ? "Yes" : "No"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{payroll.invoiceNumber || "N/A"}</TableCell>
+                      <TableCell>${payroll.amountExclGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                      <TableCell>${payroll.gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                      <TableCell className="font-semibold">${payroll.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                      <TableCell>{payroll.currency}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {payroll.paymentMethod === "bank_transfer" ? "Bank Transfer" :
+                           payroll.paymentMethod === "cash" ? "Cash" :
+                           payroll.paymentMethod === "cheque" ? "Cheque" :
+                           payroll.paymentMethod === "credit_card" ? "Credit Card" : "Other"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{payroll.paymentDate ? formatDate(payroll.paymentDate) : "-"}</TableCell>
+                      <TableCell className="max-w-[150px] truncate">{payroll.paymentReceiptNumber || "-"}</TableCell>
+                      <TableCell>
+                        <StatusBadge status={payroll.status} />
+                      </TableCell>
+                      <TableCell className="max-w-[200px] truncate">{payroll.notes || "-"}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleEditPayroll(payroll)}
+                            className="h-8 w-8"
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleDeleteClick(payroll)}
+                            className="h-8 w-8 text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
               </TableBody>
             </Table>
           </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {filteredPayrolls.map((payroll, index) => (
+                <Card key={payroll.id} className="relative flex flex-col h-[600px]">
+                  <CardHeader className="pb-3 flex-shrink-0">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge variant="outline" className="font-mono">#{index + 1}</Badge>
+                          <Badge variant={payroll.modeOfCashFlow === "inflow" ? "default" : "destructive"}>
+                            {payroll.modeOfCashFlow === "inflow" ? "Inflow" : "Outflow"}
+                          </Badge>
+                          <StatusBadge status={payroll.status} />
+                        </div>
+                        <CardTitle className="text-2xl font-bold mt-2">{payroll.name}</CardTitle>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {payroll.typeOfCashFlow === "invoice" ? "Invoice" : 
+                           payroll.typeOfCashFlow === "internal_payroll" ? "Internal Payroll" : 
+                           "Cleaner Payroll"}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEditPayroll(payroll)}
+                          className="h-8 w-8 flex-shrink-0"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteClick(payroll)}
+                          className="h-8 w-8 flex-shrink-0 text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3 flex-1 overflow-y-auto">
+                    <div className="grid grid-cols-2 gap-3 text-sm">
+                      <div>
+                        <p className="font-semibold text-xs text-muted-foreground mb-1">Date</p>
+                        <p>{formatDate(payroll.date)}</p>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-xs text-muted-foreground mb-1">Month</p>
+                        <p>{payroll.month}</p>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-xs text-muted-foreground mb-1">Site</p>
+                        <p className="truncate">{payroll.siteOfWork || "-"}</p>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-xs text-muted-foreground mb-1">Currency</p>
+                        <p>{payroll.currency}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-2 border-t">
+                      <Badge variant={payroll.abnRegistered ? "default" : "destructive"} className="text-xs">
+                        ABN: {payroll.abnRegistered ? "Yes" : "No"}
+                      </Badge>
+                      <Badge variant={payroll.gstRegistered ? "default" : "destructive"} className="text-xs">
+                        GST: {payroll.gstRegistered ? "Yes" : "No"}
+                      </Badge>
+                    </div>
+
+                    <div className="space-y-2 pt-2 border-t">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">Amount (Excl. GST)</span>
+                        <span className="font-medium">${payroll.amountExclGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-muted-foreground">GST Amount</span>
+                        <span className="font-medium">${payroll.gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="flex justify-between items-center pt-2 border-t">
+                        <span className="font-semibold">Total Amount</span>
+                        <span className="font-bold text-lg">${payroll.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2 pt-2 border-t text-sm">
+                      <div>
+                        <p className="font-semibold text-xs text-muted-foreground mb-1">Payment Method</p>
+                        <Badge variant="outline">
+                          {payroll.paymentMethod === "bank_transfer" ? "Bank Transfer" :
+                           payroll.paymentMethod === "cash" ? "Cash" :
+                           payroll.paymentMethod === "cheque" ? "Cheque" :
+                           payroll.paymentMethod === "credit_card" ? "Credit Card" : "Other"}
+                        </Badge>
+                      </div>
+                      {payroll.paymentDate && (
+                        <div>
+                          <p className="font-semibold text-xs text-muted-foreground mb-1">Payment Date</p>
+                          <p>{formatDate(payroll.paymentDate)}</p>
+                        </div>
+                      )}
+                      {payroll.paymentReceiptNumber && (
+                        <div>
+                          <p className="font-semibold text-xs text-muted-foreground mb-1">Receipt #</p>
+                          <p className="truncate">{payroll.paymentReceiptNumber}</p>
+                        </div>
+                      )}
+                      {payroll.invoiceNumber && (
+                        <div>
+                          <p className="font-semibold text-xs text-muted-foreground mb-1">Invoice #</p>
+                          <p>{payroll.invoiceNumber}</p>
+                        </div>
+                      )}
+                      {payroll.notes && (
+                        <div>
+                          <p className="font-semibold text-xs text-muted-foreground mb-1">Notes</p>
+                          <p className="text-xs line-clamp-2">{payroll.notes}</p>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+      <Dialog 
+        open={isAddDialogOpen} 
+        onOpenChange={(open) => {
+          setIsAddDialogOpen(open);
+          if (!open) {
+            resetForm();
+          }
+        }}
+      >
         <DialogContent className="max-w-6xl w-full p-0 gap-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] sm:rounded-lg">
           <div className="grid md:grid-cols-2 h-[90vh] max-h-[90vh]">
             {/* Left side - Image with Logo and Heading */}
@@ -289,81 +1361,269 @@ const Payroll = () => {
             <div className="flex flex-col overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] md:rounded-r-lg">
               <div className="p-6">
                 <DialogHeader>
-                  <DialogTitle>Add Payroll</DialogTitle>
+                  <DialogTitle>{editingPayrollId ? "Edit Payroll" : "Add Payroll"}</DialogTitle>
                   <DialogDescription>
-                    Fill in the payroll details. All fields matching the table columns are available.
+                    {editingPayrollId 
+                      ? "Update the payroll details below."
+                      : "Fill in the payroll details. All fields matching the table columns are available."}
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="employee">Employee *</Label>
+                      <Label htmlFor="month">Month *</Label>
+                      <Popover open={formMonthPopoverOpen} onOpenChange={setFormMonthPopoverOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={formMonthPopoverOpen}
+                            className="w-full justify-between"
+                          >
+                            {formData.month || "Select month..."}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[200px] p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search month..." />
+                            <CommandList>
+                              <CommandEmpty>No month found.</CommandEmpty>
+                              <CommandGroup>
+                                {allMonths.map((month) => (
+                                  <CommandItem
+                                    key={month}
+                                    value={month}
+                                    onSelect={() => {
+                                      handleInputChange("month", month);
+                                      setFormMonthPopoverOpen(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        formData.month === month ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    {month}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="date">Date *</Label>
+                      <Input
+                        id="date"
+                        type="date"
+                        value={formData.date}
+                        onChange={(e) => handleInputChange("date", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="modeOfCashFlow">Mode of Cash Flow *</Label>
                       <Select
-                        value={formData.employeeId}
-                        onValueChange={handleEmployeeSelect}
+                        value={formData.modeOfCashFlow}
+                        onValueChange={(value) => handleInputChange("modeOfCashFlow", value as CashFlowMode)}
                       >
-                        <SelectTrigger id="employee">
-                          <SelectValue placeholder="Select employee" />
+                        <SelectTrigger id="modeOfCashFlow">
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {mockEmployees.map((employee) => (
-                            <SelectItem key={employee.id} value={employee.id}>
-                              {employee.name}
+                          <SelectItem value="inflow">Inflow</SelectItem>
+                          <SelectItem value="outflow">Outflow</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="typeOfCashFlow">Type of Cash Flow *</Label>
+                      <Select
+                        value={formData.typeOfCashFlow}
+                        onValueChange={(value) => handleInputChange("typeOfCashFlow", value as CashFlowType)}
+                      >
+                        <SelectTrigger id="typeOfCashFlow">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="invoice">Invoice</SelectItem>
+                          <SelectItem value="internal_payroll">Internal Payroll</SelectItem>
+                          <SelectItem value="cleaner_payroll">Cleaner Payroll</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Name *</Label>
+                      <Popover open={employeePopoverOpen} onOpenChange={setEmployeePopoverOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={employeePopoverOpen}
+                            className="w-full justify-between"
+                            disabled={isLoadingEmployees}
+                          >
+                            {formData.name || "Select employee..."}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[350px] p-0" align="start">
+                          <Command>
+                            <CommandInput 
+                              placeholder="Search employee..." 
+                              value={employeeSearchValue}
+                              onValueChange={setEmployeeSearchValue}
+                            />
+                            <CommandList>
+                              {isLoadingEmployees ? (
+                                <div className="flex items-center justify-center py-6">
+                                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                  <span className="text-sm text-muted-foreground">Loading...</span>
+                                </div>
+                              ) : (
+                                <>
+                                  <CommandGroup>
+                                    {employees
+                                      .filter(employee => 
+                                        !employeeSearchValue || 
+                                        employee.name.toLowerCase().includes(employeeSearchValue.toLowerCase())
+                                      )
+                                      .map((employee) => (
+                                        <CommandItem
+                                          key={employee.id}
+                                          value={employee.name}
+                                          onSelect={() => handleEmployeeSelect(employee.id)}
+                                        >
+                                          <Check
+                                            className={cn(
+                                              "mr-2 h-4 w-4",
+                                              formData.name === employee.name
+                                                ? "opacity-100"
+                                                : "opacity-0"
+                                            )}
+                                          />
+                                          {employee.name}
+                                        </CommandItem>
+                                      ))}
+                                  </CommandGroup>
+                                  {employeeSearchValue && 
+                                   !employees.some(emp => 
+                                     emp.name.toLowerCase() === employeeSearchValue.trim().toLowerCase()
+                                   ) && 
+                                   employeeSearchValue.trim().length > 0 && (
+                                    <CommandGroup>
+                                      <CommandItem
+                                        value={`add-${employeeSearchValue}`}
+                                        onSelect={() => handleAddNewEmployee(employeeSearchValue)}
+                                        disabled={isAddingEmployee}
+                                        className="text-primary"
+                                      >
+                                        {isAddingEmployee ? (
+                                          <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            Adding...
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Plus className="mr-2 h-4 w-4" />
+                                            Add "{employeeSearchValue}"
+                                          </>
+                                        )}
+                                      </CommandItem>
+                                    </CommandGroup>
+                                  )}
+                                  {!employeeSearchValue && employees.length === 0 && (
+                                    <CommandEmpty>No employees found.</CommandEmpty>
+                                  )}
+                                </>
+                              )}
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="siteOfWork">Site of Work</Label>
+                      <Select
+                        value={formData.siteOfWork}
+                        onValueChange={(value) => handleInputChange("siteOfWork", value)}
+                      >
+                        <SelectTrigger id="siteOfWork">
+                          <SelectValue placeholder="Select site" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {sites.map((site) => (
+                            <SelectItem key={site.id} value={site.name}>
+                              {site.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="period">Period *</Label>
+                      <Label htmlFor="invoiceNumber">Invoice Number</Label>
                       <Input
-                        id="period"
-                        value={formData.period}
-                        onChange={(e) => handleInputChange("period", e.target.value)}
-                        placeholder="January 2025"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="basicSalary">Basic Salary *</Label>
-                      <Input
-                        id="basicSalary"
-                        type="number"
-                        step="0.01"
-                        value={formData.basicSalary}
-                        onChange={(e) => handleInputChange("basicSalary", e.target.value)}
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="allowances">Allowances</Label>
-                      <Input
-                        id="allowances"
-                        type="number"
-                        step="0.01"
-                        value={formData.allowances}
-                        onChange={(e) => handleInputChange("allowances", e.target.value)}
-                        placeholder="0.00"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="deductions">Deductions</Label>
-                      <Input
-                        id="deductions"
-                        type="number"
-                        step="0.01"
-                        value={formData.deductions}
-                        onChange={(e) => handleInputChange("deductions", e.target.value)}
-                        placeholder="0.00"
+                        id="invoiceNumber"
+                        value={formData.invoiceNumber}
+                        onChange={(e) => handleInputChange("invoiceNumber", e.target.value)}
+                        placeholder="N/A for outflows"
                       />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="abnRegistered"
+                        checked={formData.abnRegistered}
+                        onCheckedChange={(checked) => handleInputChange("abnRegistered", checked as boolean)}
+                      />
+                      <Label htmlFor="abnRegistered" className="cursor-pointer">ABN Registered</Label>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="gstRegistered"
+                        checked={formData.gstRegistered}
+                        onCheckedChange={(checked) => handleInputChange("gstRegistered", checked as boolean)}
+                      />
+                      <Label htmlFor="gstRegistered" className="cursor-pointer">GST Registered</Label>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="totalAmount">Total</Label>
+                      <Label htmlFor="amountExclGst">Amount (Excl. GST) *</Label>
+                      <Input
+                        id="amountExclGst"
+                        type="number"
+                        step="0.01"
+                        value={formData.amountExclGst}
+                        onChange={(e) => handleInputChange("amountExclGst", e.target.value)}
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="gstAmount">GST Amount (10%)</Label>
+                      <Input
+                        id="gstAmount"
+                        type="number"
+                        step="0.01"
+                        value={formData.gstAmount}
+                        readOnly
+                        className="bg-muted"
+                        placeholder="Auto-calculated"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="totalAmount">Total Amount</Label>
                       <Input
                         id="totalAmount"
                         type="number"
@@ -375,112 +1635,79 @@ const Payroll = () => {
                       />
                     </div>
                     <div className="space-y-2">
+                      <Label htmlFor="currency">Currency</Label>
+                      <Select
+                        value={formData.currency}
+                        onValueChange={(value) => handleInputChange("currency", value)}
+                      >
+                        <SelectTrigger id="currency">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="AUD">AUD</SelectItem>
+                          <SelectItem value="USD">USD</SelectItem>
+                          <SelectItem value="EUR">EUR</SelectItem>
+                          <SelectItem value="GBP">GBP</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="paymentMethod">Payment Method</Label>
+                      <Select
+                        value={formData.paymentMethod}
+                        onValueChange={(value) => handleInputChange("paymentMethod", value as PaymentMethod)}
+                      >
+                        <SelectTrigger id="paymentMethod">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                          <SelectItem value="cash">Cash</SelectItem>
+                          <SelectItem value="cheque">Cheque</SelectItem>
+                          <SelectItem value="credit_card">Credit Card</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
                       <Label htmlFor="status">Status</Label>
                       <Select
                         value={formData.status}
                         onValueChange={(value) => handleInputChange("status", value as PaymentStatus)}
                       >
                         <SelectTrigger id="status">
-                          <SelectValue placeholder="Select status" />
+                          <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="pending">Pending</SelectItem>
                           <SelectItem value="received">Received</SelectItem>
-                          <SelectItem value="overdue">Overdue</SelectItem>
+                          <SelectItem value="paid">Paid</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="paymentDate">Payment Date</Label>
-                    <Input
-                      id="paymentDate"
-                      type="date"
-                      value={formData.paymentDate}
-                      onChange={(e) => handleInputChange("paymentDate", e.target.value)}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Upload Receipt</Label>
-                    <div
-                      onDragOver={handleDragOver}
-                      onDragLeave={handleDragLeave}
-                      onDrop={handleDrop}
-                      onClick={() => !receiptFile && document.getElementById('receipt-upload')?.click()}
-                      className={`
-                        relative border-2 border-dashed rounded-lg p-8 text-center transition-colors
-                        ${isDragging ? 'border-primary bg-primary/5' : 'border-muted-foreground/25'}
-                        ${receiptFile ? 'border-primary/50' : ''}
-                        ${!receiptFile ? 'cursor-pointer hover:border-primary/50' : ''}
-                      `}
-                    >
-                      <input
-                        type="file"
-                        id="receipt-upload"
-                        className="hidden"
-                        accept=".pdf,.doc,.docx,.jpeg,.jpg,.png,.xlsx,.xls,.txt"
-                        onChange={handleFileInputChange}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="paymentDate">Payment Date</Label>
+                      <Input
+                        id="paymentDate"
+                        type="date"
+                        value={formData.paymentDate}
+                        onChange={(e) => handleInputChange("paymentDate", e.target.value)}
                       />
-                      {receiptFile ? (
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-center gap-3">
-                            <FileText className="h-10 w-10 text-primary flex-shrink-0" />
-                            <div className="flex flex-col items-start flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate w-full">{receiptFile.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {(receiptFile.size / 1024 / 1024).toFixed(2)} MB
-                              </p>
-                            </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              className="flex-shrink-0"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRemoveFile();
-                              }}
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="w-full"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              document.getElementById('receipt-upload')?.click();
-                            }}
-                          >
-                            Change File
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          <div className="flex justify-center">
-                            <Upload className="h-12 w-12 text-muted-foreground" />
-                          </div>
-                          <div className="space-y-2">
-                            <p className="text-sm font-medium">
-                              Choose a file or drag & drop it here
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              PDF, DOCX, JPEG, XLSX, TXT - Up to 50MB
-                            </p>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => document.getElementById('receipt-upload')?.click()}
-                          >
-                            Browse files
-                          </Button>
-                        </div>
-                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="paymentReceiptNumber">Payment Receipt Number</Label>
+                      <Input
+                        id="paymentReceiptNumber"
+                        value={formData.paymentReceiptNumber}
+                        onChange={(e) => handleInputChange("paymentReceiptNumber", e.target.value)}
+                        placeholder="Receipt number"
+                      />
                     </div>
                   </div>
 
@@ -490,7 +1717,7 @@ const Payroll = () => {
                       id="notes"
                       value={formData.notes}
                       onChange={(e) => handleInputChange("notes", e.target.value)}
-                      placeholder="Additional notes about the payroll..."
+                      placeholder="Additional notes..."
                       rows={3}
                     />
                   </div>
@@ -498,19 +1725,25 @@ const Payroll = () => {
                 <DialogFooter className="pt-4">
                   <Button 
                     variant="outline" 
-                    onClick={() => setIsAddDialogOpen(false)}
+                    onClick={() => {
+                      setIsAddDialogOpen(false);
+                      resetForm();
+                    }}
                     disabled={isSaving}
                   >
                     Cancel
                   </Button>
-                  <Button onClick={handleAddPayroll} disabled={isSaving}>
+                  <Button 
+                    onClick={editingPayrollId ? handleUpdatePayroll : handleAddPayroll} 
+                    disabled={isSaving}
+                  >
                     {isSaving ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Saving...
+                        {editingPayrollId ? "Updating..." : "Saving..."}
                       </>
                     ) : (
-                      "Add Payroll"
+                      editingPayrollId ? "Update Payroll" : "Add Payroll"
                     )}
                   </Button>
                 </DialogFooter>
@@ -519,6 +1752,37 @@ const Payroll = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the payroll record for{" "}
+              <span className="font-semibold">{payrollToDelete?.name}</span> from{" "}
+              <span className="font-semibold">{payrollToDelete?.month}</span>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeletePayroll}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

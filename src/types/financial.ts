@@ -1,4 +1,4 @@
-export type PaymentStatus = "pending" | "received" | "overdue";
+export type PaymentStatus = "pending" | "received" | "paid" | "overdue";
 
 export interface Invoice {
   id: string;
@@ -16,19 +16,40 @@ export interface Invoice {
   notes?: string;
 }
 
+export type CashFlowMode = "inflow" | "outflow";
+export type CashFlowType = "invoice" | "internal_payroll" | "cleaner_payroll";
+export type PaymentMethod = "bank_transfer" | "cash" | "cheque" | "credit_card" | "other";
+
 export interface Payroll {
   id: string;
-  employeeId: string;
-  employeeName: string;
-  period: string;
-  basicSalary: number;
-  allowances: number;
-  deductions: number;
-  totalAmount: number;
-  status: PaymentStatus;
-  paymentDate?: string;
+  month: string; // e.g., "November"
+  date: string; // Date in DD.MM.YYYY format
+  modeOfCashFlow: CashFlowMode; // "inflow" or "outflow"
+  typeOfCashFlow: CashFlowType; // "invoice", "internal_payroll", "cleaner_payroll"
+  name: string; // Employee or client name
+  siteOfWork?: string; // Site name or location
+  abnRegistered: boolean; // ABN registration status
+  gstRegistered: boolean; // GST registration status
+  invoiceNumber?: string; // Invoice number for inflows, "N/A" for outflows
+  amountExclGst: number; // Amount excluding GST
+  gstAmount: number; // GST amount (10% of amountExclGst)
+  totalAmount: number; // Total amount including GST
+  currency: string; // Currency code (e.g., "AUD", "USD", etc.)
+  paymentMethod: PaymentMethod; // Payment method
+  paymentDate?: string; // Payment credited/received date
+  paymentReceiptNumber?: string; // Receipt number
+  status: PaymentStatus; // "pending", "received", "paid"
+  notes?: string; // Additional notes
+  // Legacy fields for backward compatibility
+  employeeId?: string;
+  employeeName?: string;
+  period?: string;
+  basicSalary?: number;
+  allowances?: number;
+  deductions?: number;
   receiptUrl?: string;
-  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Employee {
@@ -58,6 +79,8 @@ export interface Site {
   dayRate?: number;
   invoicingFrequency?: "Monthly" | "Fortnightly" | "Weekly";
   specialNote?: string;
+  latitude?: number; // Location latitude
+  longitude?: number; // Location longitude
 }
 
 export interface WorkSchedule {
