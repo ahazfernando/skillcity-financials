@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { SearchFilter } from "@/components/SearchFilter";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Download, Upload, Plus, FileText, X, Loader2, Check, ChevronsUpDown, Search, Edit2, LayoutGrid, Table as TableIcon, CalendarIcon, TrendingUp, Trash2 } from "lucide-react";
+import { Plus, FileText, X, Loader2, Check, ChevronsUpDown, Search, Edit2, LayoutGrid, Table as TableIcon, CalendarIcon, TrendingUp, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -88,7 +88,6 @@ const Payroll = () => {
   const [isAddingEmployee, setIsAddingEmployee] = useState(false);
   const [monthPopoverOpen, setMonthPopoverOpen] = useState(false);
   const [formMonthPopoverOpen, setFormMonthPopoverOpen] = useState(false);
-  const [isSeeding, setIsSeeding] = useState(false);
   const [viewMode, setViewMode] = useState<"card" | "table">("table");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [payrollToDelete, setPayrollToDelete] = useState<Payroll | null>(null);
@@ -654,35 +653,6 @@ const Payroll = () => {
     }
   };
 
-  const handleSeedData = async () => {
-    if (!confirm("This will add 12 sample payroll records to the database. Continue?")) {
-      return;
-    }
-
-    try {
-      setIsSeeding(true);
-      const response = await fetch("/api/seed-payroll", {
-        method: "POST",
-      });
-
-      const result = await response.json();
-
-      if (result.success) {
-        toast.success(`Successfully added ${result.results.length} payroll records!`);
-        // Reload payrolls
-        const updatedPayrolls = await getAllPayrolls();
-        setPayrolls(updatedPayrolls);
-      } else {
-        toast.error(`Failed to seed data: ${result.error}`);
-      }
-    } catch (error) {
-      console.error("Error seeding data:", error);
-      toast.error("Failed to seed data. Please try again.");
-    } finally {
-      setIsSeeding(false);
-    }
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -691,23 +661,6 @@ const Payroll = () => {
           <p className="text-muted-foreground">Manage employee payroll (includes 10% GST)</p>
         </div>
         <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            onClick={handleSeedData}
-            disabled={isSeeding}
-          >
-            {isSeeding ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Seeding...
-              </>
-            ) : (
-              <>
-                <Upload className="mr-2 h-4 w-4" />
-                Seed Sample Data
-              </>
-            )}
-          </Button>
           <Button onClick={() => setIsAddDialogOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Add Payroll

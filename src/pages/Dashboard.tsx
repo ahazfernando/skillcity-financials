@@ -1,8 +1,8 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { FileText, Wallet, DollarSign, TrendingUp } from "lucide-react";
-import { mockInvoices, mockPayrolls, mockReminders } from "@/data/mockData";
+import { FileText, Wallet, DollarSign, TrendingUp, Loader2 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, XAxis, Pie, PieChart } from "recharts";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -13,34 +13,87 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
+import { getAllInvoices } from "@/lib/firebase/invoices";
+import { getAllPayrolls } from "@/lib/firebase/payroll";
+import { getAllReminders } from "@/lib/firebase/reminders";
+import { Invoice, Payroll, Reminder } from "@/types/financial";
 
 const Dashboard = () => {
-  const totalRevenue = mockInvoices
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [payrolls, setPayrolls] = useState<Payroll[]>([]);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setIsLoading(true);
+        const [fetchedInvoices, fetchedPayrolls, fetchedReminders] = await Promise.all([
+          getAllInvoices(),
+          getAllPayrolls(),
+          getAllReminders(),
+        ]);
+        setInvoices(fetchedInvoices);
+        setPayrolls(fetchedPayrolls);
+        setReminders(fetchedReminders);
+      } catch (error) {
+        console.error("Error loading dashboard data:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
+
+  // Calculate revenue from invoices (inflow)
+  const totalRevenue = invoices
     .filter(inv => inv.status === "received")
     .reduce((sum, inv) => sum + inv.totalAmount, 0);
 
-  const pendingRevenue = mockInvoices
+  const pendingRevenue = invoices
     .filter(inv => inv.status === "pending")
     .reduce((sum, inv) => sum + inv.totalAmount, 0);
 
-  const totalExpenses = mockPayrolls
-    .filter(pay => pay.status === "received")
+  // Calculate expenses from payroll (outflow)
+  const totalExpenses = payrolls
+    .filter(pay => pay.modeOfCashFlow === "outflow" && pay.status === "received")
     .reduce((sum, pay) => sum + pay.totalAmount, 0);
 
-  const pendingExpenses = mockPayrolls
-    .filter(pay => pay.status === "pending")
+  const pendingExpenses = payrolls
+    .filter(pay => pay.modeOfCashFlow === "outflow" && pay.status === "pending")
     .reduce((sum, pay) => sum + pay.totalAmount, 0);
 
   const profit = totalRevenue - totalExpenses;
 
-  const monthlyData = [
-    { month: "Jan", revenue: totalRevenue, expenses: totalExpenses }
-  ];
+  // Group by month for chart
+  const monthlyData = invoices.reduce((acc, inv) => {
+    const month = new Date(inv.issueDate).toLocaleString('default', { month: 'short' });
+    if (!acc[month]) {
+      acc[month] = { month, revenue: 0, expenses: 0 };
+    }
+    if (inv.status === "received") {
+      acc[month].revenue += inv.totalAmount;
+    }
+    return acc;
+  }, {} as Record<string, { month: string; revenue: number; expenses: number }>);
+
+  payrolls.forEach(pay => {
+    if (pay.modeOfCashFlow === "outflow" && pay.status === "received") {
+      const month = new Date(pay.date.split('.').reverse().join('-')).toLocaleString('default', { month: 'short' });
+      if (!monthlyData[month]) {
+        monthlyData[month] = { month, revenue: 0, expenses: 0 };
+      }
+      monthlyData[month].expenses += pay.totalAmount;
+    }
+  });
+
+  const monthlyDataArray = Object.values(monthlyData).slice(0, 6); // Last 6 months
 
   const statusData = [
-    { status: "received", count: mockInvoices.filter(i => i.status === "received").length, fill: "var(--color-received)" },
-    { status: "pending", count: mockInvoices.filter(i => i.status === "pending").length, fill: "var(--color-pending)" },
-    { status: "overdue", count: mockInvoices.filter(i => i.status === "overdue").length, fill: "var(--color-overdue)" },
+    { status: "received", count: invoices.filter(i => i.status === "received").length, fill: "var(--color-received)" },
+    { status: "pending", count: invoices.filter(i => i.status === "pending").length, fill: "var(--color-pending)" },
+    { status: "overdue", count: invoices.filter(i => i.status === "overdue").length, fill: "var(--color-overdue)" },
   ];
 
   const cashFlowConfig = {
@@ -72,7 +125,7 @@ const Dashboard = () => {
     },
   } satisfies ChartConfig;
 
-  const pendingReminders = mockReminders.filter(r => r.status === "pending");
+  const pendingReminders = reminders.filter(r => r.status === "pending");
 
   return (
     <div className="space-y-6">
@@ -126,8 +179,8 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {mockInvoices.filter(i => i.status === "pending").length + 
-               mockPayrolls.filter(p => p.status === "pending").length}
+              {invoices.filter(i => i.status === "pending").length + 
+               payrolls.filter(p => p.status === "pending").length}
             </div>
             <p className="text-xs text-muted-foreground">Requires attention</p>
           </CardContent>
@@ -141,8 +194,14 @@ const Dashboard = () => {
             <CardDescription>Revenue vs Expenses (Cash Flow Method)</CardDescription>
           </CardHeader>
           <CardContent>
-            <ChartContainer config={cashFlowConfig}>
-              <BarChart accessibilityLayer data={monthlyData}>
+            {isLoading ? (
+              <div className="flex items-center justify-center h-[300px]">
+                <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                <span className="text-muted-foreground">Loading chart data...</span>
+              </div>
+            ) : (
+              <ChartContainer config={cashFlowConfig}>
+                <BarChart accessibilityLayer data={monthlyDataArray.length > 0 ? monthlyDataArray : [{ month: "No Data", revenue: 0, expenses: 0 }]}>
                 <CartesianGrid vertical={false} />
                 <XAxis
                   dataKey="month"
@@ -166,6 +225,7 @@ const Dashboard = () => {
                 />
               </BarChart>
             </ChartContainer>
+            )}
           </CardContent>
           <CardFooter className="flex-col items-start gap-2 text-sm">
             <div className="flex gap-2 leading-none font-medium">
@@ -183,22 +243,29 @@ const Dashboard = () => {
             <CardDescription>Current status of all invoices</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 pb-0">
-            <ChartContainer
-              config={statusConfig}
-              className="mx-auto aspect-square max-h-[300px]"
-            >
-              <PieChart>
-                <ChartTooltip
-                  cursor={false}
-                  content={<ChartTooltipContent hideLabel />}
-                />
-                <Pie data={statusData} dataKey="count" nameKey="status" />
-              </PieChart>
-            </ChartContainer>
+            {isLoading ? (
+              <div className="flex items-center justify-center h-[300px]">
+                <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                <span className="text-muted-foreground">Loading chart data...</span>
+              </div>
+            ) : (
+              <ChartContainer
+                config={statusConfig}
+                className="mx-auto aspect-square max-h-[300px]"
+              >
+                <PieChart>
+                  <ChartTooltip
+                    cursor={false}
+                    content={<ChartTooltipContent hideLabel />}
+                  />
+                  <Pie data={statusData} dataKey="count" nameKey="status" />
+                </PieChart>
+              </ChartContainer>
+            )}
           </CardContent>
           <CardFooter className="flex-col gap-2 text-sm">
             <div className="text-muted-foreground leading-none">
-              Total {mockInvoices.length} invoices tracked
+              Total {invoices.length} invoices tracked
             </div>
           </CardFooter>
         </Card>
@@ -210,8 +277,14 @@ const Dashboard = () => {
           <CardDescription>Pending notifications and alerts</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {pendingReminders.map((reminder) => (
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin mr-2" />
+              <span className="text-muted-foreground">Loading reminders...</span>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {pendingReminders.map((reminder) => (
               <div key={reminder.id} className="flex items-center justify-between p-4 border rounded-lg">
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
@@ -230,10 +303,11 @@ const Dashboard = () => {
                 </div>
               </div>
             ))}
-            {pendingReminders.length === 0 && (
-              <p className="text-center text-muted-foreground py-8">No pending reminders</p>
-            )}
-          </div>
+              {pendingReminders.length === 0 && (
+                <p className="text-center text-muted-foreground py-8">No pending reminders</p>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
