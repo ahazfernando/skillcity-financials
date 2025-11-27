@@ -211,7 +211,7 @@ const Invoices = () => {
             dueDate && 
             dueDate < today;
 
-          const priority = (isOverdue || isPendingButOverdue) ? "high" : "medium";
+          const priority: "high" | "medium" | "low" = (isOverdue || isPendingButOverdue) ? "high" : "medium";
           const title = (isOverdue || isPendingButOverdue)
             ? `Overdue Payment: ${payroll.name} - ${payroll.invoiceNumber || "N/A"}`
             : `Pending Payment: ${payroll.name} - ${payroll.invoiceNumber || "N/A"}`;
