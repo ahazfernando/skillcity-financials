@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { SearchFilter } from "@/components/SearchFilter";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Plus, FileText, X, Loader2, Check, ChevronsUpDown, Search, Edit2, LayoutGrid, Table as TableIcon, CalendarIcon, TrendingUp, Trash2, Download } from "lucide-react";
+import { Plus, FileText, X, Loader2, Check, ChevronsUpDown, Search, Edit2, LayoutGrid, Table as TableIcon, CalendarIcon, TrendingUp, Trash2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -67,7 +67,6 @@ import { getAllEmployees, addEmployee } from "@/lib/firebase/employees";
 import { getAllPayrolls, addPayroll, updatePayroll, deletePayroll } from "@/lib/firebase/payroll";
 import { getAllSites } from "@/lib/firebase/sites";
 import { toast } from "sonner";
-import { generatePayrollReport } from "@/lib/report-generator";
 
 const Payroll = () => {
   const [searchValue, setSearchValue] = useState("");
@@ -666,21 +665,6 @@ const Payroll = () => {
           <p className="text-muted-foreground">Manage employee payroll (includes 10% GST)</p>
         </div>
         <div className="flex gap-2">
-          <Button 
-            variant="outline"
-            onClick={async () => {
-              try {
-                await generatePayrollReport(payrolls, dateRange);
-                toast.success("Report downloaded successfully!");
-              } catch (error: any) {
-                toast.error(error.message || "Failed to generate report. Please select a date range with data.");
-              }
-            }}
-            disabled={isLoading || payrolls.length === 0}
-          >
-            <Download className="mr-2 h-4 w-4" />
-            Download Report
-          </Button>
           <Button onClick={() => setIsAddDialogOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Add Payroll
@@ -1037,23 +1021,6 @@ const Payroll = () => {
                   />
                 </PopoverContent>
               </Popover>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={async () => {
-                  try {
-                    await generatePayrollReport(payrolls, dateRange);
-                    toast.success("Report downloaded successfully!");
-                  } catch (error: any) {
-                    toast.error(error.message || "Failed to generate report. Please select a date range with data.");
-                  }
-                }}
-                disabled={isLoading || payrolls.length === 0}
-                className="whitespace-nowrap"
-              >
-                <Download className="mr-2 h-4 w-4" />
-                Download Report
-              </Button>
               <Select value={modeFilter} onValueChange={(value) => setModeFilter(value as "all" | "inflow" | "outflow")}>
                 <SelectTrigger className="w-[150px]">
                   <SelectValue placeholder="All Modes" />
