@@ -171,7 +171,7 @@ export const queryReminders = async (
 
     const q = query(remindersRef, ...constraints);
     const querySnapshot = await getDocs(q);
-    let reminders = querySnapshot.docs.map(docToReminder);
+    const reminders = querySnapshot.docs.map(docToReminder);
     
     // Sort in memory if we had filters
     if (hasFilters) {

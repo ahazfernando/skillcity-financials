@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -177,7 +177,7 @@ const Invoices = () => {
   };
 
   // Sync reminders for pending/overdue payroll records
-  const syncRemindersForPayrolls = async (payrolls: Payroll[]) => {
+  const syncRemindersForPayrolls = useCallback(async (payrolls: Payroll[]) => {
     try {
       const allReminders = await queryReminders({ type: "payroll" });
       const existingReminderMap = new Map(
@@ -250,7 +250,7 @@ const Invoices = () => {
       console.error("Error syncing reminders:", error);
       // Don't show error toast as this runs in background
     }
-  };
+  }, []);
 
   // Load payroll data from Firebase
   useEffect(() => {
@@ -279,7 +279,7 @@ const Invoices = () => {
     };
 
     loadData();
-  }, []);
+  }, [syncRemindersForPayrolls]);
 
   const handleEmployeeSelect = (employeeId: string) => {
     const employee = employees.find(emp => emp.id === employeeId);

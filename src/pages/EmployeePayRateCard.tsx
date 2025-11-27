@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
@@ -84,7 +84,7 @@ const EmployeePayRateCard = () => {
   }, [payRates]);
 
   // Get employees for a site, sorted by creation date to maintain assignment order
-  const getEmployeesForSite = (siteId: string): EmployeePayRate[] => {
+  const getEmployeesForSite = useCallback((siteId: string): EmployeePayRate[] => {
     const sitePayRates = payRatesBySite.get(siteId) || [];
     // Sort by createdAt timestamp to maintain assignment order (first assigned = Employee 1)
     return [...sitePayRates].sort((a, b) => {
@@ -92,7 +92,7 @@ const EmployeePayRateCard = () => {
       const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
       return dateA - dateB; // Ascending order (oldest first)
     });
-  };
+  }, [payRatesBySite]);
 
   // Filter sites by search
   const filteredSites = useMemo(() => {
@@ -112,7 +112,7 @@ const EmployeePayRateCard = () => {
       max = Math.max(max, siteEmployees.length);
     });
     return Math.max(max, 3); // At least 3 columns
-  }, [filteredSites, payRatesBySite]);
+  }, [filteredSites, getEmployeesForSite]);
 
   const resetForm = () => {
     setFormData({
