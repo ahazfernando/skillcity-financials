@@ -4,7 +4,9 @@ export interface Invoice {
   id: string;
   invoiceNumber: string;
   clientName: string;
+  name?: string; // Employee or person name (similar to payroll)
   siteId: string;
+  siteOfWork?: string; // Site name or location
   amount: number;
   gst: number;
   totalAmount: number;
@@ -12,6 +14,8 @@ export interface Invoice {
   dueDate: string;
   status: PaymentStatus;
   paymentDate?: string;
+  paymentMethod?: PaymentMethod; // Payment method
+  paymentReceiptNumber?: string; // Receipt number
   receiptUrl?: string;
   notes?: string;
 }

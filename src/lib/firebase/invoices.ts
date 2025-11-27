@@ -35,7 +35,9 @@ const docToInvoice = (doc: any): Invoice => {
     id: doc.id,
     invoiceNumber: data.invoiceNumber || "",
     clientName: data.clientName || "",
+    name: data.name || undefined,
     siteId: data.siteId || "",
+    siteOfWork: data.siteOfWork || undefined,
     amount: data.amount || 0,
     gst: data.gst || 0,
     totalAmount: data.totalAmount || 0,
@@ -43,6 +45,8 @@ const docToInvoice = (doc: any): Invoice => {
     dueDate: timestampToDateString(data.dueDate),
     status: (data.status as PaymentStatus) || "pending",
     paymentDate: data.paymentDate ? timestampToDateString(data.paymentDate) : undefined,
+    paymentMethod: data.paymentMethod || undefined,
+    paymentReceiptNumber: data.paymentReceiptNumber || undefined,
     receiptUrl: data.receiptUrl || undefined,
     notes: data.notes || undefined,
   };
@@ -53,7 +57,9 @@ const invoiceToDoc = (invoice: Omit<Invoice, "id">): any => {
   return {
     invoiceNumber: invoice.invoiceNumber,
     clientName: invoice.clientName,
+    name: invoice.name || null,
     siteId: invoice.siteId,
+    siteOfWork: invoice.siteOfWork || null,
     amount: invoice.amount,
     gst: invoice.gst,
     totalAmount: invoice.totalAmount,
@@ -63,6 +69,8 @@ const invoiceToDoc = (invoice: Omit<Invoice, "id">): any => {
     paymentDate: invoice.paymentDate
       ? Timestamp.fromDate(new Date(invoice.paymentDate))
       : null,
+    paymentMethod: invoice.paymentMethod || null,
+    paymentReceiptNumber: invoice.paymentReceiptNumber || null,
     receiptUrl: invoice.receiptUrl || null,
     notes: invoice.notes || null,
     createdAt: Timestamp.now(),

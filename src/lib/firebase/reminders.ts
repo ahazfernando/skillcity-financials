@@ -162,11 +162,27 @@ export const queryReminders = async (
       constraints.push(where("priority", "==", filters.priority));
     }
 
-    constraints.push(orderBy("dueDate", "asc"));
+    // Only add orderBy if we don't have filters that require composite index
+    // If we have filters, we'll sort in memory instead
+    const hasFilters = filters?.status || filters?.type || filters?.priority;
+    if (!hasFilters) {
+      constraints.push(orderBy("dueDate", "asc"));
+    }
 
     const q = query(remindersRef, ...constraints);
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(docToReminder);
+    let reminders = querySnapshot.docs.map(docToReminder);
+    
+    // Sort in memory if we had filters
+    if (hasFilters) {
+      reminders.sort((a, b) => {
+        const dateA = new Date(a.dueDate).getTime();
+        const dateB = new Date(b.dueDate).getTime();
+        return dateA - dateB;
+      });
+    }
+    
+    return reminders;
   } catch (error) {
     console.error("Error querying reminders:", error);
     throw error;

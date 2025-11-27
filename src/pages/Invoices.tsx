@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { SearchFilter } from "@/components/SearchFilter";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Download, Plus, FileText, Calendar as CalendarIcon, Upload, X, Loader2 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -30,46 +31,70 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Invoice, PaymentStatus } from "@/types/financial";
+import { Invoice, PaymentStatus, Employee, PaymentMethod, Payroll, CashFlowMode, CashFlowType } from "@/types/financial";
 import { getAllInvoices, addInvoice, updateInvoice } from "@/lib/firebase/invoices";
+import { getAllPayrolls, updatePayroll } from "@/lib/firebase/payroll";
+import { getAllEmployees, addEmployee } from "@/lib/firebase/employees";
+import { getAllSites } from "@/lib/firebase/sites";
+import { getAllReminders, addReminder, updateReminder, queryReminders } from "@/lib/firebase/reminders";
 import { uploadReceipt } from "@/lib/firebase/storage";
 import { toast } from "sonner";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const Invoices = () => {
   const [searchValue, setSearchValue] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [payrolls, setPayrolls] = useState<Payroll[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
+  const [editingPayrollId, setEditingPayrollId] = useState<string | null>(null);
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [sites, setSites] = useState<any[]>([]);
+  const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
+  const [employeePopoverOpen, setEmployeePopoverOpen] = useState(false);
+  const [employeeSearchValue, setEmployeeSearchValue] = useState("");
+  const [isAddingEmployee, setIsAddingEmployee] = useState(false);
   const [formData, setFormData] = useState({
     invoiceNumber: "",
-    clientName: "",
-    amount: "",
-    gst: "",
+    name: "",
+    siteOfWork: "",
+    amountExclGst: "",
+    gstAmount: "",
     totalAmount: "",
-    issueDate: "",
-    dueDate: "",
+    date: "",
+    paymentDate: "",
     status: "pending" as PaymentStatus,
+    paymentMethod: "bank_transfer" as PaymentMethod,
+    paymentReceiptNumber: "",
     notes: "",
     receiptUrl: "",
   });
 
-  const handleInputChange = (field: string, value: string) => {
+  const handleInputChange = (field: string, value: string | PaymentMethod) => {
     setFormData((prev) => {
       const updated = { ...prev, [field]: value };
       
       // Auto-calculate GST (10% of amount) and Total if amount changes
-      if (field === "amount" && value) {
-        const amount = parseFloat(value) || 0;
-        const gst = amount * 0.10;
-        const total = amount + gst;
-        updated.gst = gst.toFixed(2);
+      if (field === "amountExclGst" && value) {
+        const amountExclGst = parseFloat(value as string) || 0;
+        const gst = amountExclGst * 0.10;
+        const total = amountExclGst + gst;
+        updated.gstAmount = gst.toFixed(2);
         updated.totalAmount = total.toFixed(2);
       }
       
@@ -136,52 +161,322 @@ const Invoices = () => {
     handleInputChange("receiptUrl", "");
   };
 
-  // Load invoices from Firebase
+  // Parse date from DD.MM.YYYY format
+  const parseDateFromPayroll = (dateStr: string): Date | null => {
+    if (!dateStr) return null;
+    if (dateStr.includes('.')) {
+      const parts = dateStr.split('.');
+      if (parts.length === 3) {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const year = parseInt(parts[2], 10);
+        return new Date(year, month, day);
+      }
+    }
+    return null;
+  };
+
+  // Sync reminders for pending/overdue payroll records
+  const syncRemindersForPayrolls = async (payrolls: Payroll[]) => {
+    try {
+      const allReminders = await queryReminders({ type: "payroll" });
+      const existingReminderMap = new Map(
+        allReminders
+          .filter(r => r.relatedId) // Filter out any reminders without relatedId
+          .map(r => [r.relatedId, r.id] as [string, string])
+      );
+
+      for (const payroll of payrolls) {
+        // Get the actual status from the payroll record
+        const actualStatus = payroll.status;
+        
+        // Use payment date if available, otherwise use issue date as due date
+        const dueDate = payroll.paymentDate 
+          ? parseDateFromPayroll(payroll.paymentDate) 
+          : parseDateFromPayroll(payroll.date);
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        // Only create reminders for pending or overdue status
+        // Use the actual status from the payroll record
+        if (actualStatus === "pending" || actualStatus === "overdue") {
+          const reminderId = existingReminderMap.get(payroll.id);
+          
+          // Determine if it's overdue based on actual status
+          const isOverdue = actualStatus === "overdue";
+          
+          // Also check if pending payment has passed its due date
+          const isPendingButOverdue = actualStatus === "pending" && 
+            dueDate && 
+            dueDate < today;
+
+          const priority = (isOverdue || isPendingButOverdue) ? "high" : "medium";
+          const title = (isOverdue || isPendingButOverdue)
+            ? `Overdue Payment: ${payroll.name} - ${payroll.invoiceNumber || "N/A"}`
+            : `Pending Payment: ${payroll.name} - ${payroll.invoiceNumber || "N/A"}`;
+          
+          const description = `Payment of $${payroll.totalAmount.toFixed(2)} for ${payroll.name}${payroll.siteOfWork ? ` at ${payroll.siteOfWork}` : ""} is ${(isOverdue || isPendingButOverdue) ? "overdue" : "pending"}.`;
+
+          const reminderData = {
+            type: "payroll" as const,
+            title,
+            description,
+            dueDate: dueDate ? dueDate.toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
+            priority,
+            status: "pending" as const,
+            relatedId: payroll.id,
+          };
+
+          if (reminderId) {
+            // Update existing reminder
+            await updateReminder(reminderId, reminderData);
+          } else {
+            // Create new reminder
+            await addReminder(reminderData);
+          }
+        } else if (actualStatus === "received" || actualStatus === "paid") {
+          // If status is received/paid, mark related reminder as completed if it exists
+          const reminderId = existingReminderMap.get(payroll.id);
+          if (reminderId) {
+            const existingReminder = allReminders.find(r => r.id === reminderId);
+            if (existingReminder && existingReminder.status === "pending") {
+              await updateReminder(reminderId, { status: "completed" });
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error syncing reminders:", error);
+      // Don't show error toast as this runs in background
+    }
+  };
+
+  // Load payroll data from Firebase
   useEffect(() => {
-    const loadInvoices = async () => {
+    const loadData = async () => {
       try {
         setIsLoading(true);
-        const fetchedInvoices = await getAllInvoices();
-        setInvoices(fetchedInvoices);
+        setIsLoadingEmployees(true);
+        const [fetchedPayrolls, fetchedEmployees, fetchedSites] = await Promise.all([
+          getAllPayrolls(),
+          getAllEmployees(),
+          getAllSites(),
+        ]);
+        setPayrolls(fetchedPayrolls);
+        setEmployees(fetchedEmployees.filter(emp => emp.status === "active"));
+        setSites(fetchedSites.filter(s => s.status === "active"));
+        
+        // Sync reminders for pending/overdue records
+        await syncRemindersForPayrolls(fetchedPayrolls);
       } catch (error) {
-        console.error("Error loading invoices:", error);
-        toast.error("Failed to load invoices. Please try again.");
+        console.error("Error loading data:", error);
+        toast.error("Failed to load data. Please try again.");
       } finally {
         setIsLoading(false);
+        setIsLoadingEmployees(false);
       }
     };
 
-    loadInvoices();
+    loadData();
   }, []);
+
+  const handleEmployeeSelect = (employeeId: string) => {
+    const employee = employees.find(emp => emp.id === employeeId);
+    if (employee) {
+      setFormData((prev) => ({
+        ...prev,
+        name: employee.name,
+      }));
+      setEmployeePopoverOpen(false);
+      setEmployeeSearchValue("");
+    }
+  };
+
+  const handleAddNewEmployee = async (name: string) => {
+    if (!name.trim()) {
+      toast.error("Please enter a name");
+      return;
+    }
+
+    // Check if employee already exists
+    const existingEmployee = employees.find(
+      emp => emp.name.toLowerCase() === name.trim().toLowerCase()
+    );
+    if (existingEmployee) {
+      handleEmployeeSelect(existingEmployee.id);
+      return;
+    }
+
+    try {
+      setIsAddingEmployee(true);
+      const newEmployeeId = await addEmployee({
+        name: name.trim(),
+        role: "",
+        email: "",
+        phone: "",
+        salary: 0,
+        startDate: new Date().toISOString().split('T')[0],
+        status: "active",
+      });
+
+      // Reload employees list
+      const updatedEmployees = await getAllEmployees();
+      setEmployees(updatedEmployees.filter(emp => emp.status === "active"));
+
+      // Select the newly added employee
+      setFormData((prev) => ({
+        ...prev,
+        name: name.trim(),
+      }));
+      setEmployeePopoverOpen(false);
+      setEmployeeSearchValue("");
+      toast.success(`Employee "${name.trim()}" added successfully!`);
+    } catch (error) {
+      console.error("Error adding employee:", error);
+      toast.error("Failed to add employee. Please try again.");
+    } finally {
+      setIsAddingEmployee(false);
+    }
+  };
+
+  // Convert DD.MM.YYYY to YYYY-MM-DD for date inputs
+  const convertDateToInputFormat = (dateStr: string): string => {
+    if (!dateStr) return "";
+    // If already in DD.MM.YYYY format, convert to YYYY-MM-DD
+    if (dateStr.includes('.')) {
+      const parts = dateStr.split('.');
+      if (parts.length === 3) {
+        return `${parts[2]}-${parts[1]}-${parts[0]}`;
+      }
+    }
+    // If already in YYYY-MM-DD format, return as is
+    if (dateStr.includes('-') && dateStr.length === 10) {
+      return dateStr;
+    }
+    return "";
+  };
 
   const resetForm = () => {
     setFormData({
       invoiceNumber: "",
-      clientName: "",
-      amount: "",
-      gst: "",
+      name: "",
+      siteOfWork: "",
+      amountExclGst: "",
+      gstAmount: "",
       totalAmount: "",
-      issueDate: "",
-      dueDate: "",
+      date: "",
+      paymentDate: "",
       status: "pending",
+      paymentMethod: "bank_transfer",
+      paymentReceiptNumber: "",
       notes: "",
       receiptUrl: "",
     });
     setReceiptFile(null);
-    setEditingInvoiceId(null);
+    setEditingPayrollId(null);
+    setEmployeePopoverOpen(false);
+    setEmployeeSearchValue("");
+  };
+
+  const handleEditPayroll = (payroll: Payroll) => {
+    setEditingPayrollId(payroll.id);
+    setFormData({
+      invoiceNumber: payroll.invoiceNumber || "",
+      name: payroll.name,
+      siteOfWork: payroll.siteOfWork || "",
+      amountExclGst: payroll.amountExclGst.toString(),
+      gstAmount: payroll.gstAmount.toString(),
+      totalAmount: payroll.totalAmount.toString(),
+      date: convertDateToInputFormat(payroll.date),
+      paymentDate: payroll.paymentDate ? convertDateToInputFormat(payroll.paymentDate) : "",
+      status: payroll.status,
+      paymentMethod: payroll.paymentMethod,
+      paymentReceiptNumber: payroll.paymentReceiptNumber || "",
+      notes: payroll.notes || "",
+      receiptUrl: payroll.receiptUrl || "",
+    });
+    setReceiptFile(null);
+    setIsEditDialogOpen(true);
+  };
+
+  const handleUpdatePayroll = async () => {
+    if (!editingPayrollId) return;
+    
+    if (!formData.name || !formData.date || !formData.amountExclGst) {
+      toast.error("Please fill in all required fields (Name, Date, Amount)");
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      
+      // Convert date from YYYY-MM-DD to DD.MM.YYYY format
+      const dateParts = formData.date.split('-');
+      const formattedDate = dateParts.length === 3 
+        ? `${dateParts[2]}.${dateParts[1]}.${dateParts[0]}`
+        : formData.date;
+
+      // Convert payment date from YYYY-MM-DD to DD.MM.YYYY format if provided
+      let formattedPaymentDate = undefined;
+      if (formData.paymentDate) {
+        const paymentDateParts = formData.paymentDate.split('-');
+        formattedPaymentDate = paymentDateParts.length === 3 
+          ? `${paymentDateParts[2]}.${paymentDateParts[1]}.${paymentDateParts[0]}`
+          : formData.paymentDate;
+      }
+
+      const updatedPayroll: Partial<Omit<Payroll, "id">> = {
+        invoiceNumber: formData.invoiceNumber || undefined,
+        name: formData.name,
+        siteOfWork: formData.siteOfWork || undefined,
+        amountExclGst: parseFloat(formData.amountExclGst) || 0,
+        gstAmount: parseFloat(formData.gstAmount) || 0,
+        totalAmount: parseFloat(formData.totalAmount) || 0,
+        date: formattedDate,
+        paymentMethod: formData.paymentMethod,
+        paymentDate: formattedPaymentDate,
+        paymentReceiptNumber: formData.paymentReceiptNumber || undefined,
+        status: formData.status,
+        notes: formData.notes || undefined,
+      };
+
+      await updatePayroll(editingPayrollId, updatedPayroll);
+      
+      // Reload payrolls
+      const updatedPayrolls = await getAllPayrolls();
+      setPayrolls(updatedPayrolls);
+      
+      // Sync reminders after update
+      await syncRemindersForPayrolls(updatedPayrolls);
+      
+      toast.success("Record updated successfully!");
+      setIsEditDialogOpen(false);
+      setReceiptFile(null);
+      setEmployeePopoverOpen(false);
+      resetForm();
+    } catch (error) {
+      console.error("Error updating record:", error);
+      toast.error("Failed to update record. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleEditInvoice = (invoice: Invoice) => {
     setEditingInvoiceId(invoice.id);
     setFormData({
       invoiceNumber: invoice.invoiceNumber,
-      clientName: invoice.clientName,
+      name: invoice.name || "",
+      siteOfWork: invoice.siteOfWork || "",
       amount: invoice.amount.toString(),
       gst: invoice.gst.toString(),
       totalAmount: invoice.totalAmount.toString(),
       issueDate: invoice.issueDate,
       dueDate: invoice.dueDate,
       status: invoice.status,
+      paymentMethod: invoice.paymentMethod || "bank_transfer",
+      paymentReceiptNumber: invoice.paymentReceiptNumber || "",
       notes: invoice.notes || "",
       receiptUrl: invoice.receiptUrl || "",
     });
@@ -190,8 +485,8 @@ const Invoices = () => {
   };
 
   const handleSaveInvoice = async () => {
-    if (!formData.invoiceNumber || !formData.clientName || !formData.amount) {
-      toast.error("Please fill in all required fields (Invoice #, Client, Amount)");
+    if (!formData.invoiceNumber || !formData.amount) {
+      toast.error("Please fill in all required fields (Invoice #, Amount)");
       return;
     }
 
@@ -209,14 +504,17 @@ const Invoices = () => {
         // Update existing invoice
         await updateInvoice(editingInvoiceId, {
           invoiceNumber: formData.invoiceNumber,
-          clientName: formData.clientName,
+          name: formData.name || undefined,
           siteId: "", // You might want to add site selection
+          siteOfWork: formData.siteOfWork || undefined,
           amount: parseFloat(formData.amount),
           gst: parseFloat(formData.gst) || 0,
           totalAmount: parseFloat(formData.totalAmount) || parseFloat(formData.amount),
           issueDate: formData.issueDate || new Date().toISOString().split("T")[0],
           dueDate: formData.dueDate || new Date().toISOString().split("T")[0],
           status: formData.status,
+          paymentMethod: formData.paymentMethod,
+          paymentReceiptNumber: formData.paymentReceiptNumber || undefined,
           receiptUrl: receiptUrl || undefined,
           notes: formData.notes || undefined,
         });
@@ -231,14 +529,17 @@ const Invoices = () => {
         // Add new invoice
         const newInvoice: Omit<Invoice, "id"> = {
           invoiceNumber: formData.invoiceNumber,
-          clientName: formData.clientName,
+          name: formData.name || undefined,
           siteId: "", // You might want to add site selection
+          siteOfWork: formData.siteOfWork || undefined,
           amount: parseFloat(formData.amount),
           gst: parseFloat(formData.gst) || 0,
           totalAmount: parseFloat(formData.totalAmount) || parseFloat(formData.amount),
           issueDate: formData.issueDate || new Date().toISOString().split("T")[0],
           dueDate: formData.dueDate || new Date().toISOString().split("T")[0],
           status: formData.status,
+          paymentMethod: formData.paymentMethod,
+          paymentReceiptNumber: formData.paymentReceiptNumber || undefined,
           receiptUrl: receiptUrl || undefined,
           notes: formData.notes || undefined,
         };
@@ -269,30 +570,59 @@ const Invoices = () => {
   };
 
 
-  const filteredInvoices = invoices.filter(invoice => {
-    const matchesSearch = invoice.invoiceNumber.toLowerCase().includes(searchValue.toLowerCase()) ||
-      invoice.clientName.toLowerCase().includes(searchValue.toLowerCase());
-    const matchesStatus = statusFilter === "all" || invoice.status === statusFilter;
+  // Convert DD.MM.YYYY to Date object
+  const parseDate = (dateStr: string): Date | null => {
+    if (!dateStr) return null;
+    if (dateStr.includes('.')) {
+      const parts = dateStr.split('.');
+      if (parts.length === 3) {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1; // Month is 0-indexed
+        const year = parseInt(parts[2], 10);
+        return new Date(year, month, day);
+      }
+    }
+    return null;
+  };
+
+  // Format date from DD.MM.YYYY or ISO to display format
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return "-";
+    // If already in DD.MM.YYYY format, return as is
+    if (dateStr.includes('.')) return dateStr;
+    // Otherwise convert from ISO (YYYY-MM-DD) to DD.MM.YYYY
+    try {
+      const date = new Date(dateStr);
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const year = date.getFullYear();
+      return `${day}.${month}.${year}`;
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const filteredPayrolls = payrolls.filter(payroll => {
+    const matchesSearch = payroll.invoiceNumber?.toLowerCase().includes(searchValue.toLowerCase()) ||
+      payroll.name.toLowerCase().includes(searchValue.toLowerCase()) ||
+      (payroll.siteOfWork && payroll.siteOfWork.toLowerCase().includes(searchValue.toLowerCase()));
+    const matchesStatus = statusFilter === "all" || payroll.status === statusFilter;
     
-    // Date range filtering - check if invoice issue date or due date falls within range
+    // Date range filtering
     let matchesDate = true;
-    if (dateRange?.from && dateRange?.to) {
-      const invoiceIssueDate = new Date(invoice.issueDate);
-      const invoiceDueDate = new Date(invoice.dueDate);
-      const fromDate = new Date(dateRange.from);
-      const toDate = new Date(dateRange.to);
-      toDate.setHours(23, 59, 59, 999); // Include the entire end date
-      
-      // Check if invoice issue date or due date is within the range
-      matchesDate = (invoiceIssueDate >= fromDate && invoiceIssueDate <= toDate) ||
-                   (invoiceDueDate >= fromDate && invoiceDueDate <= toDate) ||
-                   (invoiceIssueDate <= fromDate && invoiceDueDate >= toDate);
-    } else if (dateRange?.from) {
-      // Only from date selected
-      const invoiceIssueDate = new Date(invoice.issueDate);
-      const invoiceDueDate = new Date(invoice.dueDate);
-      const fromDate = new Date(dateRange.from);
-      matchesDate = invoiceIssueDate >= fromDate || invoiceDueDate >= fromDate;
+    if (dateRange?.from || dateRange?.to) {
+      const payrollDate = parseDate(payroll.date);
+      if (payrollDate) {
+        if (dateRange.from && dateRange.to) {
+          matchesDate = payrollDate >= dateRange.from && payrollDate <= dateRange.to;
+        } else if (dateRange.from) {
+          matchesDate = payrollDate >= dateRange.from;
+        } else if (dateRange.to) {
+          matchesDate = payrollDate <= dateRange.to;
+        }
+      } else {
+        matchesDate = false;
+      }
     }
     
     return matchesSearch && matchesStatus && matchesDate;
@@ -362,75 +692,99 @@ const Invoices = () => {
             </Popover>
           </div>
 
-          <div className="rounded-md border">
+          <div className="rounded-md border overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow>
+                <TableRow className="bg-green-50 dark:bg-green-950">
                   <TableHead>Invoice #</TableHead>
-                  <TableHead>Client</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Site of Work</TableHead>
                   <TableHead>Amount</TableHead>
                   <TableHead>GST</TableHead>
                   <TableHead>Total</TableHead>
                   <TableHead>Issue Date</TableHead>
                   <TableHead>Due Date</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Receipt</TableHead>
-                  <TableHead>Notes</TableHead>
+                  <TableHead>Payment Method</TableHead>
+                  <TableHead>Payment Date</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
+                  Array.from({ length: 5 }).map((_, index) => (
+                    <TableRow key={`skeleton-${index}`}>
+                      <TableCell>
+                        <Skeleton className="h-4 w-24" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-32" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-28" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-20" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-16" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-20" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-24" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-16" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-5 w-16 rounded-full" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-5 w-24 rounded-full" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-24" />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : filteredPayrolls.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8">
-                      <div className="flex items-center justify-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Loading invoices...</span>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : filteredInvoices.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
-                      No invoices found
+                    <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
+                      No records found
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredInvoices.map((invoice) => (
+                  filteredPayrolls.map((payroll) => (
                     <TableRow 
-                      key={invoice.id}
+                      key={payroll.id}
                       className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => handleEditInvoice(invoice)}
+                      onClick={() => handleEditPayroll(payroll)}
                     >
-                      <TableCell className="font-medium">{invoice.invoiceNumber}</TableCell>
-                      <TableCell>{invoice.clientName}</TableCell>
-                      <TableCell>${invoice.amount.toLocaleString()}</TableCell>
-                      <TableCell>${invoice.gst.toLocaleString()}</TableCell>
-                      <TableCell className="font-semibold">${invoice.totalAmount.toLocaleString()}</TableCell>
-                      <TableCell>{new Date(invoice.issueDate).toLocaleDateString()}</TableCell>
-                      <TableCell>{new Date(invoice.dueDate).toLocaleDateString()}</TableCell>
+                      <TableCell className="font-medium">{payroll.invoiceNumber || "-"}</TableCell>
+                      <TableCell className="font-medium">{payroll.name || "-"}</TableCell>
+                      <TableCell>{payroll.siteOfWork || "-"}</TableCell>
+                      <TableCell>${payroll.amountExclGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                      <TableCell>${payroll.gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                      <TableCell className="font-semibold">${payroll.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                      <TableCell>{formatDate(payroll.date)}</TableCell>
+                      <TableCell>-</TableCell>
                       <TableCell>
-                        <StatusBadge status={invoice.status} />
+                        <StatusBadge status={payroll.status} />
                       </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        {invoice.receiptUrl ? (
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => {
-                              if (invoice.receiptUrl) {
-                                window.open(invoice.receiptUrl, '_blank');
-                              }
-                            }}
-                          >
-                            <Download className="h-4 w-4" />
-                          </Button>
+                      <TableCell>
+                        {payroll.paymentMethod ? (
+                          <Badge variant="outline">
+                            {payroll.paymentMethod === "bank_transfer" ? "Bank Transfer" :
+                             payroll.paymentMethod === "cash" ? "Cash" :
+                             payroll.paymentMethod === "cheque" ? "Cheque" :
+                             payroll.paymentMethod === "credit_card" ? "Credit Card" : "Other"}
+                          </Badge>
                         ) : (
-                          <Badge variant="outline">No receipt</Badge>
+                          "-"
                         )}
                       </TableCell>
-                      <TableCell className="max-w-[200px] truncate">
-                        {invoice.notes || "-"}
-                      </TableCell>
+                      <TableCell>{payroll.paymentDate ? formatDate(payroll.paymentDate) : "-"}</TableCell>
                     </TableRow>
                   ))
                 )}
@@ -481,7 +835,7 @@ const Invoices = () => {
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="invoiceNumber">Invoice # *</Label>
                 <Input
@@ -491,48 +845,152 @@ const Invoices = () => {
                   placeholder="INV-2025-001"
                 />
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="clientName">Client *</Label>
-                <Input
-                  id="clientName"
-                  value={formData.clientName}
-                  onChange={(e) => handleInputChange("clientName", e.target.value)}
-                  placeholder="Client Name"
-                />
+                <Label htmlFor="name">Name</Label>
+                <Popover open={employeePopoverOpen} onOpenChange={setEmployeePopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={employeePopoverOpen}
+                      className="w-full justify-between"
+                      disabled={isLoadingEmployees}
+                    >
+                      {formData.name || "Select employee..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[350px] p-0" align="start">
+                    <Command>
+                      <CommandInput 
+                        placeholder="Search employee..." 
+                        value={employeeSearchValue}
+                        onValueChange={setEmployeeSearchValue}
+                      />
+                      <CommandList>
+                        {isLoadingEmployees ? (
+                          <div className="flex items-center justify-center py-6">
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            <span className="text-sm text-muted-foreground">Loading...</span>
+                          </div>
+                        ) : (
+                          <>
+                            <CommandGroup>
+                              {employees
+                                .filter(employee => 
+                                  !employeeSearchValue || 
+                                  employee.name.toLowerCase().includes(employeeSearchValue.toLowerCase())
+                                )
+                                .map((employee) => (
+                                  <CommandItem
+                                    key={employee.id}
+                                    value={employee.name}
+                                    onSelect={() => handleEmployeeSelect(employee.id)}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        formData.name === employee.name
+                                          ? "opacity-100"
+                                          : "opacity-0"
+                                      )}
+                                    />
+                                    {employee.name}
+                                  </CommandItem>
+                                ))}
+                            </CommandGroup>
+                            {employeeSearchValue && 
+                             !employees.some(emp => 
+                               emp.name.toLowerCase() === employeeSearchValue.trim().toLowerCase()
+                             ) && 
+                             employeeSearchValue.trim().length > 0 && (
+                              <CommandGroup>
+                                <CommandItem
+                                  value={`add-${employeeSearchValue}`}
+                                  onSelect={() => handleAddNewEmployee(employeeSearchValue)}
+                                  disabled={isAddingEmployee}
+                                  className="text-primary"
+                                >
+                                  {isAddingEmployee ? (
+                                    <>
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                      Adding...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Plus className="mr-2 h-4 w-4" />
+                                      Add "{employeeSearchValue}"
+                                    </>
+                                  )}
+                                </CommandItem>
+                              </CommandGroup>
+                            )}
+                            {!employeeSearchValue && employees.length === 0 && (
+                              <CommandEmpty>No employees found.</CommandEmpty>
+                            )}
+                          </>
+                        )}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="siteOfWork">Site of Work</Label>
+                <Select
+                  value={formData.siteOfWork}
+                  onValueChange={(value) => handleInputChange("siteOfWork", value)}
+                >
+                  <SelectTrigger id="siteOfWork">
+                    <SelectValue placeholder="Select site" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sites.map((site) => (
+                      <SelectItem key={site.id} value={site.name}>
+                        {site.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="amount">Amount *</Label>
+                <Label htmlFor="amountExclGst">Amount (Excl. GST) *</Label>
                 <Input
-                  id="amount"
+                  id="amountExclGst"
                   type="number"
                   step="0.01"
-                  value={formData.amount}
-                  onChange={(e) => handleInputChange("amount", e.target.value)}
+                  value={formData.amountExclGst}
+                  onChange={(e) => handleInputChange("amountExclGst", e.target.value)}
                   placeholder="0.00"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="gst">GST</Label>
+                <Label htmlFor="gstAmount">GST Amount (10%)</Label>
                 <Input
-                  id="gst"
+                  id="gstAmount"
                   type="number"
                   step="0.01"
-                  value={formData.gst}
-                  onChange={(e) => handleInputChange("gst", e.target.value)}
+                  value={formData.gstAmount}
+                  readOnly
+                  className="bg-muted"
                   placeholder="Auto-calculated"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="totalAmount">Total</Label>
+                <Label htmlFor="totalAmount">Total Amount</Label>
                 <Input
                   id="totalAmount"
                   type="number"
                   step="0.01"
                   value={formData.totalAmount}
-                  onChange={(e) => handleInputChange("totalAmount", e.target.value)}
+                  readOnly
+                  className="bg-muted"
                   placeholder="Auto-calculated"
                 />
               </div>
@@ -540,40 +998,72 @@ const Invoices = () => {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="issueDate">Issue Date</Label>
+                <Label htmlFor="date">Issue Date *</Label>
                 <Input
-                  id="issueDate"
+                  id="date"
                   type="date"
-                  value={formData.issueDate}
-                  onChange={(e) => handleInputChange("issueDate", e.target.value)}
+                  value={formData.date}
+                  onChange={(e) => handleInputChange("date", e.target.value)}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="dueDate">Due Date</Label>
+                <Label htmlFor="paymentDate">Payment Date</Label>
                 <Input
-                  id="dueDate"
+                  id="paymentDate"
                   type="date"
-                  value={formData.dueDate}
-                  onChange={(e) => handleInputChange("dueDate", e.target.value)}
+                  value={formData.paymentDate}
+                  onChange={(e) => handleInputChange("paymentDate", e.target.value)}
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="status">Status</Label>
-              <Select
-                value={formData.status}
-                onValueChange={(value) => handleInputChange("status", value)}
-              >
-                <SelectTrigger id="status">
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="received">Received</SelectItem>
-                  <SelectItem value="overdue">Overdue</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="status">Status</Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(value) => handleInputChange("status", value)}
+                >
+                  <SelectTrigger id="status">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="received">Received</SelectItem>
+                    <SelectItem value="overdue">Overdue</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="paymentMethod">Payment Method</Label>
+                <Select
+                  value={formData.paymentMethod}
+                  onValueChange={(value) => handleInputChange("paymentMethod", value)}
+                >
+                  <SelectTrigger id="paymentMethod">
+                    <SelectValue placeholder="Select payment method" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                    <SelectItem value="cash">Cash</SelectItem>
+                    <SelectItem value="cheque">Cheque</SelectItem>
+                    <SelectItem value="credit_card">Credit Card</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="paymentReceiptNumber">Payment Receipt Number</Label>
+                <Input
+                  id="paymentReceiptNumber"
+                  value={formData.paymentReceiptNumber}
+                  onChange={(e) => handleInputChange("paymentReceiptNumber", e.target.value)}
+                  placeholder="Receipt number"
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -680,7 +1170,7 @@ const Invoices = () => {
                   >
                     Cancel
                   </Button>
-                  <Button onClick={handleSaveInvoice} disabled={isSaving}>
+                  <Button onClick={() => {}} disabled={isSaving}>
                     {isSaving ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -732,13 +1222,13 @@ const Invoices = () => {
             <div className="flex flex-col overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] md:rounded-r-lg">
               <div className="p-6">
                 <DialogHeader>
-                  <DialogTitle>Edit Invoice</DialogTitle>
+                  <DialogTitle>Edit Record</DialogTitle>
                   <DialogDescription>
-                    Update the invoice details. All fields matching the table columns are available.
+                    Update the record details. All fields matching the table columns are available.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-invoiceNumber">Invoice # *</Label>
                 <Input
@@ -748,48 +1238,152 @@ const Invoices = () => {
                   placeholder="INV-2025-001"
                 />
               </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="edit-clientName">Client *</Label>
-                <Input
-                  id="edit-clientName"
-                  value={formData.clientName}
-                  onChange={(e) => handleInputChange("clientName", e.target.value)}
-                  placeholder="Client Name"
-                />
+                <Label htmlFor="edit-name">Name</Label>
+                <Popover open={employeePopoverOpen} onOpenChange={setEmployeePopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={employeePopoverOpen}
+                      className="w-full justify-between"
+                      disabled={isLoadingEmployees}
+                    >
+                      {formData.name || "Select employee..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[350px] p-0" align="start">
+                    <Command>
+                      <CommandInput 
+                        placeholder="Search employee..." 
+                        value={employeeSearchValue}
+                        onValueChange={setEmployeeSearchValue}
+                      />
+                      <CommandList>
+                        {isLoadingEmployees ? (
+                          <div className="flex items-center justify-center py-6">
+                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                            <span className="text-sm text-muted-foreground">Loading...</span>
+                          </div>
+                        ) : (
+                          <>
+                            <CommandGroup>
+                              {employees
+                                .filter(employee => 
+                                  !employeeSearchValue || 
+                                  employee.name.toLowerCase().includes(employeeSearchValue.toLowerCase())
+                                )
+                                .map((employee) => (
+                                  <CommandItem
+                                    key={employee.id}
+                                    value={employee.name}
+                                    onSelect={() => handleEmployeeSelect(employee.id)}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        formData.name === employee.name
+                                          ? "opacity-100"
+                                          : "opacity-0"
+                                      )}
+                                    />
+                                    {employee.name}
+                                  </CommandItem>
+                                ))}
+                            </CommandGroup>
+                            {employeeSearchValue && 
+                             !employees.some(emp => 
+                               emp.name.toLowerCase() === employeeSearchValue.trim().toLowerCase()
+                             ) && 
+                             employeeSearchValue.trim().length > 0 && (
+                              <CommandGroup>
+                                <CommandItem
+                                  value={`add-${employeeSearchValue}`}
+                                  onSelect={() => handleAddNewEmployee(employeeSearchValue)}
+                                  disabled={isAddingEmployee}
+                                  className="text-primary"
+                                >
+                                  {isAddingEmployee ? (
+                                    <>
+                                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                      Adding...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Plus className="mr-2 h-4 w-4" />
+                                      Add "{employeeSearchValue}"
+                                    </>
+                                  )}
+                                </CommandItem>
+                              </CommandGroup>
+                            )}
+                            {!employeeSearchValue && employees.length === 0 && (
+                              <CommandEmpty>No employees found.</CommandEmpty>
+                            )}
+                          </>
+                        )}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-siteOfWork">Site of Work</Label>
+                <Select
+                  value={formData.siteOfWork}
+                  onValueChange={(value) => handleInputChange("siteOfWork", value)}
+                >
+                  <SelectTrigger id="edit-siteOfWork">
+                    <SelectValue placeholder="Select site" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {sites.map((site) => (
+                      <SelectItem key={site.id} value={site.name}>
+                        {site.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="edit-amount">Amount *</Label>
+                <Label htmlFor="edit-amountExclGst">Amount (Excl. GST) *</Label>
                 <Input
-                  id="edit-amount"
+                  id="edit-amountExclGst"
                   type="number"
                   step="0.01"
-                  value={formData.amount}
-                  onChange={(e) => handleInputChange("amount", e.target.value)}
+                  value={formData.amountExclGst}
+                  onChange={(e) => handleInputChange("amountExclGst", e.target.value)}
                   placeholder="0.00"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-gst">GST</Label>
+                <Label htmlFor="edit-gstAmount">GST Amount (10%)</Label>
                 <Input
-                  id="edit-gst"
+                  id="edit-gstAmount"
                   type="number"
                   step="0.01"
-                  value={formData.gst}
-                  onChange={(e) => handleInputChange("gst", e.target.value)}
+                  value={formData.gstAmount}
+                  readOnly
+                  className="bg-muted"
                   placeholder="Auto-calculated"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-totalAmount">Total</Label>
+                <Label htmlFor="edit-totalAmount">Total Amount</Label>
                 <Input
                   id="edit-totalAmount"
                   type="number"
                   step="0.01"
                   value={formData.totalAmount}
-                  onChange={(e) => handleInputChange("totalAmount", e.target.value)}
+                  readOnly
+                  className="bg-muted"
                   placeholder="Auto-calculated"
                 />
               </div>
@@ -797,40 +1391,72 @@ const Invoices = () => {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="edit-issueDate">Issue Date</Label>
+                <Label htmlFor="edit-date">Issue Date *</Label>
                 <Input
-                  id="edit-issueDate"
+                  id="edit-date"
                   type="date"
-                  value={formData.issueDate}
-                  onChange={(e) => handleInputChange("issueDate", e.target.value)}
+                  value={formData.date}
+                  onChange={(e) => handleInputChange("date", e.target.value)}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-dueDate">Due Date</Label>
+                <Label htmlFor="edit-paymentDate">Payment Date</Label>
                 <Input
-                  id="edit-dueDate"
+                  id="edit-paymentDate"
                   type="date"
-                  value={formData.dueDate}
-                  onChange={(e) => handleInputChange("dueDate", e.target.value)}
+                  value={formData.paymentDate}
+                  onChange={(e) => handleInputChange("paymentDate", e.target.value)}
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="edit-status">Status</Label>
-              <Select
-                value={formData.status}
-                onValueChange={(value) => handleInputChange("status", value)}
-              >
-                <SelectTrigger id="edit-status">
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="received">Received</SelectItem>
-                  <SelectItem value="overdue">Overdue</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-status">Status</Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(value) => handleInputChange("status", value)}
+                >
+                  <SelectTrigger id="edit-status">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="received">Received</SelectItem>
+                    <SelectItem value="paid">Paid</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit-paymentMethod">Payment Method</Label>
+                <Select
+                  value={formData.paymentMethod}
+                  onValueChange={(value) => handleInputChange("paymentMethod", value)}
+                >
+                  <SelectTrigger id="edit-paymentMethod">
+                    <SelectValue placeholder="Select payment method" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                    <SelectItem value="cash">Cash</SelectItem>
+                    <SelectItem value="cheque">Cheque</SelectItem>
+                    <SelectItem value="credit_card">Credit Card</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-paymentReceiptNumber">Payment Receipt Number</Label>
+                <Input
+                  id="edit-paymentReceiptNumber"
+                  value={formData.paymentReceiptNumber}
+                  onChange={(e) => handleInputChange("paymentReceiptNumber", e.target.value)}
+                  placeholder="Receipt number"
+                />
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -961,14 +1587,14 @@ const Invoices = () => {
                   >
                     Cancel
                   </Button>
-                  <Button onClick={handleSaveInvoice} disabled={isSaving}>
+                  <Button onClick={handleUpdatePayroll} disabled={isSaving}>
                     {isSaving ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Saving...
+                        Updating...
                       </>
                     ) : (
-                      "Update Invoice"
+                      "Update Record"
                     )}
                   </Button>
                 </DialogFooter>

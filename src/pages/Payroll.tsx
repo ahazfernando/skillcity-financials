@@ -6,7 +6,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { SearchFilter } from "@/components/SearchFilter";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Plus, FileText, X, Loader2, Check, ChevronsUpDown, Search, Edit2, LayoutGrid, Table as TableIcon, CalendarIcon, TrendingUp, Trash2 } from "lucide-react";
+import { Plus, FileText, X, Loader2, Check, ChevronsUpDown, Search, Edit2, LayoutGrid, Table as TableIcon, CalendarIcon, TrendingUp, Trash2, Download } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -66,6 +67,7 @@ import { getAllEmployees, addEmployee } from "@/lib/firebase/employees";
 import { getAllPayrolls, addPayroll, updatePayroll, deletePayroll } from "@/lib/firebase/payroll";
 import { getAllSites } from "@/lib/firebase/sites";
 import { toast } from "sonner";
+import { generatePayrollReport } from "@/lib/report-generator";
 
 const Payroll = () => {
   const [searchValue, setSearchValue] = useState("");
@@ -664,6 +666,21 @@ const Payroll = () => {
           <p className="text-muted-foreground">Manage employee payroll (includes 10% GST)</p>
         </div>
         <div className="flex gap-2">
+          <Button 
+            variant="outline"
+            onClick={async () => {
+              try {
+                await generatePayrollReport(payrolls, dateRange);
+                toast.success("Report downloaded successfully!");
+              } catch (error: any) {
+                toast.error(error.message || "Failed to generate report. Please select a date range with data.");
+              }
+            }}
+            disabled={isLoading || payrolls.length === 0}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Download Report
+          </Button>
           <Button onClick={() => setIsAddDialogOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Add Payroll
@@ -1020,6 +1037,23 @@ const Payroll = () => {
                   />
                 </PopoverContent>
               </Popover>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={async () => {
+                  try {
+                    await generatePayrollReport(payrolls, dateRange);
+                    toast.success("Report downloaded successfully!");
+                  } catch (error: any) {
+                    toast.error(error.message || "Failed to generate report. Please select a date range with data.");
+                  }
+                }}
+                disabled={isLoading || payrolls.length === 0}
+                className="whitespace-nowrap"
+              >
+                <Download className="mr-2 h-4 w-4" />
+                Download Report
+              </Button>
               <Select value={modeFilter} onValueChange={(value) => setModeFilter(value as "all" | "inflow" | "outflow")}>
                 <SelectTrigger className="w-[150px]">
                   <SelectValue placeholder="All Modes" />
@@ -1044,12 +1078,7 @@ const Payroll = () => {
             </div>
           </div>
 
-          {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              <span>Loading payrolls...</span>
-            </div>
-          ) : filteredPayrolls.length === 0 ? (
+          {filteredPayrolls.length === 0 && !isLoading ? (
             <div className="text-center py-8 text-muted-foreground">
               No payroll records found
             </div>
@@ -1070,7 +1099,6 @@ const Payroll = () => {
                   <TableHead>Amount (Excl. GST)</TableHead>
                   <TableHead>GST Amount</TableHead>
                   <TableHead>Total Amount</TableHead>
-                  <TableHead>Currency</TableHead>
                   <TableHead>Payment Method</TableHead>
                   <TableHead>Payment Date</TableHead>
                   <TableHead>Receipt #</TableHead>
@@ -1080,7 +1108,67 @@ const Payroll = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                  {filteredPayrolls.map((payroll, index) => (
+                {isLoading ? (
+                  Array.from({ length: 5 }).map((_, index) => (
+                    <TableRow key={`skeleton-${index}`}>
+                      <TableCell>
+                        <Skeleton className="h-4 w-8" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-5 w-16 rounded-full" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-24" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-20" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-32" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-28" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-5 w-12 rounded-full" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-5 w-12 rounded-full" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-24" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-20" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-16" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-20" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-5 w-24 rounded-full" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-24" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-20" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-5 w-16 rounded-full" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-4 w-32" />
+                      </TableCell>
+                      <TableCell>
+                        <Skeleton className="h-8 w-16" />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  filteredPayrolls.map((payroll, index) => (
                     <TableRow key={payroll.id}>
                       <TableCell className="font-medium">{index + 1}</TableCell>
                       <TableCell>
@@ -1110,7 +1198,6 @@ const Payroll = () => {
                       <TableCell>${payroll.amountExclGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                       <TableCell>${payroll.gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                       <TableCell className="font-semibold">${payroll.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                      <TableCell>{payroll.currency}</TableCell>
                       <TableCell>
                         <Badge variant="outline">
                           {payroll.paymentMethod === "bank_transfer" ? "Bank Transfer" :
@@ -1127,14 +1214,14 @@ const Payroll = () => {
                       <TableCell className="max-w-[200px] truncate">{payroll.notes || "-"}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEditPayroll(payroll)}
-                            className="h-8 w-8"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEditPayroll(payroll)}
+                          className="h-8 w-8"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -1146,7 +1233,8 @@ const Payroll = () => {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
@@ -1172,14 +1260,14 @@ const Payroll = () => {
                         </p>
                       </div>
                       <div className="flex items-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleEditPayroll(payroll)}
-                          className="h-8 w-8 flex-shrink-0"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleEditPayroll(payroll)}
+                        className="h-8 w-8 flex-shrink-0"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -1204,10 +1292,6 @@ const Payroll = () => {
                       <div>
                         <p className="font-semibold text-xs text-muted-foreground mb-1">Site</p>
                         <p className="truncate">{payroll.siteOfWork || "-"}</p>
-                      </div>
-                      <div>
-                        <p className="font-semibold text-xs text-muted-foreground mb-1">Currency</p>
-                        <p>{payroll.currency}</p>
                       </div>
                     </div>
 
@@ -1443,30 +1527,30 @@ const Payroll = () => {
                                 </div>
                               ) : (
                                 <>
-                                  <CommandGroup>
+                              <CommandGroup>
                                     {employees
                                       .filter(employee => 
                                         !employeeSearchValue || 
                                         employee.name.toLowerCase().includes(employeeSearchValue.toLowerCase())
                                       )
                                       .map((employee) => (
-                                        <CommandItem
-                                          key={employee.id}
-                                          value={employee.name}
-                                          onSelect={() => handleEmployeeSelect(employee.id)}
-                                        >
-                                          <Check
-                                            className={cn(
-                                              "mr-2 h-4 w-4",
-                                              formData.name === employee.name
-                                                ? "opacity-100"
-                                                : "opacity-0"
-                                            )}
-                                          />
-                                          {employee.name}
-                                        </CommandItem>
-                                      ))}
-                                  </CommandGroup>
+                                  <CommandItem
+                                    key={employee.id}
+                                    value={employee.name}
+                                    onSelect={() => handleEmployeeSelect(employee.id)}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        formData.name === employee.name
+                                          ? "opacity-100"
+                                          : "opacity-0"
+                                      )}
+                                    />
+                                    {employee.name}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
                                   {employeeSearchValue && 
                                    !employees.some(emp => 
                                      emp.name.toLowerCase() === employeeSearchValue.trim().toLowerCase()

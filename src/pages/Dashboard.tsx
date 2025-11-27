@@ -15,27 +15,23 @@ import {
 } from "@/components/ui/chart";
 import { getAllInvoices } from "@/lib/firebase/invoices";
 import { getAllPayrolls } from "@/lib/firebase/payroll";
-import { getAllReminders } from "@/lib/firebase/reminders";
-import { Invoice, Payroll, Reminder } from "@/types/financial";
+import { Invoice, Payroll } from "@/types/financial";
 
 const Dashboard = () => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [payrolls, setPayrolls] = useState<Payroll[]>([]);
-  const [reminders, setReminders] = useState<Reminder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const loadData = async () => {
       try {
         setIsLoading(true);
-        const [fetchedInvoices, fetchedPayrolls, fetchedReminders] = await Promise.all([
+        const [fetchedInvoices, fetchedPayrolls] = await Promise.all([
           getAllInvoices(),
           getAllPayrolls(),
-          getAllReminders(),
         ]);
         setInvoices(fetchedInvoices);
         setPayrolls(fetchedPayrolls);
-        setReminders(fetchedReminders);
       } catch (error) {
         console.error("Error loading dashboard data:", error);
       } finally {
@@ -125,8 +121,6 @@ const Dashboard = () => {
     },
   } satisfies ChartConfig;
 
-  const pendingReminders = reminders.filter(r => r.status === "pending");
-
   return (
     <div className="space-y-6">
       <div>
@@ -200,7 +194,7 @@ const Dashboard = () => {
                 <span className="text-muted-foreground">Loading chart data...</span>
               </div>
             ) : (
-              <ChartContainer config={cashFlowConfig}>
+            <ChartContainer config={cashFlowConfig}>
                 <BarChart accessibilityLayer data={monthlyDataArray.length > 0 ? monthlyDataArray : [{ month: "No Data", revenue: 0, expenses: 0 }]}>
                 <CartesianGrid vertical={false} />
                 <XAxis
@@ -249,18 +243,18 @@ const Dashboard = () => {
                 <span className="text-muted-foreground">Loading chart data...</span>
               </div>
             ) : (
-              <ChartContainer
-                config={statusConfig}
-                className="mx-auto aspect-square max-h-[300px]"
-              >
-                <PieChart>
-                  <ChartTooltip
-                    cursor={false}
-                    content={<ChartTooltipContent hideLabel />}
-                  />
-                  <Pie data={statusData} dataKey="count" nameKey="status" />
-                </PieChart>
-              </ChartContainer>
+            <ChartContainer
+              config={statusConfig}
+              className="mx-auto aspect-square max-h-[300px]"
+            >
+              <PieChart>
+                <ChartTooltip
+                  cursor={false}
+                  content={<ChartTooltipContent hideLabel />}
+                />
+                <Pie data={statusData} dataKey="count" nameKey="status" />
+              </PieChart>
+            </ChartContainer>
             )}
           </CardContent>
           <CardFooter className="flex-col gap-2 text-sm">
@@ -270,46 +264,6 @@ const Dashboard = () => {
           </CardFooter>
         </Card>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Active Reminders</CardTitle>
-          <CardDescription>Pending notifications and alerts</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-6 w-6 animate-spin mr-2" />
-              <span className="text-muted-foreground">Loading reminders...</span>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {pendingReminders.map((reminder) => (
-              <div key={reminder.id} className="flex items-center justify-between p-4 border rounded-lg">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <h4 className="font-medium">{reminder.title}</h4>
-                    <Badge variant={
-                      reminder.priority === "high" ? "destructive" : 
-                      reminder.priority === "medium" ? "default" : "secondary"
-                    }>
-                      {reminder.priority}
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">{reminder.description}</p>
-                </div>
-                <div className="text-sm text-muted-foreground">
-                  Due: {new Date(reminder.dueDate).toLocaleDateString()}
-                </div>
-              </div>
-            ))}
-              {pendingReminders.length === 0 && (
-                <p className="text-center text-muted-foreground py-8">No pending reminders</p>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 };
