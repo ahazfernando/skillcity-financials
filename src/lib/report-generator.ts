@@ -103,10 +103,10 @@ export const generatePayrollReport = async (
 
   // Set up colors - using #058717
   const primaryColor = hexToRgb("#058717"); // [5, 135, 23]
-  const headerColor = [245, 250, 247]; // Very light green background
+  const headerColor: [number, number, number] = [245, 250, 247]; // Very light green background
   const inflowColor = hexToRgb("#058717"); // [5, 135, 23]
-  const outflowColor = [239, 68, 68]; // Red
-  const accentColor = [255, 152, 0]; // Orange accent
+  const outflowColor: [number, number, number] = [239, 68, 68]; // Red
+  const accentColor: [number, number, number] = [255, 152, 0]; // Orange accent
 
   // Set consistent margins
   const leftMargin = 20;
@@ -284,7 +284,7 @@ export const generatePayrollReport = async (
   doc.text("NET CASH FLOW", netX + 3, yPos + 4.5);
   
   // Net amount
-  const netColor = netCashFlow >= 0 ? inflowColor : outflowColor;
+  const netColor: [number, number, number] = netCashFlow >= 0 ? inflowColor : outflowColor;
   doc.setTextColor(...netColor);
   doc.setFontSize(18);
   doc.setFont("helvetica", "bold");
