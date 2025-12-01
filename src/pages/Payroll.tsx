@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { SearchFilter } from "@/components/SearchFilter";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Plus, FileText, X, Loader2, Check, ChevronsUpDown, Search, Edit2, LayoutGrid, Table as TableIcon, CalendarIcon, TrendingUp, Trash2 } from "lucide-react";
+import { Plus, FileText, X, Loader2, Check, ChevronsUpDown, Search, Edit2, LayoutGrid, Table as TableIcon, CalendarIcon, TrendingUp, Trash2, Upload, File } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -62,7 +62,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import { PaymentStatus, Employee, CashFlowMode, CashFlowType, PaymentMethod, type Payroll } from "@/types/financial";
+import { PaymentStatus, Employee, CashFlowMode, CashFlowType, PaymentMethod, PayrollFrequency, type Payroll } from "@/types/financial";
 import { getAllEmployees, addEmployee } from "@/lib/firebase/employees";
 import { getAllPayrolls, addPayroll, updatePayroll, deletePayroll } from "@/lib/firebase/payroll";
 import { getAllSites } from "@/lib/firebase/sites";
@@ -113,7 +113,11 @@ const Payroll = () => {
     status: "pending" as PaymentStatus,
     notes: "",
     receiptUrl: "",
+    frequency: "Monthly" as PayrollFrequency,
+    paymentCycle: 45,
+    attachedFiles: [] as string[],
   });
+  const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
 
   // Load data from Firebase
   useEffect(() => {
@@ -141,7 +145,30 @@ const Payroll = () => {
     loadData();
   }, []);
 
-  const handleInputChange = (field: string, value: string | boolean) => {
+  // Calculate payment status based on payment cycle
+  // On the paymentCycle day (e.g., 45th day): pending
+  // Starting from paymentCycle + 1 day (e.g., 46th day): overdue
+  const calculatePaymentStatus = (date: string, paymentCycle: number): PaymentStatus => {
+    if (!date) return "pending";
+    
+    const payrollDate = new Date(date);
+    const today = new Date();
+    // Set time to midnight for accurate day calculation
+    payrollDate.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+    const daysDiff = Math.floor((today.getTime() - payrollDate.getTime()) / (1000 * 60 * 60 * 24));
+    
+    if (daysDiff < paymentCycle) {
+      return "pending";
+    } else if (daysDiff === paymentCycle) {
+      return "pending";
+    } else {
+      // From day 46 onwards, status is overdue
+      return "overdue";
+    }
+  };
+
+  const handleInputChange = (field: string, value: string | boolean | number) => {
     setFormData((prev) => {
       const updated = { ...prev, [field]: value };
       
@@ -152,6 +179,15 @@ const Payroll = () => {
         const total = amountExclGst + gst;
         updated.gstAmount = gst.toFixed(2);
         updated.totalAmount = total.toFixed(2);
+      }
+      
+      // Auto-calculate status based on payment cycle when date or paymentCycle changes
+      if (field === "date" || field === "paymentCycle") {
+        const date = field === "date" ? (value as string) : updated.date;
+        const cycle = field === "paymentCycle" ? (value as number) : updated.paymentCycle;
+        if (date && cycle) {
+          updated.status = calculatePaymentStatus(date, cycle);
+        }
       }
       
       return updated;
@@ -232,9 +268,28 @@ const Payroll = () => {
       return;
     }
     
-    setReceiptFile(file);
+    // Add to attached files array
+    setAttachedFiles((prev) => [...prev, file]);
     const fileUrl = URL.createObjectURL(file);
-    handleInputChange("receiptUrl", fileUrl);
+    setFormData((prev) => ({
+      ...prev,
+      attachedFiles: [...prev.attachedFiles, fileUrl],
+    }));
+  };
+
+  const handleRemoveAttachedFile = (index: number) => {
+    setAttachedFiles((prev) => {
+      const newFiles = prev.filter((_, i) => i !== index);
+      return newFiles;
+    });
+    setFormData((prev) => {
+      const newUrls = prev.attachedFiles.filter((_, i) => i !== index);
+      // Revoke blob URL if it exists
+      if (prev.attachedFiles[index]?.startsWith('blob:')) {
+        URL.revokeObjectURL(prev.attachedFiles[index]);
+      }
+      return { ...prev, attachedFiles: newUrls };
+    });
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -251,16 +306,18 @@ const Payroll = () => {
     e.preventDefault();
     setIsDragging(false);
     
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      handleFileSelect(files[0]);
-    }
+    const files = Array.from(e.dataTransfer.files);
+    files.forEach((file) => {
+      handleFileSelect(file);
+    });
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      handleFileSelect(files[0]);
+      Array.from(files).forEach((file) => {
+        handleFileSelect(file);
+      });
     }
   };
 
@@ -298,6 +355,9 @@ const Payroll = () => {
           : formData.paymentDate;
       }
 
+      // Calculate status based on payment cycle if not manually set
+      const calculatedStatus = calculatePaymentStatus(formData.date, formData.paymentCycle);
+      
       const newPayroll: Omit<Payroll, "id"> = {
         month: formData.month,
         date: formattedDate,
@@ -315,8 +375,11 @@ const Payroll = () => {
         paymentMethod: formData.paymentMethod,
         paymentDate: formattedPaymentDate,
         paymentReceiptNumber: formData.paymentReceiptNumber || undefined,
-        status: formData.status,
+        status: calculatedStatus,
         notes: formData.notes || undefined,
+        frequency: formData.frequency,
+        paymentCycle: formData.paymentCycle,
+        attachedFiles: formData.attachedFiles.length > 0 ? formData.attachedFiles : undefined,
       };
 
       await addPayroll(newPayroll);
@@ -328,6 +391,7 @@ const Payroll = () => {
       toast.success("Payroll added successfully!");
       setIsAddDialogOpen(false);
       setReceiptFile(null);
+      setAttachedFiles([]);
       setEmployeePopoverOpen(false);
       setEditingPayrollId(null);
       resetForm();
@@ -357,6 +421,13 @@ const Payroll = () => {
   };
 
   const resetForm = () => {
+    // Revoke all blob URLs
+    formData.attachedFiles.forEach((url) => {
+      if (url.startsWith('blob:')) {
+        URL.revokeObjectURL(url);
+      }
+    });
+    
     setFormData({
       month: new Date().toLocaleString('default', { month: 'long' }),
       date: new Date().toISOString().split('T')[0],
@@ -377,7 +448,11 @@ const Payroll = () => {
       status: "pending",
       notes: "",
       receiptUrl: "",
+      frequency: "Monthly",
+      paymentCycle: 45,
+      attachedFiles: [],
     });
+    setAttachedFiles([]);
     setEditingPayrollId(null);
   };
 
@@ -403,7 +478,11 @@ const Payroll = () => {
       status: payroll.status,
       notes: payroll.notes || "",
       receiptUrl: payroll.receiptUrl || "",
+      frequency: payroll.frequency || "Monthly",
+      paymentCycle: payroll.paymentCycle || 45,
+      attachedFiles: payroll.attachedFiles || [],
     });
+    setAttachedFiles([]); // Reset file array for editing
     setIsAddDialogOpen(true);
   };
 
@@ -433,6 +512,9 @@ const Payroll = () => {
           : formData.paymentDate;
       }
 
+      // Calculate status based on payment cycle if not manually set
+      const calculatedStatus = calculatePaymentStatus(formData.date, formData.paymentCycle);
+      
       const updatedPayroll: Partial<Omit<Payroll, "id">> = {
         month: formData.month,
         date: formattedDate,
@@ -450,8 +532,11 @@ const Payroll = () => {
         paymentMethod: formData.paymentMethod,
         paymentDate: formattedPaymentDate,
         paymentReceiptNumber: formData.paymentReceiptNumber || undefined,
-        status: formData.status,
+        status: calculatedStatus,
         notes: formData.notes || undefined,
+        frequency: formData.frequency,
+        paymentCycle: formData.paymentCycle,
+        attachedFiles: formData.attachedFiles.length > 0 ? formData.attachedFiles : undefined,
       };
 
       await updatePayroll(editingPayrollId, updatedPayroll);
@@ -463,6 +548,7 @@ const Payroll = () => {
       toast.success("Payroll updated successfully!");
       setIsAddDialogOpen(false);
       setReceiptFile(null);
+      setAttachedFiles([]);
       setEmployeePopoverOpen(false);
       resetForm();
     } catch (error) {
@@ -684,7 +770,7 @@ const Payroll = () => {
           </CardHeader>
           <CardContent className="px-1 pr-2">
             {!isLoading && payrolls.length > 0 && areaChartData.length > 0 ? (
-              <ChartContainer config={areaChartConfig} className="h-[180px] w-full -mx-1">
+              <ChartContainer config={areaChartConfig} className="h-[300px] w-full -mx-1">
                 <AreaChart
                   accessibilityLayer
                   data={areaChartData}
@@ -750,7 +836,7 @@ const Payroll = () => {
                 </AreaChart>
               </ChartContainer>
             ) : (
-              <div className="flex items-center justify-center h-[180px] text-muted-foreground text-sm">
+              <div className="flex items-center justify-center h-[300px] text-muted-foreground text-sm">
                 No data available
               </div>
             )}
@@ -779,7 +865,7 @@ const Payroll = () => {
             {!isLoading && payrolls.length > 0 && pieChartData.length > 0 && pieChartData.some(d => d.amount > 0) ? (
               <ChartContainer
                 config={pieChartConfig}
-                className="mx-auto aspect-square h-[180px]"
+                className="mx-auto aspect-square h-[300px]"
               >
                 <PieChart>
                   <ChartTooltip
@@ -792,7 +878,7 @@ const Payroll = () => {
                     nameKey="type"
                     cx="50%"
                     cy="50%"
-                    outerRadius={65}
+                    outerRadius={100}
                     innerRadius={0}
                     label={({ type, amount }) => `${type}: $${amount.toLocaleString()}`}
                     labelLine={false}
@@ -800,12 +886,12 @@ const Payroll = () => {
                 </PieChart>
               </ChartContainer>
             ) : isLoading ? (
-              <div className="flex items-center justify-center h-[180px]">
+              <div className="flex items-center justify-center h-[300px]">
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 <span className="text-muted-foreground text-sm">Loading...</span>
               </div>
             ) : (
-              <div className="flex items-center justify-center h-[180px] text-muted-foreground text-sm">
+              <div className="flex items-center justify-center h-[300px] text-muted-foreground text-sm">
                 No data available
               </div>
             )}
@@ -830,7 +916,7 @@ const Payroll = () => {
           </CardHeader>
           <CardContent className="px-1 pr-2">
             {!isLoading && payrolls.length > 0 && barChartData.length > 0 ? (
-              <ChartContainer config={barChartConfig} className="h-[180px] w-full -mx-1">
+              <ChartContainer config={barChartConfig} className="h-[300px] w-full -mx-1">
                 <BarChart
                   accessibilityLayer
                   data={barChartData}
@@ -870,12 +956,12 @@ const Payroll = () => {
                 </BarChart>
               </ChartContainer>
             ) : isLoading ? (
-              <div className="flex items-center justify-center h-[180px]">
+              <div className="flex items-center justify-center h-[300px]">
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 <span className="text-muted-foreground text-sm">Loading...</span>
               </div>
             ) : (
-              <div className="flex items-center justify-center h-[180px] text-muted-foreground text-sm">
+              <div className="flex items-center justify-center h-[300px] text-muted-foreground text-sm">
                 No data available
               </div>
             )}
@@ -1465,6 +1551,25 @@ const Payroll = () => {
                       </Select>
                     </div>
                     <div className="space-y-2">
+                      <Label htmlFor="frequency">Payroll Frequency</Label>
+                      <Select
+                        value={formData.frequency}
+                        onValueChange={(value) => handleInputChange("frequency", value as PayrollFrequency)}
+                      >
+                        <SelectTrigger id="frequency">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Weekly">Weekly</SelectItem>
+                          <SelectItem value="Fortnightly">Fortnightly</SelectItem>
+                          <SelectItem value="Monthly">Monthly</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
                       <Label htmlFor="name">Name *</Label>
                       <Popover open={employeePopoverOpen} onOpenChange={setEmployeePopoverOpen}>
                         <PopoverTrigger asChild>
@@ -1679,6 +1784,44 @@ const Payroll = () => {
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="paymentCycle">Payment Cycle (Days)</Label>
+                      <Input
+                        id="paymentCycle"
+                        type="number"
+                        min="1"
+                        value={formData.paymentCycle}
+                        onChange={(e) => handleInputChange("paymentCycle", parseInt(e.target.value) || 45)}
+                        placeholder="45"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Payments become pending on day {formData.paymentCycle} and overdue from day {formData.paymentCycle + 1}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="paymentDate">Payment Date</Label>
+                      <Input
+                        id="paymentDate"
+                        type="date"
+                        value={formData.paymentDate}
+                        onChange={(e) => handleInputChange("paymentDate", e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="paymentReceiptNumber">Payment Receipt Number</Label>
+                      <Input
+                        id="paymentReceiptNumber"
+                        value={formData.paymentReceiptNumber}
+                        onChange={(e) => handleInputChange("paymentReceiptNumber", e.target.value)}
+                        placeholder="Receipt number"
+                      />
+                    </div>
                     <div className="space-y-2">
                       <Label htmlFor="status">Status</Label>
                       <Select
@@ -1692,30 +1835,78 @@ const Payroll = () => {
                           <SelectItem value="pending">Pending</SelectItem>
                           <SelectItem value="received">Received</SelectItem>
                           <SelectItem value="paid">Paid</SelectItem>
+                          <SelectItem value="overdue">Overdue</SelectItem>
+                          <SelectItem value="late">Late</SelectItem>
                         </SelectContent>
                       </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Status is auto-calculated based on payment cycle
+                      </p>
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="paymentDate">Payment Date</Label>
-                      <Input
-                        id="paymentDate"
-                        type="date"
-                        value={formData.paymentDate}
-                        onChange={(e) => handleInputChange("paymentDate", e.target.value)}
+                  <div className="space-y-2">
+                    <Label>Attached Files</Label>
+                    <div
+                      className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                        isDragging
+                          ? "border-primary bg-primary/5"
+                          : "border-muted-foreground/25 hover:border-muted-foreground/50"
+                      }`}
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                    >
+                      <input
+                        type="file"
+                        id="file-upload"
+                        className="hidden"
+                        multiple
+                        onChange={handleFileInputChange}
+                        accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.txt"
                       />
+                      <div className="flex flex-col items-center justify-center space-y-2">
+                        <Upload className="h-8 w-8 text-muted-foreground" />
+                        <div className="text-sm">
+                          <label
+                            htmlFor="file-upload"
+                            className="cursor-pointer text-primary hover:underline"
+                          >
+                            Click to upload
+                          </label>
+                          <span className="text-muted-foreground"> or drag and drop</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          PDF, DOCX, JPEG, XLSX, or TXT (max 50MB)
+                        </p>
+                      </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="paymentReceiptNumber">Payment Receipt Number</Label>
-                      <Input
-                        id="paymentReceiptNumber"
-                        value={formData.paymentReceiptNumber}
-                        onChange={(e) => handleInputChange("paymentReceiptNumber", e.target.value)}
-                        placeholder="Receipt number"
-                      />
-                    </div>
+                    {attachedFiles.length > 0 && (
+                      <div className="space-y-2 mt-2">
+                        {attachedFiles.map((file, index) => (
+                          <div
+                            key={index}
+                            className="flex items-center justify-between p-2 border rounded-md bg-muted/50"
+                          >
+                            <div className="flex items-center gap-2">
+                              <File className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm truncate max-w-[300px]">{file.name}</span>
+                              <span className="text-xs text-muted-foreground">
+                                ({(file.size / 1024).toFixed(2)} KB)
+                              </span>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => handleRemoveAttachedFile(index)}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2">

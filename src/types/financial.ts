@@ -1,4 +1,5 @@
-export type PaymentStatus = "pending" | "received" | "paid" | "overdue";
+export type PaymentStatus = "pending" | "received" | "paid" | "overdue" | "late";
+export type PayrollFrequency = "Weekly" | "Fortnightly" | "Monthly";
 
 export interface Invoice {
   id: string;
@@ -42,8 +43,11 @@ export interface Payroll {
   paymentMethod: PaymentMethod; // Payment method
   paymentDate?: string; // Payment credited/received date
   paymentReceiptNumber?: string; // Receipt number
-  status: PaymentStatus; // "pending", "received", "paid"
+  status: PaymentStatus; // "pending", "received", "paid", "overdue", "late"
   notes?: string; // Additional notes
+  frequency?: PayrollFrequency; // "Weekly", "Fortnightly", "Monthly"
+  paymentCycle?: number; // Payment cycle in days (default: 45)
+  attachedFiles?: string[]; // Array of file URLs
   // Legacy fields for backward compatibility
   employeeId?: string;
   employeeName?: string;

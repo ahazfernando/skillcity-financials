@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { SearchFilter } from "@/components/SearchFilter";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Download, Plus, FileText, Calendar as CalendarIcon, Upload, X, Loader2 } from "lucide-react";
+import { generateMonthlyReport } from "@/lib/monthly-report-generator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
@@ -528,6 +529,30 @@ const Invoices = () => {
         <div>
           <h2 className="text-3xl font-bold tracking-tight">Invoices</h2>
           <p className="text-muted-foreground">Manage client invoices and payments</p>
+        </div>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={async () => {
+              try {
+                const monthLabel = dateRange?.from && dateRange?.to
+                  ? `${format(dateRange.from, "MMM dd, yyyy")} - ${format(dateRange.to, "MMM dd, yyyy")}`
+                  : dateRange?.from
+                  ? format(dateRange.from, "MMMM yyyy")
+                  : new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+                
+                await generateMonthlyReport(filteredPayrolls, monthLabel, "/logo/skillcityyy.png");
+                toast.success("Monthly report downloaded successfully!");
+              } catch (error: any) {
+                console.error("Error generating report:", error);
+                toast.error(error.message || "Failed to generate report. Please try again.");
+              }
+            }}
+            disabled={isLoading || filteredPayrolls.length === 0}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Download Monthly Report
+          </Button>
         </div>
       </div>
 
