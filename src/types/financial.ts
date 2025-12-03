@@ -60,6 +60,8 @@ export interface Payroll {
   updatedAt?: string;
 }
 
+export type EmployeeType = "employee" | "client";
+
 export interface Employee {
   id: string;
   name: string;
@@ -70,6 +72,7 @@ export interface Employee {
   startDate: string;
   status: "active" | "inactive";
   invoiceCollectionFrequency?: "Monthly" | "Fortnightly" | "Weekly";
+  type?: EmployeeType; // "employee" or "client" - defaults to "employee" for backward compatibility
 }
 
 export interface Site {

@@ -131,7 +131,8 @@ const Payroll = () => {
           getAllSites(),
         ]);
         setPayrolls(fetchedPayrolls);
-        setEmployees(fetchedEmployees.filter(emp => emp.status === "active"));
+        // Filter out clients and inactive employees
+        setEmployees(fetchedEmployees.filter(emp => emp.status === "active" && (!emp.type || emp.type === "employee")));
         setSites(fetchedSites.filter(s => s.status === "active"));
       } catch (error) {
         console.error("Error loading data:", error);
@@ -235,7 +236,7 @@ const Payroll = () => {
 
       // Reload employees list
       const updatedEmployees = await getAllEmployees();
-      setEmployees(updatedEmployees.filter(emp => emp.status === "active"));
+      setEmployees(updatedEmployees.filter(emp => emp.status === "active" && (!emp.type || emp.type === "employee")));
 
       // Select the newly added employee
       setFormData((prev) => ({

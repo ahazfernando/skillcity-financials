@@ -90,13 +90,15 @@ export const getEmployeePayRatesBySite = async (siteId: string): Promise<Employe
 export const getEmployeePayRatesByEmployee = async (employeeId: string): Promise<EmployeePayRate[]> => {
   try {
     const payRatesRef = collection(db, EMPLOYEE_PAY_RATES_COLLECTION);
+    // Remove orderBy to avoid requiring a composite index - we'll sort client-side instead
     const q = query(
       payRatesRef,
-      where("employeeId", "==", employeeId),
-      orderBy("siteName", "asc")
+      where("employeeId", "==", employeeId)
     );
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(docToEmployeePayRate);
+    const payRates = querySnapshot.docs.map(docToEmployeePayRate);
+    // Sort by siteName client-side
+    return payRates.sort((a, b) => a.siteName.localeCompare(b.siteName));
   } catch (error) {
     console.error("Error fetching employee pay rates by employee:", error);
     throw error;

@@ -29,16 +29,18 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { EmployeePayRate, Site, Employee } from "@/types/financial";
+import { EmployeePayRate, Site, Employee, SiteEmployeeAllocation } from "@/types/financial";
 import { getAllEmployeePayRates, addEmployeePayRate, updateEmployeePayRate, deleteEmployeePayRate, getEmployeePayRateBySiteAndEmployee } from "@/lib/firebase/employeePayRates";
 import { getAllSites } from "@/lib/firebase/sites";
 import { getAllEmployees } from "@/lib/firebase/employees";
+import { getAllAllocations } from "@/lib/firebase/siteEmployeeAllocations";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 const EmployeePayRateCard = () => {
   const [searchValue, setSearchValue] = useState("");
   const [payRates, setPayRates] = useState<EmployeePayRate[]>([]);
+  const [allocations, setAllocations] = useState<SiteEmployeeAllocation[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -64,14 +66,17 @@ const EmployeePayRateCard = () => {
     const loadData = async () => {
       try {
         setIsLoading(true);
-        const [fetchedPayRates, fetchedSites, fetchedEmployees] = await Promise.all([
+        const [fetchedPayRates, fetchedAllocations, fetchedSites, fetchedEmployees] = await Promise.all([
           getAllEmployeePayRates(),
+          getAllAllocations(),
           getAllSites(),
           getAllEmployees(),
         ]);
         setPayRates(fetchedPayRates);
+        setAllocations(fetchedAllocations);
         setSites(fetchedSites.filter(s => s.status === "active"));
-        setEmployees(fetchedEmployees.filter(e => e.status === "active"));
+        // Filter out clients and inactive employees
+        setEmployees(fetchedEmployees.filter(e => e.status === "active" && (!e.type || e.type === "employee")));
       } catch (error) {
         console.error("Error loading data:", error);
         toast.error("Failed to load data. Please try again.");
@@ -95,16 +100,42 @@ const EmployeePayRateCard = () => {
     return grouped;
   }, [payRates]);
 
-  // Get employees for a site, sorted by creation date to maintain assignment order
+  // Get employees for a site, using allocations as source of truth and matching with pay rates
   const getEmployeesForSite = useCallback((siteId: string): EmployeePayRate[] => {
-    const sitePayRates = payRatesBySite.get(siteId) || [];
-    // Sort by createdAt timestamp to maintain assignment order (first assigned = Employee 1)
-    return [...sitePayRates].sort((a, b) => {
-      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return dateA - dateB; // Ascending order (oldest first)
+    // Get all allocations for this site, sorted by employeeNumber
+    const siteAllocations = allocations
+      .filter(alloc => alloc.siteId === siteId)
+      .sort((a, b) => a.employeeNumber - b.employeeNumber);
+
+    // For each allocation, find or create a pay rate entry
+    const employeesWithPayRates: EmployeePayRate[] = siteAllocations.map(alloc => {
+      // Try to find existing pay rate for this employee and site
+      const existingPayRate = payRates.find(
+        pr => pr.siteId === siteId && pr.employeeId === alloc.employeeId
+      );
+
+      if (existingPayRate) {
+        return existingPayRate;
+      }
+
+      // If no pay rate exists, create a placeholder that will show the employee but no rate
+      // This allows the UI to show all assigned employees even without pay rates
+      return {
+        id: `placeholder-${alloc.id}`,
+        siteId: alloc.siteId,
+        siteName: alloc.siteName,
+        employeeId: alloc.employeeId,
+        employeeName: alloc.employeeName,
+        hourlyRate: 0,
+        travelAllowance: undefined,
+        notes: undefined,
+        createdAt: alloc.createdAt,
+        updatedAt: alloc.updatedAt,
+      } as EmployeePayRate;
     });
-  }, [payRatesBySite]);
+
+    return employeesWithPayRates;
+  }, [allocations, payRates]);
 
   // Filter sites by search and sort alphabetically
   const filteredSites = useMemo(() => {
@@ -226,8 +257,12 @@ const EmployeePayRateCard = () => {
       }
 
       // Reload data
-      const updatedPayRates = await getAllEmployeePayRates();
+      const [updatedPayRates, updatedAllocations] = await Promise.all([
+        getAllEmployeePayRates(),
+        getAllAllocations(),
+      ]);
       setPayRates(updatedPayRates);
+      setAllocations(updatedAllocations);
       resetForm();
     } catch (error) {
       console.error("Error saving pay rate:", error);
@@ -245,8 +280,12 @@ const EmployeePayRateCard = () => {
       toast.success("Pay rate deleted successfully!");
       
       // Reload data
-      const updatedPayRates = await getAllEmployeePayRates();
+      const [updatedPayRates, updatedAllocations] = await Promise.all([
+        getAllEmployeePayRates(),
+        getAllAllocations(),
+      ]);
       setPayRates(updatedPayRates);
+      setAllocations(updatedAllocations);
     } catch (error) {
       console.error("Error deleting pay rate:", error);
       toast.error("Failed to delete pay rate. Please try again.");
@@ -254,6 +293,10 @@ const EmployeePayRateCard = () => {
   };
 
   const formatPayRate = (payRate: EmployeePayRate): string => {
+    // Check if this is a placeholder (no actual pay rate set)
+    if (payRate.id.startsWith('placeholder-') && payRate.hourlyRate === 0) {
+      return "-";
+    }
     let rate = `$${payRate.hourlyRate}`;
     if (payRate.travelAllowance) {
       rate += ` + $${payRate.travelAllowance} Travel Allowance`;
@@ -353,7 +396,22 @@ const EmployeePayRateCard = () => {
                                 <Button
                                   variant="link"
                                   className="h-auto p-0 text-left font-normal justify-start hover:underline"
-                                  onClick={() => handleEditPayRate(payRate)}
+                                  onClick={() => {
+                                    // Only allow editing if it's not a placeholder
+                                    if (!payRate.id.startsWith('placeholder-')) {
+                                      handleEditPayRate(payRate);
+                                    } else {
+                                      // If it's a placeholder, open add dialog with pre-filled data
+                                      setFormData({
+                                        siteId: payRate.siteId,
+                                        employeeId: payRate.employeeId,
+                                        hourlyRate: "",
+                                        travelAllowance: "",
+                                        notes: "",
+                                      });
+                                      setIsAddDialogOpen(true);
+                                    }
+                                  }}
                                 >
                                   {payRate.employeeName}
                                 </Button>

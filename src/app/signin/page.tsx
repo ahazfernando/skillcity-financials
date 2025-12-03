@@ -14,16 +14,13 @@ import { toast } from "sonner";
 import { authService } from "@/lib/authService";
 import { useAuth } from "@/contexts/AuthContext";
 
-export default function SignUpPage() {
+export default function SignInPage() {
   const router = useRouter();
   const { user, loading } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState({
-    name: "",
     email: "",
     password: "",
-    confirmPassword: "",
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,36 +31,24 @@ export default function SignUpPage() {
     }
   }, [user, loading, router]);
 
-  async function handleSignUp() {
+  async function handleSignIn() {
     try {
       setError(null);
       setIsLoading(true);
 
-      if (!formData.name || !formData.email || !formData.password || !formData.confirmPassword) {
+      if (!formData.email || !formData.password) {
         setError("Please fill in all fields");
         setIsLoading(false);
         return;
       }
 
-      if (formData.password !== formData.confirmPassword) {
-        setError("Passwords do not match");
-        setIsLoading(false);
-        return;
-      }
+      await authService.login(formData.email, formData.password);
 
-      if (formData.password.length < 6) {
-        setError("Password must be at least 6 characters");
-        setIsLoading(false);
-        return;
-      }
-
-      await authService.register(formData.email, formData.password, formData.name);
-
-      toast.success("Account created successfully! Your account is pending approval from an administrator.");
-      router.push("/signin");
+      toast.success("Signed in successfully!");
+      router.push("/");
     } catch (e) {
-      console.error("Sign up error:", e);
-      let errorMessage = "Sign up failed. Please try again.";
+      console.error("Sign in error:", e);
+      let errorMessage = "Sign in failed. Please try again.";
 
       if (e instanceof Error) {
         errorMessage = e.message;
@@ -132,28 +117,14 @@ export default function SignUpPage() {
                 />
               </div>
               <CardTitle className="text-3xl lg:text-4xl font-bold text-[#1E130B] text-start">
-                Create Account
+                Welcome Back
               </CardTitle>
               <CardDescription className="text-[#1E130B] text-start">
-                Sign up to start managing your finances with ease
+                Sign in to access your financial management system
               </CardDescription>
             </CardHeader>
 
             <CardContent className="space-y-4 lg:space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="name" className="text-sm font-medium text-[#1E130B]">
-                  Full Name
-                </Label>
-                <Input
-                  id="name"
-                  type="text"
-                  placeholder="Input your full name"
-                  className="px-4 py-3 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 text-[#1E130B] placeholder:text-gray-500"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                />
-              </div>
-
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium text-[#1E130B]">
                   Email
@@ -165,6 +136,11 @@ export default function SignUpPage() {
                   className="px-4 py-3 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 text-[#1E130B] placeholder:text-gray-500"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleSignIn();
+                    }
+                  }}
                 />
               </div>
 
@@ -180,6 +156,11 @@ export default function SignUpPage() {
                     className="px-4 py-3 pr-12 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 text-[#1E130B] placeholder:text-gray-500"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        handleSignIn();
+                      }
+                    }}
                   />
                   <Button
                     type="button"
@@ -192,47 +173,22 @@ export default function SignUpPage() {
                   </Button>
                 </div>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword" className="text-sm font-medium text-[#1E130B]">
-                  Confirm Password
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="confirmPassword"
-                    type={showConfirmPassword ? "text" : "password"}
-                    placeholder="Confirm your password"
-                    className="px-4 py-3 pr-12 bg-white/80 backdrop-blur-sm border border-gray-200 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all duration-200 text-[#1E130B] placeholder:text-gray-500"
-                    value={formData.confirmPassword}
-                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-3 top-1/2 -translate-y-1/2 h-7 w-7 text-gray-500 hover:text-gray-700"
-                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  >
-                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
             </CardContent>
 
             <CardFooter className="flex flex-col space-y-4">
               {error ? <p className="text-sm text-red-600 w-full">{error}</p> : null}
               <Button
-                onClick={handleSignUp}
+                onClick={handleSignIn}
                 disabled={isLoading}
                 className="w-full py-3 bg-[#4A9D5E] text-white font-medium rounded-xl hover:bg-green-600 focus:ring-1 focus:ring-offset-2 transform hover:scale-105 transition-all duration-200 shadow-lg"
               >
-                {isLoading ? "Creating Account..." : "Sign Up"}
+                {isLoading ? "Signing In..." : "Sign In"}
               </Button>
               <Separator className="bg-gray-300/50" />
               <p className="text-center text-sm text-gray-600">
-                Already have an account?{" "}
-                <Link href="/signin" className="text-[#4A9D5E] hover:text-green-700 font-medium">
-                  Sign in here
+                Don't have an account?{" "}
+                <Link href="/signup" className="text-[#4A9D5E] hover:text-green-700 font-medium">
+                  Sign up here
                 </Link>
               </p>
             </CardFooter>
@@ -242,3 +198,4 @@ export default function SignUpPage() {
     </div>
   );
 }
+

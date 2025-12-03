@@ -83,7 +83,11 @@ const Schedule = () => {
           getAllSites(),
         ]);
         setWorkHours(fetchedWorkHours);
-        setEmployees(fetchedEmployees);
+        // Filter out clients - only show actual employees
+        const actualEmployees = fetchedEmployees.filter(
+          (emp) => !emp.type || emp.type === "employee"
+        );
+        setEmployees(actualEmployees);
         setSites(fetchedSites);
       } catch (error) {
         console.error("Error loading data:", error);

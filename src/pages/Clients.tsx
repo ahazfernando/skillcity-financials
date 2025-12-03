@@ -34,9 +34,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Client } from "@/types/financial";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Client, Employee, Site } from "@/types/financial";
 import { getAllClients, addClient, updateClient, deleteClient } from "@/lib/firebase/clients";
+import { getAllEmployees, updateEmployee, deleteEmployee } from "@/lib/firebase/employees";
+import { getAllSites } from "@/lib/firebase/sites";
 import { toast } from "sonner";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   Pagination,
   PaginationContent,
@@ -47,18 +64,27 @@ import {
   PaginationPrevious,
 } from "@/components/ui/pagination";
 
+interface ClientDisplay extends Omit<Client, "id"> {
+  id: string;
+  source: "client" | "employee"; // Track if it came from clients collection or employees collection
+}
+
 const Clients = () => {
   const [searchValue, setSearchValue] = useState("");
-  const [clients, setClients] = useState<Client[]>([]);
+  const [clients, setClients] = useState<ClientDisplay[]>([]);
+  const [sites, setSites] = useState<Site[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingClientId, setEditingClientId] = useState<string | null>(null);
+  const [editingClientSource, setEditingClientSource] = useState<"client" | "employee" | null>(null);
   const [deletingClientId, setDeletingClientId] = useState<string | null>(null);
+  const [deletingClientSource, setDeletingClientSource] = useState<"client" | "employee" | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 8;
+  const [companyNamePopoverOpen, setCompanyNamePopoverOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     companyName: "",
@@ -70,13 +96,48 @@ const Clients = () => {
     notes: "",
   });
 
-  // Load clients from Firebase
+  // Load clients and sites from Firebase
   useEffect(() => {
-    const loadClients = async () => {
+    const loadData = async () => {
       try {
         setIsLoading(true);
-        const fetchedClients = await getAllClients();
-        setClients(fetchedClients);
+        const [fetchedClients, fetchedEmployees, fetchedSites] = await Promise.all([
+          getAllClients(),
+          getAllEmployees(),
+          getAllSites(),
+        ]);
+
+        // Sort sites alphabetically by name
+        const sortedSites = fetchedSites.sort((a, b) => 
+          a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+        );
+        setSites(sortedSites);
+
+        // Convert clients to ClientDisplay format
+        const clientsFromCollection: ClientDisplay[] = fetchedClients.map((client) => ({
+          ...client,
+          source: "client" as const,
+        }));
+
+        // Convert employees with type="client" to ClientDisplay format
+        const employeesAsClients: ClientDisplay[] = fetchedEmployees
+          .filter((emp) => emp.type === "client")
+          .map((emp) => ({
+            id: emp.id,
+            name: emp.name,
+            companyName: emp.role || undefined,
+            email: emp.email,
+            phone: emp.phone,
+            address: undefined,
+            contactPerson: undefined,
+            status: emp.status,
+            notes: undefined,
+            source: "employee" as const,
+          }));
+
+        // Merge both sources
+        const allClients = [...clientsFromCollection, ...employeesAsClients];
+        setClients(allClients);
       } catch (error) {
         console.error("Error loading clients:", error);
         toast.error("Failed to load clients. Please try again.");
@@ -85,7 +146,7 @@ const Clients = () => {
       }
     };
 
-    loadClients();
+    loadData();
   }, []);
 
   const resetForm = () => {
@@ -100,10 +161,13 @@ const Clients = () => {
       notes: "",
     });
     setEditingClientId(null);
+    setEditingClientSource(null);
+    setCompanyNamePopoverOpen(false);
   };
 
-  const handleEditClient = (client: Client) => {
+  const handleEditClient = (client: ClientDisplay) => {
     setEditingClientId(client.id);
+    setEditingClientSource(client.source);
     setFormData({
       name: client.name,
       companyName: client.companyName || "",
@@ -117,8 +181,9 @@ const Clients = () => {
     setIsEditDialogOpen(true);
   };
 
-  const handleDeleteClient = (client: Client) => {
+  const handleDeleteClient = (client: ClientDisplay) => {
     setDeletingClientId(client.id);
+    setDeletingClientSource(client.source);
     setIsDeleteDialogOpen(true);
   };
 
@@ -132,26 +197,66 @@ const Clients = () => {
       setIsSaving(true);
 
       if (editingClientId) {
-        // Update existing client
-        await updateClient(editingClientId, {
-          name: formData.name,
-          companyName: formData.companyName || undefined,
-          email: formData.email,
-          phone: formData.phone,
-          address: formData.address || undefined,
-          contactPerson: formData.contactPerson || undefined,
-          status: formData.status,
-          notes: formData.notes || undefined,
-        });
+        // Update existing client - check if it's from clients collection or employees collection
+        if (editingClientSource === "employee") {
+          // Update employee that is marked as client
+          await updateEmployee(editingClientId, {
+            name: formData.name,
+            role: formData.companyName || "",
+            email: formData.email,
+            phone: formData.phone,
+            salary: 0, // Keep existing salary or set to 0
+            startDate: new Date().toISOString().split("T")[0], // Keep existing or set to today
+            status: formData.status,
+            type: "client",
+          });
+        } else {
+          // Update client from clients collection
+          await updateClient(editingClientId, {
+            name: formData.name,
+            companyName: formData.companyName || undefined,
+            email: formData.email,
+            phone: formData.phone,
+            address: formData.address || undefined,
+            contactPerson: formData.contactPerson || undefined,
+            status: formData.status,
+            notes: formData.notes || undefined,
+          });
+        }
 
         // Reload clients to get the latest data from Firebase
-        const updatedClients = await getAllClients();
-        setClients(updatedClients);
+        const [fetchedClients, fetchedEmployees] = await Promise.all([
+          getAllClients(),
+          getAllEmployees(),
+        ]);
+
+        const clientsFromCollection: ClientDisplay[] = fetchedClients.map((client) => ({
+          ...client,
+          source: "client" as const,
+        }));
+
+        const employeesAsClients: ClientDisplay[] = fetchedEmployees
+          .filter((emp) => emp.type === "client")
+          .map((emp) => ({
+            id: emp.id,
+            name: emp.name,
+            companyName: emp.role || undefined,
+            email: emp.email,
+            phone: emp.phone,
+            address: undefined,
+            contactPerson: undefined,
+            status: emp.status,
+            notes: undefined,
+            source: "employee" as const,
+          }));
+
+        const allClients = [...clientsFromCollection, ...employeesAsClients];
+        setClients(allClients);
         
         toast.success("Client updated successfully!");
         setIsEditDialogOpen(false);
       } else {
-        // Add new client
+        // Add new client - always add to clients collection
         const newClient: Omit<Client, "id"> = {
           name: formData.name,
           companyName: formData.companyName || undefined,
@@ -167,8 +272,33 @@ const Clients = () => {
         await addClient(newClient);
         
         // Reload clients to get the latest data from Firebase
-        const updatedClients = await getAllClients();
-        setClients(updatedClients);
+        const [fetchedClients, fetchedEmployees] = await Promise.all([
+          getAllClients(),
+          getAllEmployees(),
+        ]);
+
+        const clientsFromCollection: ClientDisplay[] = fetchedClients.map((client) => ({
+          ...client,
+          source: "client" as const,
+        }));
+
+        const employeesAsClients: ClientDisplay[] = fetchedEmployees
+          .filter((emp) => emp.type === "client")
+          .map((emp) => ({
+            id: emp.id,
+            name: emp.name,
+            companyName: emp.role || undefined,
+            email: emp.email,
+            phone: emp.phone,
+            address: undefined,
+            contactPerson: undefined,
+            status: emp.status,
+            notes: undefined,
+            source: "employee" as const,
+          }));
+
+        const allClients = [...clientsFromCollection, ...employeesAsClients];
+        setClients(allClients);
         
         toast.success("Client added successfully!");
         setIsAddDialogOpen(false);
@@ -187,15 +317,48 @@ const Clients = () => {
     if (!deletingClientId) return;
 
     try {
-      await deleteClient(deletingClientId);
+      // Check if it's from clients collection or employees collection
+      if (deletingClientSource === "employee") {
+        // For employees marked as clients, delete them from employees collection
+        await deleteEmployee(deletingClientId);
+      } else {
+        // Delete from clients collection
+        await deleteClient(deletingClientId);
+      }
       
       // Reload clients to get the latest data from Firebase
-      const updatedClients = await getAllClients();
-      setClients(updatedClients);
+      const [fetchedClients, fetchedEmployees] = await Promise.all([
+        getAllClients(),
+        getAllEmployees(),
+      ]);
+
+      const clientsFromCollection: ClientDisplay[] = fetchedClients.map((client) => ({
+        ...client,
+        source: "client" as const,
+      }));
+
+      const employeesAsClients: ClientDisplay[] = fetchedEmployees
+        .filter((emp) => emp.type === "client")
+        .map((emp) => ({
+          id: emp.id,
+          name: emp.name,
+          companyName: emp.role || undefined,
+          email: emp.email,
+          phone: emp.phone,
+          address: undefined,
+          contactPerson: undefined,
+          status: emp.status,
+          notes: undefined,
+          source: "employee" as const,
+        }));
+
+      const allClients = [...clientsFromCollection, ...employeesAsClients];
+      setClients(allClients);
       
       toast.success("Client deleted successfully!");
       setIsDeleteDialogOpen(false);
       setDeletingClientId(null);
+      setDeletingClientSource(null);
     } catch (error) {
       console.error("Error deleting client:", error);
       toast.error("Failed to delete client. Please try again.");
@@ -469,12 +632,67 @@ const Clients = () => {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="companyName">Company Name</Label>
-                      <Input
-                        id="companyName"
-                        value={formData.companyName}
-                        onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                        placeholder="ABC Corporation"
-                      />
+                      <Popover open={companyNamePopoverOpen} onOpenChange={setCompanyNamePopoverOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={companyNamePopoverOpen}
+                            className="w-full justify-between"
+                          >
+                            {formData.companyName || "Select a site..."}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-full p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search sites..." />
+                            <CommandList>
+                              <CommandEmpty>No site found.</CommandEmpty>
+                              <CommandGroup>
+                                <CommandItem
+                                  value=""
+                                  onSelect={() => {
+                                    setFormData({ ...formData, companyName: "" });
+                                    setCompanyNamePopoverOpen(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      !formData.companyName ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  <span className="text-muted-foreground">Clear selection</span>
+                                </CommandItem>
+                                {sites.map((site) => (
+                                  <CommandItem
+                                    key={site.id}
+                                    value={site.name}
+                                    onSelect={() => {
+                                      setFormData({ ...formData, companyName: site.name });
+                                      setCompanyNamePopoverOpen(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        formData.companyName === site.name ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    <div className="flex flex-col">
+                                      <span>{site.name}</span>
+                                      {site.clientName && (
+                                        <span className="text-xs text-muted-foreground">{site.clientName}</span>
+                                      )}
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </div>
 
@@ -629,12 +847,67 @@ const Clients = () => {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="edit-companyName">Company Name</Label>
-                      <Input
-                        id="edit-companyName"
-                        value={formData.companyName}
-                        onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
-                        placeholder="ABC Corporation"
-                      />
+                      <Popover open={companyNamePopoverOpen} onOpenChange={setCompanyNamePopoverOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={companyNamePopoverOpen}
+                            className="w-full justify-between"
+                          >
+                            {formData.companyName || "Select a site..."}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-full p-0" align="start">
+                          <Command>
+                            <CommandInput placeholder="Search sites..." />
+                            <CommandList>
+                              <CommandEmpty>No site found.</CommandEmpty>
+                              <CommandGroup>
+                                <CommandItem
+                                  value=""
+                                  onSelect={() => {
+                                    setFormData({ ...formData, companyName: "" });
+                                    setCompanyNamePopoverOpen(false);
+                                  }}
+                                >
+                                  <Check
+                                    className={cn(
+                                      "mr-2 h-4 w-4",
+                                      !formData.companyName ? "opacity-100" : "opacity-0"
+                                    )}
+                                  />
+                                  <span className="text-muted-foreground">Clear selection</span>
+                                </CommandItem>
+                                {sites.map((site) => (
+                                  <CommandItem
+                                    key={site.id}
+                                    value={site.name}
+                                    onSelect={() => {
+                                      setFormData({ ...formData, companyName: site.name });
+                                      setCompanyNamePopoverOpen(false);
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        formData.companyName === site.name ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    <div className="flex flex-col">
+                                      <span>{site.name}</span>
+                                      {site.clientName && (
+                                        <span className="text-xs text-muted-foreground">{site.clientName}</span>
+                                      )}
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </div>
 

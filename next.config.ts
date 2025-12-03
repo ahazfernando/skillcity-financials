@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Optimize package imports to reduce chunk size
+  experimental: {
+    optimizePackageImports: ['@tanstack/react-query', 'lucide-react'],
+  },
 };
 
 export default nextConfig;

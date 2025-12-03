@@ -2,15 +2,16 @@
 
 import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import Invoices from "@/pages/Invoices";
+import SalaryCalculator from "@/pages/SalaryCalculator";
 
-export default function InvoicesPage() {
+export default function SalaryCalculatorPage() {
   return (
     <ProtectedRoute>
       <Layout>
-        <Invoices />
+        <SalaryCalculator />
       </Layout>
     </ProtectedRoute>
   );
 }
+
 

@@ -80,15 +80,20 @@ const Employees = () => {
     startDate: "",
     status: "active" as "active" | "inactive",
     invoiceCollectionFrequency: "" as "" | "Monthly" | "Fortnightly" | "Weekly",
+    type: "employee" as "employee" | "client",
   });
 
-  // Load employees from Firebase
+  // Load employees from Firebase (excluding clients)
   useEffect(() => {
     const loadEmployees = async () => {
       try {
         setIsLoading(true);
         const fetchedEmployees = await getAllEmployees();
-        setEmployees(fetchedEmployees);
+        // Filter out clients - only show actual employees
+        const actualEmployees = fetchedEmployees.filter(
+          (emp) => !emp.type || emp.type === "employee"
+        );
+        setEmployees(actualEmployees);
       } catch (error) {
         console.error("Error loading employees:", error);
         toast.error("Failed to load employees. Please try again.");
@@ -128,6 +133,7 @@ const Employees = () => {
       startDate: "",
       status: "active",
       invoiceCollectionFrequency: "",
+      type: "employee",
     });
     setEditingEmployeeId(null);
   };
@@ -143,6 +149,7 @@ const Employees = () => {
       startDate: employee.startDate,
       status: employee.status,
       invoiceCollectionFrequency: employee.invoiceCollectionFrequency || "",
+      type: employee.type || "employee",
     });
     setIsEditDialogOpen(true);
   };
@@ -167,11 +174,16 @@ const Employees = () => {
           startDate: formData.startDate || new Date().toISOString().split("T")[0],
           status: formData.status,
           invoiceCollectionFrequency: formData.invoiceCollectionFrequency || undefined,
+          type: formData.type,
         });
 
         // Reload employees to get the latest data from Firebase
         const updatedEmployees = await getAllEmployees();
-        setEmployees(updatedEmployees);
+        // Filter out clients - only show actual employees
+        const actualEmployees = updatedEmployees.filter(
+          (emp) => !emp.type || emp.type === "employee"
+        );
+        setEmployees(actualEmployees);
         
         toast.success("Employee updated successfully!");
         setIsEditDialogOpen(false);
@@ -186,6 +198,7 @@ const Employees = () => {
           startDate: formData.startDate || new Date().toISOString().split("T")[0],
           status: formData.status,
           invoiceCollectionFrequency: formData.invoiceCollectionFrequency || undefined,
+          type: formData.type,
         };
 
         // Add employee to Firebase
@@ -193,7 +206,11 @@ const Employees = () => {
         
         // Reload employees to get the latest data from Firebase
         const updatedEmployees = await getAllEmployees();
-        setEmployees(updatedEmployees);
+        // Filter out clients - only show actual employees
+        const actualEmployees = updatedEmployees.filter(
+          (emp) => !emp.type || emp.type === "employee"
+        );
+        setEmployees(actualEmployees);
         
         toast.success("Employee added successfully!");
         setIsAddDialogOpen(false);
@@ -216,7 +233,11 @@ const Employees = () => {
       
       // Reload employees to get the latest data from Firebase
       const updatedEmployees = await getAllEmployees();
-      setEmployees(updatedEmployees);
+      // Filter out clients - only show actual employees
+      const actualEmployees = updatedEmployees.filter(
+        (emp) => !emp.type || emp.type === "employee"
+      );
+      setEmployees(actualEmployees);
       
       toast.success("Employee deleted successfully!");
       setIsDeleteDialogOpen(false);
@@ -361,6 +382,7 @@ const Employees = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Invoice Collection Frequency</TableHead>
                   <TableHead>Status</TableHead>
@@ -369,7 +391,7 @@ const Employees = () => {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8">
+                    <TableCell colSpan={5} className="text-center py-8">
                       <div className="flex items-center justify-center gap-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         <span>Loading employees...</span>
@@ -378,7 +400,7 @@ const Employees = () => {
                   </TableRow>
                 ) : filteredEmployees.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                       No employees found
                     </TableCell>
                   </TableRow>
@@ -390,6 +412,11 @@ const Employees = () => {
                       onClick={() => handleEditEmployee(employee)}
                     >
                       <TableCell className="font-medium">{employee.name}</TableCell>
+                      <TableCell>
+                        <Badge variant={employee.type === "client" ? "default" : "secondary"}>
+                          {employee.type === "client" ? "Client" : "Employee"}
+                        </Badge>
+                      </TableCell>
                       <TableCell>{employee.role}</TableCell>
                       <TableCell>
                         {employee.invoiceCollectionFrequency || "-"}
@@ -760,6 +787,21 @@ const Employees = () => {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
+                      <Label htmlFor="type">Type</Label>
+                      <Select
+                        value={formData.type}
+                        onValueChange={(value) => setFormData({ ...formData, type: value as "employee" | "client" })}
+                      >
+                        <SelectTrigger id="type">
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="employee">Employee</SelectItem>
+                          <SelectItem value="client">Client</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
                       <Label htmlFor="invoiceCollectionFrequency">Invoice Collection Frequency</Label>
                       <Select
                         value={formData.invoiceCollectionFrequency}
@@ -775,6 +817,9 @@ const Employees = () => {
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="status">Status</Label>
                       <Select
@@ -1064,6 +1109,21 @@ const Employees = () => {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
+                      <Label htmlFor="edit-type">Type</Label>
+                      <Select
+                        value={formData.type}
+                        onValueChange={(value) => setFormData({ ...formData, type: value as "employee" | "client" })}
+                      >
+                        <SelectTrigger id="edit-type">
+                          <SelectValue placeholder="Select type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="employee">Employee</SelectItem>
+                          <SelectItem value="client">Client</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
                       <Label htmlFor="edit-invoiceCollectionFrequency">Invoice Collection Frequency</Label>
                       <Select
                         value={formData.invoiceCollectionFrequency}
@@ -1079,6 +1139,9 @@ const Employees = () => {
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="edit-status">Status</Label>
                       <Select

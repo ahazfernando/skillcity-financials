@@ -30,6 +30,7 @@ const docToEmployee = (doc: any): Employee => {
     startDate: data.startDate ? (data.startDate.toDate ? data.startDate.toDate().toISOString().split("T")[0] : data.startDate) : new Date().toISOString().split("T")[0],
     status: (data.status as "active" | "inactive") || "active",
     invoiceCollectionFrequency: data.invoiceCollectionFrequency || undefined,
+    type: (data.type as "employee" | "client") || "employee", // Default to "employee" for backward compatibility
   };
 };
 
@@ -44,6 +45,7 @@ const employeeToDoc = (employee: Omit<Employee, "id">): any => {
     startDate: Timestamp.fromDate(new Date(employee.startDate)),
     status: employee.status,
     invoiceCollectionFrequency: employee.invoiceCollectionFrequency || null,
+    type: employee.type || "employee", // Default to "employee" for backward compatibility
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
   };

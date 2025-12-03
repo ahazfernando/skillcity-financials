@@ -2,13 +2,13 @@
 
 import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import Invoices from "@/pages/Invoices";
+import Settings from "@/pages/Settings";
 
-export default function InvoicesPage() {
+export default function SettingsPage() {
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requireApproval={true} requireAdmin={true}>
       <Layout>
-        <Invoices />
+        <Settings />
       </Layout>
     </ProtectedRoute>
   );

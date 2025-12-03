@@ -1,11 +1,16 @@
+"use client";
+
 import { Layout } from "@/components/Layout";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Employees from "@/pages/Employees";
 
 export default function EmployeesPage() {
   return (
-    <Layout>
-      <Employees />
-    </Layout>
+    <ProtectedRoute>
+      <Layout>
+        <Employees />
+      </Layout>
+    </ProtectedRoute>
   );
 }
 

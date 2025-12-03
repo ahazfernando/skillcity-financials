@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Building2, Loader2, Trash2, Users } from "lucide-react";
+import { Search, Building2, Loader2, Trash2, Users, Check, ChevronsUpDown, UserPlus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -35,10 +35,25 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Site } from "@/types/financial";
+import { Site, SiteEmployeeAllocation, Employee } from "@/types/financial";
 import { getAllSites, addSite, updateSite, deleteSite } from "@/lib/firebase/sites";
-import { getEmployeesBySite } from "@/lib/firebase/workHours";
+import { getAllEmployees } from "@/lib/firebase/employees";
+import { getAllocationsBySite, addAllocation, deleteAllocation } from "@/lib/firebase/siteEmployeeAllocations";
 import { toast } from "sonner";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 
 const Sites = () => {
   const [searchValue, setSearchValue] = useState("");
@@ -51,9 +66,13 @@ const Sites = () => {
   const [deletingSiteId, setDeletingSiteId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isEmployeesDialogOpen, setIsEmployeesDialogOpen] = useState(false);
-  const [siteEmployees, setSiteEmployees] = useState<{ employeeId: string; employeeName: string; lastWorkDate: string }[]>([]);
+  const [siteAllocations, setSiteAllocations] = useState<SiteEmployeeAllocation[]>([]);
+  const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
   const [selectedSiteForEmployees, setSelectedSiteForEmployees] = useState<Site | null>(null);
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
+  const [isAddingEmployee, setIsAddingEmployee] = useState(false);
+  const [employeePopoverOpen, setEmployeePopoverOpen] = useState(false);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
   const [formData, setFormData] = useState({
     name: "",
     address: "",
@@ -72,22 +91,34 @@ const Sites = () => {
 
   const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
-  // Load sites from Firebase
+  // Load sites and employees from Firebase
   useEffect(() => {
-    const loadSites = async () => {
+    const loadData = async () => {
       try {
         setIsLoading(true);
-        const fetchedSites = await getAllSites();
+        const [fetchedSites, fetchedEmployees] = await Promise.all([
+          getAllSites(),
+          getAllEmployees(),
+        ]);
         setSites(fetchedSites);
+        // Filter out clients - only show actual employees
+        const actualEmployees = fetchedEmployees.filter(
+          (emp) => (!emp.type || emp.type === "employee") && emp.status === "active"
+        );
+        // Sort employees alphabetically
+        const sortedEmployees = actualEmployees.sort((a, b) =>
+          a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+        );
+        setAllEmployees(sortedEmployees);
       } catch (error) {
-        console.error("Error loading sites:", error);
-        toast.error("Failed to load sites. Please try again.");
+        console.error("Error loading data:", error);
+        toast.error("Failed to load data. Please try again.");
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadSites();
+    loadData();
   }, []);
 
   const resetForm = () => {
@@ -147,14 +178,86 @@ const Sites = () => {
     try {
       setIsLoadingEmployees(true);
       setSelectedSiteForEmployees(site);
-      const employees = await getEmployeesBySite(site.id);
-      setSiteEmployees(employees);
+      setSelectedEmployeeId("");
+      const allocations = await getAllocationsBySite(site.id);
+      setSiteAllocations(allocations);
       setIsEmployeesDialogOpen(true);
     } catch (error) {
       console.error("Error loading employees:", error);
       toast.error("Failed to load employees for this site.");
     } finally {
       setIsLoadingEmployees(false);
+    }
+  };
+
+  const handleAddEmployeeToSite = async () => {
+    if (!selectedSiteForEmployees || !selectedEmployeeId) {
+      toast.error("Please select an employee");
+      return;
+    }
+
+    // Check if employee is already assigned
+    const existingAllocation = siteAllocations.find(
+      (alloc) => alloc.employeeId === selectedEmployeeId
+    );
+    if (existingAllocation) {
+      toast.error("This employee is already assigned to this site");
+      return;
+    }
+
+    try {
+      setIsAddingEmployee(true);
+      const selectedEmployee = allEmployees.find((emp) => emp.id === selectedEmployeeId);
+      if (!selectedEmployee) {
+        toast.error("Employee not found");
+        return;
+      }
+
+      // Get the next employee number for this site
+      const maxEmployeeNumber = siteAllocations.length > 0
+        ? Math.max(...siteAllocations.map((a) => a.employeeNumber))
+        : 0;
+
+      const newAllocation: Omit<SiteEmployeeAllocation, "id"> = {
+        siteId: selectedSiteForEmployees.id,
+        siteName: selectedSiteForEmployees.name,
+        employeeId: selectedEmployee.id,
+        employeeName: selectedEmployee.name,
+        employeeNumber: maxEmployeeNumber + 1,
+        actualWorkingTime: "",
+        hasExtraTime: false,
+      };
+
+      await addAllocation(newAllocation);
+
+      // Reload allocations
+      const updatedAllocations = await getAllocationsBySite(selectedSiteForEmployees.id);
+      setSiteAllocations(updatedAllocations);
+      setSelectedEmployeeId("");
+      setEmployeePopoverOpen(false);
+      toast.success("Employee added successfully!");
+    } catch (error) {
+      console.error("Error adding employee:", error);
+      toast.error("Failed to add employee. Please try again.");
+    } finally {
+      setIsAddingEmployee(false);
+    }
+  };
+
+  const handleRemoveEmployeeFromSite = async (allocationId: string, employeeName: string) => {
+    try {
+      await deleteAllocation(allocationId);
+      
+      // Reload allocations
+      if (selectedSiteForEmployees) {
+        const updatedAllocations = await getAllocationsBySite(selectedSiteForEmployees.id);
+        setSiteAllocations(updatedAllocations);
+      }
+      
+      toast.success(`${employeeName} removed from site successfully!`);
+    } catch (error) {
+      console.error("Error removing employee:", error);
+      toast.error("Failed to remove employee. Please try again.");
     }
   };
 
@@ -850,24 +953,102 @@ const Sites = () => {
       </Dialog>
 
       {/* View Employees Dialog */}
-      <Dialog open={isEmployeesDialogOpen} onOpenChange={setIsEmployeesDialogOpen}>
-        <DialogContent className="max-w-2xl">
+      <Dialog open={isEmployeesDialogOpen} onOpenChange={(open) => {
+        setIsEmployeesDialogOpen(open);
+        if (!open) {
+          setSelectedSiteForEmployees(null);
+          setSiteAllocations([]);
+          setSelectedEmployeeId("");
+          setEmployeePopoverOpen(false);
+        }
+      }}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Employees at {selectedSiteForEmployees?.name}</DialogTitle>
             <DialogDescription>
-              Employees who have worked at this site
+              Manage employees assigned to this site
             </DialogDescription>
           </DialogHeader>
-          <div className="py-4">
+          <div className="py-4 space-y-4">
+            {/* Add Employee Section */}
+            <div className="flex items-end gap-2 pb-4 border-b">
+              <div className="flex-1 space-y-2">
+                <Label>Add Employee</Label>
+                <Popover open={employeePopoverOpen} onOpenChange={setEmployeePopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={employeePopoverOpen}
+                      className="w-full justify-between"
+                    >
+                      {selectedEmployeeId
+                        ? allEmployees.find((emp) => emp.id === selectedEmployeeId)?.name
+                        : "Select an employee..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search employees..." />
+                      <CommandList>
+                        <CommandEmpty>No employee found.</CommandEmpty>
+                        <CommandGroup>
+                          {allEmployees
+                            .filter((emp) => !siteAllocations.some((alloc) => alloc.employeeId === emp.id))
+                            .map((employee) => (
+                              <CommandItem
+                                key={employee.id}
+                                value={employee.name}
+                                onSelect={() => {
+                                  setSelectedEmployeeId(employee.id);
+                                  setEmployeePopoverOpen(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    selectedEmployeeId === employee.id ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                {employee.name}
+                              </CommandItem>
+                            ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+              <Button
+                onClick={handleAddEmployeeToSite}
+                disabled={!selectedEmployeeId || isAddingEmployee}
+                className="mb-0"
+              >
+                {isAddingEmployee ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Adding...
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Add
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {/* Employees List */}
             {isLoadingEmployees ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 <span>Loading employees...</span>
               </div>
-            ) : siteEmployees.length === 0 ? (
+            ) : siteAllocations.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 <Users className="h-12 w-12 mx-auto mb-4 opacity-20" />
-                <p>No employees have worked at this site yet.</p>
+                <p>No employees assigned to this site yet.</p>
               </div>
             ) : (
               <div className="rounded-md border">
@@ -875,15 +1056,24 @@ const Sites = () => {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Employee Name</TableHead>
-                      <TableHead>Last Work Date</TableHead>
+                      <TableHead>Working Time</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {siteEmployees.map((emp) => (
-                      <TableRow key={emp.employeeId}>
-                        <TableCell className="font-medium">{emp.employeeName}</TableCell>
+                    {siteAllocations.map((allocation) => (
+                      <TableRow key={allocation.id}>
+                        <TableCell className="font-medium">{allocation.employeeName}</TableCell>
+                        <TableCell>{allocation.actualWorkingTime || "-"}</TableCell>
                         <TableCell>
-                          {new Date(emp.lastWorkDate).toLocaleDateString()}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveEmployeeFromSite(allocation.id, allocation.employeeName)}
+                            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))}
