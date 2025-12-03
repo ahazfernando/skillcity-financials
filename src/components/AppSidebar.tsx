@@ -1,6 +1,6 @@
 "use client";
 
-import { LayoutDashboard, FileText, Users, Wallet, Building2, Calendar, Bell, Briefcase, CreditCard, UserCheck } from "lucide-react";
+import { LayoutDashboard, FileText, Users, Wallet, Building2, Calendar, Bell } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
   Sidebar,
@@ -19,10 +19,7 @@ const menuItems = [
   { title: "Invoices", url: "/invoices", icon: FileText },
   { title: "Payroll", url: "/payroll", icon: Wallet },
   { title: "Employees", url: "/employees", icon: Users },
-  { title: "Clients", url: "/clients", icon: Briefcase },
   { title: "Sites", url: "/sites", icon: Building2 },
-  { title: "Site Employee Allocations", url: "/site-employee-allocations", icon: UserCheck },
-  { title: "Employee Pay Rates", url: "/employee-pay-rates", icon: CreditCard },
   { title: "Work Schedule", url: "/schedule", icon: Calendar },
   { title: "Reminders", url: "/reminders", icon: Bell },
 ];
