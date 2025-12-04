@@ -356,13 +356,13 @@ const Sites = () => {
   });
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Sites</h2>
-          <p className="text-muted-foreground">Manage cleaning sites and locations</p>
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Sites</h2>
+          <p className="text-sm sm:text-base text-muted-foreground">Manage cleaning sites and locations</p>
         </div>
-        <Button onClick={handleAddSite}>
+        <Button onClick={handleAddSite} className="w-full sm:w-auto">
           <Building2 className="mr-2 h-4 w-4" />
           Add Site
         </Button>

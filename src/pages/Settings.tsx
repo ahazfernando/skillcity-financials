@@ -19,10 +19,10 @@ const Settings = () => {
 
   if (!isAdmin) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Settings</h2>
-          <p className="text-muted-foreground">System settings and preferences</p>
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Settings</h2>
+          <p className="text-sm sm:text-base text-muted-foreground">System settings and preferences</p>
         </div>
         <Alert>
           <AlertDescription>
@@ -34,13 +34,13 @@ const Settings = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       <div>
-        <h2 className="text-3xl font-bold tracking-tight">Settings</h2>
-        <p className="text-muted-foreground">System settings and preferences</p>
+        <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Settings</h2>
+        <p className="text-sm sm:text-base text-muted-foreground">System settings and preferences</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-3 sm:gap-4 grid-cols-1 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>General Settings</CardTitle>

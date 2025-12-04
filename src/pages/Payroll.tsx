@@ -746,13 +746,13 @@ const Payroll = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Payroll</h2>
-          <p className="text-muted-foreground">Manage employee payroll (includes 10% GST)</p>
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Payroll</h2>
+          <p className="text-sm sm:text-base text-muted-foreground">Manage employee payroll (includes 10% GST)</p>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={() => setIsAddDialogOpen(true)}>
+        <div className="flex gap-2 w-full sm:w-auto">
+          <Button onClick={() => setIsAddDialogOpen(true)} className="w-full sm:w-auto">
             <Plus className="mr-2 h-4 w-4" />
             Add Payroll
           </Button>

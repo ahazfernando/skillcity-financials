@@ -298,13 +298,13 @@ const SiteEmployeeAllocations = () => {
   });
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Employees Standard Time Allocation for Sites</h2>
-          <p className="text-muted-foreground">Manage employee allocations and hours for each site</p>
+          <h2 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Employees Standard Time Allocation for Sites</h2>
+          <p className="text-sm sm:text-base text-muted-foreground">Manage employee allocations and hours for each site</p>
         </div>
-        <Button onClick={handleAddAllocation}>
+        <Button onClick={handleAddAllocation} className="w-full sm:w-auto">
           <Plus className="mr-2 h-4 w-4" />
           Add Allocation
         </Button>
@@ -440,7 +440,7 @@ const SiteEmployeeAllocations = () => {
                       </CollapsibleTrigger>
                       <CollapsibleContent>
                         <CardContent>
-                          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                          <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                             {siteAllocations.map((allocation) => (
                               <Card key={allocation.id} className="relative">
                                 <CardContent className="pt-6">

@@ -19,3 +19,6 @@ This page implements CRUD operations on the Firestore `clients` collection with 
 This page computes employee salaries by querying Firestore collections for employee pay rates and site allocations. It performs Firestore queries using `getEmployeePayRatesByEmployee` to retrieve pay rate documents filtered by employee ID. The calculator implements client-side computation logic that aggregates hourly rates, travel allowances, and hours worked from multiple Firestore documents. It uses React state management to track calculation results and performs real-time recalculation when input values change. The page validates data existence by checking Firestore query results before performing salary computations.
 
 
+
+
+

@@ -59,16 +59,19 @@ export function Layout({ children }: LayoutProps) {
       <div className="min-h-screen flex w-full">
         <AppSidebar />
         <main className="flex-1 overflow-auto">
-          <header className="sticky top-0 z-10 h-14 border-b bg-card flex items-center px-4 gap-2">
+          <header className="sticky top-0 z-10 h-14 border-b bg-card flex items-center px-2 sm:px-4 gap-2">
             <SidebarTrigger />
-            <h1 className="text-lg font-semibold text-foreground">Skill City Financial Management System</h1>
-            <div className="ml-auto flex items-center gap-2">
+            <h1 className="text-sm sm:text-base md:text-lg font-semibold text-foreground truncate flex-1 min-w-0">
+              <span className="hidden sm:inline">Skill City Financial Management System</span>
+              <span className="sm:hidden">Skill City</span>
+            </h1>
+            <div className="ml-auto flex items-center gap-1 sm:gap-2 flex-shrink-0">
               {user && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="ghost" className="relative h-9 w-9 rounded-full">
-                      <Avatar className="h-9 w-9">
-                        <AvatarFallback>{getUserInitials()}</AvatarFallback>
+                    <Button variant="ghost" className="relative h-8 w-8 sm:h-9 sm:w-9 rounded-full">
+                      <Avatar className="h-8 w-8 sm:h-9 sm:w-9">
+                        <AvatarFallback className="text-xs sm:text-sm">{getUserInitials()}</AvatarFallback>
                       </Avatar>
                     </Button>
                   </DropdownMenuTrigger>
@@ -94,7 +97,7 @@ export function Layout({ children }: LayoutProps) {
               <ThemeToggle />
             </div>
           </header>
-          <div className="p-6">
+          <div className="p-3 sm:p-4 md:p-6">
             {children}
           </div>
         </main>

@@ -525,13 +525,13 @@ const Invoices = () => {
   });
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Invoices</h2>
-          <p className="text-muted-foreground">Manage client invoices and payments</p>
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Invoices</h2>
+          <p className="text-sm sm:text-base text-muted-foreground">Manage client invoices and payments</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
           <Button
             variant="outline"
             onClick={async () => {

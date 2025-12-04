@@ -350,13 +350,13 @@ const Employees = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="space-y-4 sm:space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Employees</h2>
-          <p className="text-muted-foreground">Manage your workforce</p>
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Employees</h2>
+          <p className="text-sm sm:text-base text-muted-foreground">Manage your workforce</p>
         </div>
-        <Button onClick={handleAddEmployee}>
+        <Button onClick={handleAddEmployee} className="w-full sm:w-auto">
           <UserPlus className="mr-2 h-4 w-4" />
           Add Employee
         </Button>
@@ -377,15 +377,15 @@ const Employees = () => {
             />
           </div>
 
-          <div className="rounded-md border">
+          <div className="rounded-md border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Invoice Collection Frequency</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead className="min-w-[120px]">Name</TableHead>
+                  <TableHead className="min-w-[100px]">Type</TableHead>
+                  <TableHead className="min-w-[120px]">Role</TableHead>
+                  <TableHead className="min-w-[180px]">Invoice Collection Frequency</TableHead>
+                  <TableHead className="min-w-[100px]">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -678,8 +678,8 @@ const Employees = () => {
         setIsAddDialogOpen(open);
         if (!open) resetForm();
       }}>
-        <DialogContent className="max-w-6xl w-full p-0 gap-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] sm:rounded-lg">
-          <div className="grid md:grid-cols-2 h-[90vh] max-h-[90vh]">
+        <DialogContent className="max-w-6xl w-full p-0 gap-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] sm:rounded-lg max-h-[95vh] sm:max-h-[90vh] m-2 sm:m-4">
+          <div className="grid md:grid-cols-2 h-[95vh] sm:h-[90vh] max-h-[95vh] sm:max-h-[90vh]">
             {/* Left side - Image with Logo and Heading */}
             <div className="relative hidden md:block overflow-hidden md:rounded-l-lg">
               <img
@@ -706,7 +706,7 @@ const Employees = () => {
             
             {/* Right side - Form */}
             <div className="flex flex-col overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] md:rounded-r-lg">
-              <div className="p-6">
+              <div className="p-4 sm:p-6">
                 <DialogHeader>
                   <DialogTitle>Add Employee</DialogTitle>
                   <DialogDescription>
@@ -714,7 +714,7 @@ const Employees = () => {
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="name">Name</Label>
                       <Input
@@ -740,7 +740,7 @@ const Employees = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="email">Email</Label>
                       <Input
@@ -762,7 +762,7 @@ const Employees = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="salary">Salary</Label>
                       <Input
@@ -785,7 +785,7 @@ const Employees = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="type">Type</Label>
                       <Select
@@ -819,7 +819,7 @@ const Employees = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="status">Status</Label>
                       <Select
@@ -1036,7 +1036,7 @@ const Employees = () => {
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="edit-name">Name</Label>
                       <Input
@@ -1062,7 +1062,7 @@ const Employees = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="edit-email">Email</Label>
                       <Input
@@ -1084,7 +1084,7 @@ const Employees = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="edit-salary">Salary</Label>
                       <Input
@@ -1107,7 +1107,7 @@ const Employees = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="edit-type">Type</Label>
                       <Select
@@ -1141,7 +1141,7 @@ const Employees = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="edit-status">Status</Label>
                       <Select
