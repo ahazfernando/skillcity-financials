@@ -103,7 +103,7 @@ export const generateMonthlyReport = async (
   doc.text("Financial Management System", margin, headerTop + (logoHeight || 20) + 8);
 
   // "INVOICE" or "REPORT" title on the right in orange
-  const orangeColor = [255, 152, 0]; // Orange color
+  const orangeColor: [number, number, number] = [255, 152, 0]; // Orange color
   doc.setFontSize(32);
   doc.setTextColor(...orangeColor);
   doc.setFont("helvetica", "bold");
