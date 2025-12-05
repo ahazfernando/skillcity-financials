@@ -1,20 +1,22 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatCurrency } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { SearchFilter } from "@/components/SearchFilter";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Calendar as CalendarIcon, Download, TrendingUp, TrendingDown, DollarSign } from "lucide-react";
+import { Calendar as CalendarIcon, Download, TrendingUp, TrendingDown, DollarSign, RefreshCw, Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
-import { PaymentStatus, PaymentMethod, Payroll, CashFlowMode } from "@/types/financial";
+import { PaymentStatus, PaymentMethod, Payroll, CashFlowMode, Invoice } from "@/types/financial";
 import { getPayrollsByHistoryStatus, movePaidInvoicesToHistory } from "@/lib/firebase/payroll";
+import { getAllInvoices } from "@/lib/firebase/invoices";
 import { toast } from "sonner";
 import { generateMonthlyReport } from "@/lib/monthly-report-generator";
 
@@ -23,6 +25,7 @@ const InvoiceHistory = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [payrolls, setPayrolls] = useState<Payroll[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Load history data from Firebase
@@ -36,16 +39,26 @@ const InvoiceHistory = () => {
         const today = new Date().toDateString();
         if (!lastMoveCheck || lastMoveCheck !== today) {
           try {
-            await movePaidInvoicesToHistory();
+            const movedCount = await movePaidInvoicesToHistory();
             localStorage.setItem('lastHistoryMoveCheck', today);
+            if (movedCount > 0) {
+              console.log(`Moved ${movedCount} paid invoices to history`);
+            }
           } catch (error) {
             console.error("Error moving paid invoices to history:", error);
             // Don't block the UI if this fails
           }
         }
         
-        const fetchedPayrolls = await getPayrollsByHistoryStatus(true);
+        // Fetch all payrolls that are in history and all invoices for profit calculation
+        const [fetchedPayrolls, fetchedInvoices] = await Promise.all([
+          getPayrollsByHistoryStatus(true),
+          getAllInvoices()
+        ]);
+        console.log(`Loaded ${fetchedPayrolls.length} payroll records from history`);
+        console.log(`Loaded ${fetchedInvoices.length} invoice records`);
         setPayrolls(fetchedPayrolls);
+        setInvoices(fetchedInvoices);
       } catch (error) {
         console.error("Error loading data:", error);
         toast.error("Failed to load data. Please try again.");
@@ -124,18 +137,37 @@ const InvoiceHistory = () => {
     });
   }, [payrolls, searchValue, statusFilter, dateRange]);
 
-  // Calculate monthly cash flow summaries
-  // IMPORTANT: Payments are attributed to the month when work was performed, not when payment was received
-  // Example: Jordan works in November, gets paid on December 15th -> Payment belongs to November
+  // Calculate monthly profit summaries
+  // Revenue from invoices (received status) and expenses from payroll outflows (received status)
   const monthlySummaries = useMemo(() => {
-    const summaries: Record<string, { inflow: number; outflow: number; month: string; year: number }> = {};
+    const summaries: Record<string, { revenue: number; expenses: number; profit: number; month: string; year: number }> = {};
     
-    filteredPayrolls.forEach(payroll => {
-      // Always use work date (invoice date) to determine the month
-      // Payments belong to the month when work was done, not when payment was received
-      // Example: Work done in November, paid in December -> belongs to November
-      const dateToUse = parseDate(payroll.date);
+    // Process invoices for revenue
+    invoices.forEach(invoice => {
+      if (invoice.status !== "received") return;
       
+      const invoiceDate = new Date(invoice.issueDate);
+      const monthKey = `${invoiceDate.getFullYear()}-${String(invoiceDate.getMonth() + 1).padStart(2, '0')}`;
+      const monthName = format(invoiceDate, "MMMM yyyy");
+      
+      if (!summaries[monthKey]) {
+        summaries[monthKey] = {
+          revenue: 0,
+          expenses: 0,
+          profit: 0,
+          month: monthName,
+          year: invoiceDate.getFullYear(),
+        };
+      }
+      
+      summaries[monthKey].revenue += invoice.totalAmount;
+    });
+    
+    // Process payroll outflows for expenses
+    payrolls.forEach(payroll => {
+      if (payroll.modeOfCashFlow !== "outflow" || payroll.status !== "received") return;
+      
+      const dateToUse = parseDate(payroll.date);
       if (!dateToUse) return;
       
       const monthKey = `${dateToUse.getFullYear()}-${String(dateToUse.getMonth() + 1).padStart(2, '0')}`;
@@ -143,18 +175,20 @@ const InvoiceHistory = () => {
       
       if (!summaries[monthKey]) {
         summaries[monthKey] = {
-          inflow: 0,
-          outflow: 0,
+          revenue: 0,
+          expenses: 0,
+          profit: 0,
           month: monthName,
           year: dateToUse.getFullYear(),
         };
       }
       
-      if (payroll.modeOfCashFlow === "inflow") {
-        summaries[monthKey].inflow += payroll.totalAmount;
-      } else if (payroll.modeOfCashFlow === "outflow") {
-        summaries[monthKey].outflow += payroll.totalAmount;
-      }
+      summaries[monthKey].expenses += payroll.totalAmount;
+    });
+    
+    // Calculate profit for each month
+    Object.keys(summaries).forEach(key => {
+      summaries[key].profit = summaries[key].revenue - summaries[key].expenses;
     });
     
     // Convert to array and sort by date (newest first)
@@ -163,9 +197,9 @@ const InvoiceHistory = () => {
       const dateB = new Date(b.month);
       return dateB.getTime() - dateA.getTime();
     });
-  }, [filteredPayrolls]);
+  }, [invoices, payrolls]);
 
-  // Calculate totals
+  // Calculate totals from payrolls (cash flow)
   const totalInflow = useMemo(() => {
     return filteredPayrolls
       .filter(p => p.modeOfCashFlow === "inflow")
@@ -180,6 +214,23 @@ const InvoiceHistory = () => {
 
   const netCashFlow = totalInflow - totalOutflow;
 
+  // Calculate profit from invoices (revenue) and payroll (expenses)
+  // Revenue = invoices with status "received"
+  // Expenses = payroll outflows with status "received"
+  const totalRevenue = useMemo(() => {
+    return invoices
+      .filter(inv => inv.status === "received")
+      .reduce((sum, inv) => sum + inv.totalAmount, 0);
+  }, [invoices]);
+
+  const totalExpenses = useMemo(() => {
+    return payrolls
+      .filter(pay => pay.modeOfCashFlow === "outflow" && pay.status === "received")
+      .reduce((sum, pay) => sum + pay.totalAmount, 0);
+  }, [payrolls]);
+
+  const totalProfit = totalRevenue - totalExpenses;
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -192,17 +243,24 @@ const InvoiceHistory = () => {
             variant="outline"
             onClick={async () => {
               try {
+                setIsLoading(true);
+                // Refresh data before generating report
+                const fetchedPayrolls = await getPayrollsByHistoryStatus(true);
+                setPayrolls(fetchedPayrolls);
+                
                 const monthLabel = dateRange?.from && dateRange?.to
                   ? `${format(dateRange.from, "MMM dd, yyyy")} - ${format(dateRange.to, "MMM dd, yyyy")}`
                   : dateRange?.from
                   ? format(dateRange.from, "MMMM yyyy")
                   : "All History";
                 
-                await generateMonthlyReport(filteredPayrolls, monthLabel, "/logo/skillcityyy.png");
+                await generateMonthlyReport(fetchedPayrolls, monthLabel, "/logo/skillcityyy.png");
                 toast.success("Monthly report downloaded successfully!");
               } catch (error: any) {
                 console.error("Error generating report:", error);
                 toast.error(error.message || "Failed to generate report. Please try again.");
+              } finally {
+                setIsLoading(false);
               }
             }}
             disabled={isLoading || filteredPayrolls.length === 0}
@@ -210,77 +268,127 @@ const InvoiceHistory = () => {
             <Download className="mr-2 h-4 w-4" />
             Download Report
           </Button>
+          <Button
+            variant="outline"
+            onClick={async () => {
+              try {
+                setIsLoading(true);
+                // Force refresh by moving paid invoices and reloading
+                await movePaidInvoicesToHistory();
+                const [fetchedPayrolls, fetchedInvoices] = await Promise.all([
+                  getPayrollsByHistoryStatus(true),
+                  getAllInvoices()
+                ]);
+                setPayrolls(fetchedPayrolls);
+                setInvoices(fetchedInvoices);
+                toast.success(`Refreshed! Loaded ${fetchedPayrolls.length} payroll and ${fetchedInvoices.length} invoice records.`);
+              } catch (error) {
+                console.error("Error refreshing data:", error);
+                toast.error("Failed to refresh data. Please try again.");
+              } finally {
+                setIsLoading(false);
+              }
+            }}
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Refreshing...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Refresh
+              </>
+            )}
+          </Button>
         </div>
       </div>
 
-      {/* Monthly Cash Flow Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Cash Inflow</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">
-              ${totalInflow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      {/* Profit Summary Cards */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <Card className="relative overflow-hidden bg-card border shadow-lg p-0 rounded-[32px]">
+          <CardHeader className="relative px-6 pt-6">
+            <div className="flex items-start justify-between">
+              <div className="p-3 rounded-lg bg-green-500/10 dark:bg-green-500/20">
+                <TrendingUp className="h-6 w-6 text-green-600 dark:text-green-400" />
+              </div>
             </div>
+            <CardTitle className="text-sm font-medium mt-4 text-muted-foreground">Total Revenue</CardTitle>
+            <div className="text-3xl font-bold text-green-600 dark:text-green-400 mt-2">
+              {formatCurrency(totalRevenue)}
+            </div>
+          </CardHeader>
+          <CardContent className="bg-muted/30 dark:bg-muted/20 rounded-b-[32px] px-6 py-4 border-t">
+            <p className="text-xs text-muted-foreground">From received invoices</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Cash Outflow</CardTitle>
-            <TrendingDown className="h-4 w-4 text-red-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">
-              ${totalOutflow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        <Card className="relative overflow-hidden bg-card border shadow-lg p-0 rounded-[32px]">
+          <CardHeader className="relative px-6 pt-6">
+            <div className="flex items-start justify-between">
+              <div className="p-3 rounded-lg bg-red-500/10 dark:bg-red-500/20">
+                <TrendingDown className="h-6 w-6 text-red-600 dark:text-red-400" />
+              </div>
             </div>
+            <CardTitle className="text-sm font-medium mt-4 text-muted-foreground">Total Expenses</CardTitle>
+            <div className="text-3xl font-bold text-red-600 dark:text-red-400 mt-2">
+              {formatCurrency(totalExpenses)}
+            </div>
+          </CardHeader>
+          <CardContent className="bg-muted/30 dark:bg-muted/20 rounded-b-[32px] px-6 py-4 border-t">
+            <p className="text-xs text-muted-foreground">From received payroll outflows</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Net Cash Flow</CardTitle>
-            <DollarSign className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${netCashFlow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              ${netCashFlow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+        <Card className="relative overflow-hidden bg-card border shadow-lg p-0 rounded-[32px]">
+          <CardHeader className="relative px-6 pt-6">
+            <div className="flex items-start justify-between">
+              <div className={`p-3 rounded-lg ${totalProfit >= 0 ? 'bg-green-500/10 dark:bg-green-500/20' : 'bg-red-500/10 dark:bg-red-500/20'}`}>
+                <DollarSign className={`h-6 w-6 ${totalProfit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`} />
+              </div>
             </div>
+            <CardTitle className="text-sm font-medium mt-4 text-muted-foreground">Net Profit</CardTitle>
+            <div className={`text-3xl font-bold mt-2 ${totalProfit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+              {formatCurrency(totalProfit)}
+            </div>
+          </CardHeader>
+          <CardContent className="bg-muted/30 dark:bg-muted/20 rounded-b-[32px] px-6 py-4 border-t">
+            <p className="text-xs text-muted-foreground">Revenue minus expenses</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Monthly Summary Table */}
+      {/* Monthly Profit Summary Table */}
       {monthlySummaries.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Monthly Cash Flow Summary</CardTitle>
+        <Card className="shadow-card border">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg font-semibold">Monthly Profit Summary</CardTitle>
+            <CardDescription>Revenue, expenses, and profit breakdown by month</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="rounded-md border overflow-x-auto">
+            <div className="rounded-xl border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-green-50 dark:bg-green-950">
                     <TableHead>Month</TableHead>
-                    <TableHead className="text-right">Cash Inflow</TableHead>
-                    <TableHead className="text-right">Cash Outflow</TableHead>
-                    <TableHead className="text-right">Net Flow</TableHead>
+                    <TableHead className="text-right">Revenue</TableHead>
+                    <TableHead className="text-right">Expenses</TableHead>
+                    <TableHead className="text-right">Profit</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {monthlySummaries.map((summary, index) => {
-                    const netFlow = summary.inflow - summary.outflow;
                     return (
-                      <TableRow key={index}>
+                      <TableRow key={index} className="hover:bg-muted/50">
                         <TableCell className="font-medium">{summary.month}</TableCell>
-                        <TableCell className="text-right text-green-600 font-semibold">
-                          ${summary.inflow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        <TableCell className="text-right text-green-600 dark:text-green-400 font-semibold">
+                          {formatCurrency(summary.revenue)}
                         </TableCell>
-                        <TableCell className="text-right text-red-600 font-semibold">
-                          ${summary.outflow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        <TableCell className="text-right text-red-600 dark:text-red-400 font-semibold">
+                          {formatCurrency(summary.expenses)}
                         </TableCell>
-                        <TableCell className={`text-right font-semibold ${netFlow >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          ${netFlow.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        <TableCell className={`text-right font-semibold ${summary.profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                          {formatCurrency(summary.profit)}
                         </TableCell>
                       </TableRow>
                     );
@@ -293,9 +401,10 @@ const InvoiceHistory = () => {
       )}
 
       {/* Invoice History Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Invoice History</CardTitle>
+      <Card className="shadow-card border">
+        <CardHeader className="pb-4">
+          <CardTitle className="text-lg font-semibold">Invoice History</CardTitle>
+          <CardDescription>View all historical invoices and payments</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex gap-4 flex-wrap items-end mb-6">
@@ -342,7 +451,7 @@ const InvoiceHistory = () => {
             </Popover>
           </div>
 
-          <div className="rounded-md border overflow-x-auto">
+          <div className="rounded-xl border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow className="bg-green-50 dark:bg-green-950">
@@ -412,7 +521,7 @@ const InvoiceHistory = () => {
                   filteredPayrolls.map((payroll) => (
                     <TableRow 
                       key={payroll.id}
-                      className="hover:bg-muted/50"
+                      className="hover:bg-muted/50 transition-colors"
                     >
                       <TableCell className="font-medium">{payroll.invoiceNumber || "-"}</TableCell>
                       <TableCell className="font-medium">{payroll.name || "-"}</TableCell>
@@ -422,9 +531,9 @@ const InvoiceHistory = () => {
                           {payroll.modeOfCashFlow === "inflow" ? "Inflow" : "Outflow"}
                         </Badge>
                       </TableCell>
-                      <TableCell>${payroll.amountExclGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                      <TableCell>${payroll.gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="font-semibold">${payroll.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                      <TableCell>{formatCurrency(payroll.amountExclGst)}</TableCell>
+                      <TableCell>{formatCurrency(payroll.gstAmount)}</TableCell>
+                      <TableCell className="font-semibold">{formatCurrency(payroll.totalAmount)}</TableCell>
                       <TableCell>{formatDate(payroll.date)}</TableCell>
                       <TableCell>
                         <StatusBadge status={payroll.status} />

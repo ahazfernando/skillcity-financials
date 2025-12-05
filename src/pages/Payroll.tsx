@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { SearchFilter } from "@/components/SearchFilter";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Plus, FileText, X, Loader2, Check, ChevronsUpDown, Search, Edit2, LayoutGrid, Table as TableIcon, CalendarIcon, TrendingUp, Trash2, Upload, File } from "lucide-react";
+import { Plus, FileText, X, Loader2, Check, ChevronsUpDown, Search, Edit2, LayoutGrid, Table as TableIcon, CalendarIcon, TrendingUp, TrendingDown, DollarSign, Trash2, Upload, File } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -51,7 +51,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
 import { DateRange } from "react-day-picker";
 import { format } from "date-fns";
@@ -351,19 +351,31 @@ const Payroll = () => {
   };
 
   const handleAddPayroll = async () => {
-    if (!formData.name || !formData.date || !formData.amountExclGst) {
-      toast.error("Please fill in all required fields (Name, Date, Amount)");
+    // Allow partial filling - no strict validation required
+    // Only show a warning if absolutely no data is provided
+    if (!formData.name && !formData.date && !formData.amountExclGst && !formData.notes) {
+      toast.warning("Please fill in at least one field to save the payroll entry");
       return;
     }
 
     try {
       setIsSaving(true);
       
-      // Convert date from YYYY-MM-DD to DD.MM.YYYY format
-      const dateParts = formData.date.split('-');
-      const formattedDate = dateParts.length === 3 
-        ? `${dateParts[2]}.${dateParts[1]}.${dateParts[0]}`
-        : formData.date;
+      // Convert date from YYYY-MM-DD to DD.MM.YYYY format (use today's date if not provided)
+      let formattedDate = "";
+      if (formData.date) {
+        const dateParts = formData.date.split('-');
+        formattedDate = dateParts.length === 3 
+          ? `${dateParts[2]}.${dateParts[1]}.${dateParts[0]}`
+          : formData.date;
+      } else {
+        // Use today's date as default if not provided
+        const today = new Date();
+        const day = String(today.getDate()).padStart(2, '0');
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const year = today.getFullYear();
+        formattedDate = `${day}.${month}.${year}`;
+      }
 
       // Convert payment date from YYYY-MM-DD to DD.MM.YYYY format if provided
       let formattedPaymentDate = undefined;
@@ -374,15 +386,17 @@ const Payroll = () => {
           : formData.paymentDate;
       }
 
-      // Calculate status based on payment cycle if not manually set
-      const calculatedStatus = calculatePaymentStatus(formData.date, formData.paymentCycle);
+      // Calculate status based on payment cycle if date is provided, otherwise use 'pending'
+      const calculatedStatus = formData.date 
+        ? calculatePaymentStatus(formData.date, formData.paymentCycle)
+        : "pending";
       
       const newPayroll: Omit<Payroll, "id"> = {
-        month: formData.month,
+        month: formData.month || new Date().toLocaleString('default', { month: 'long' }),
         date: formattedDate,
         modeOfCashFlow: formData.modeOfCashFlow,
         typeOfCashFlow: formData.typeOfCashFlow,
-        name: formData.name,
+        name: formData.name || "Unnamed",
         siteOfWork: formData.siteOfWork || undefined,
         abnRegistered: formData.abnRegistered,
         gstRegistered: formData.gstRegistered,
@@ -508,19 +522,18 @@ const Payroll = () => {
   const handleUpdatePayroll = async () => {
     if (!editingPayrollId) return;
     
-    if (!formData.name || !formData.date || !formData.amountExclGst) {
-      toast.error("Please fill in all required fields (Name, Date, Amount)");
-      return;
-    }
-
+    // Allow partial filling - no strict validation required for updates
     try {
       setIsSaving(true);
       
-      // Convert date from YYYY-MM-DD to DD.MM.YYYY format
-      const dateParts = formData.date.split('-');
-      const formattedDate = dateParts.length === 3 
-        ? `${dateParts[2]}.${dateParts[1]}.${dateParts[0]}`
-        : formData.date;
+      // Convert date from YYYY-MM-DD to DD.MM.YYYY format (preserve existing if not provided)
+      let formattedDate = "";
+      if (formData.date) {
+        const dateParts = formData.date.split('-');
+        formattedDate = dateParts.length === 3 
+          ? `${dateParts[2]}.${dateParts[1]}.${dateParts[0]}`
+          : formData.date;
+      }
 
       // Convert payment date from YYYY-MM-DD to DD.MM.YYYY format if provided
       let formattedPaymentDate = undefined;
@@ -531,31 +544,33 @@ const Payroll = () => {
           : formData.paymentDate;
       }
 
-      // Calculate status based on payment cycle if not manually set
-      const calculatedStatus = calculatePaymentStatus(formData.date, formData.paymentCycle);
+      // Calculate status based on payment cycle if date is provided, otherwise keep existing status
+      const calculatedStatus = formData.date 
+        ? calculatePaymentStatus(formData.date, formData.paymentCycle)
+        : undefined;
       
       const updatedPayroll: Partial<Omit<Payroll, "id">> = {
-        month: formData.month,
-        date: formattedDate,
-        modeOfCashFlow: formData.modeOfCashFlow,
-        typeOfCashFlow: formData.typeOfCashFlow,
-        name: formData.name,
-        siteOfWork: formData.siteOfWork || undefined,
-        abnRegistered: formData.abnRegistered,
-        gstRegistered: formData.gstRegistered,
-        invoiceNumber: formData.invoiceNumber || undefined,
-        amountExclGst: parseFloat(formData.amountExclGst) || 0,
-        gstAmount: parseFloat(formData.gstAmount) || 0,
-        totalAmount: parseFloat(formData.totalAmount) || 0,
-        currency: formData.currency,
-        paymentMethod: formData.paymentMethod,
-        paymentDate: formattedPaymentDate,
-        paymentReceiptNumber: formData.paymentReceiptNumber || undefined,
-        status: calculatedStatus,
-        notes: formData.notes || undefined,
-        frequency: formData.frequency,
-        paymentCycle: formData.paymentCycle,
-        attachedFiles: formData.attachedFiles.length > 0 ? formData.attachedFiles : undefined,
+        ...(formData.month && { month: formData.month }),
+        ...(formattedDate && { date: formattedDate }),
+        ...(formData.modeOfCashFlow && { modeOfCashFlow: formData.modeOfCashFlow }),
+        ...(formData.typeOfCashFlow && { typeOfCashFlow: formData.typeOfCashFlow }),
+        ...(formData.name && { name: formData.name }),
+        ...(formData.siteOfWork !== undefined && { siteOfWork: formData.siteOfWork || undefined }),
+        ...(formData.abnRegistered !== undefined && { abnRegistered: formData.abnRegistered }),
+        ...(formData.gstRegistered !== undefined && { gstRegistered: formData.gstRegistered }),
+        ...(formData.invoiceNumber !== undefined && { invoiceNumber: formData.invoiceNumber || undefined }),
+        ...(formData.amountExclGst !== undefined && { amountExclGst: parseFloat(formData.amountExclGst) || 0 }),
+        ...(formData.gstAmount !== undefined && { gstAmount: parseFloat(formData.gstAmount) || 0 }),
+        ...(formData.totalAmount !== undefined && { totalAmount: parseFloat(formData.totalAmount) || 0 }),
+        ...(formData.currency && { currency: formData.currency }),
+        ...(formData.paymentMethod && { paymentMethod: formData.paymentMethod }),
+        ...(formattedPaymentDate !== undefined && { paymentDate: formattedPaymentDate }),
+        ...(formData.paymentReceiptNumber !== undefined && { paymentReceiptNumber: formData.paymentReceiptNumber || undefined }),
+        ...(calculatedStatus && { status: calculatedStatus }),
+        ...(formData.notes !== undefined && { notes: formData.notes || undefined }),
+        ...(formData.frequency && { frequency: formData.frequency }),
+        ...(formData.paymentCycle !== undefined && { paymentCycle: formData.paymentCycle }),
+        ...(formData.attachedFiles.length > 0 && { attachedFiles: formData.attachedFiles }),
       };
 
       await updatePayroll(editingPayrollId, updatedPayroll);
@@ -777,12 +792,72 @@ const Payroll = () => {
         </div>
       </div>
 
+      {/* Statistical Summary Cards */}
+      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+        <Card className="relative overflow-hidden bg-card border shadow-lg p-0 rounded-[32px]">
+          <CardHeader className="relative px-6 pt-6">
+            <div className="flex items-start justify-between">
+              <div className="p-3 rounded-lg bg-green-500/10 dark:bg-green-500/20">
+                <TrendingUp className="h-6 w-6 text-green-600 dark:text-green-400" />
+              </div>
+            </div>
+            <CardTitle className="text-sm font-medium mt-4 text-muted-foreground">Total Inflow</CardTitle>
+            <div className="text-3xl font-bold text-green-600 dark:text-green-400 mt-2">
+              {formatCurrency(totalInflow)}
+            </div>
+          </CardHeader>
+          <CardContent className="bg-muted/30 dark:bg-muted/20 rounded-b-[32px] px-6 py-4 border-t">
+            <p className="text-xs text-muted-foreground">
+              {filteredPayrolls.filter(p => p.modeOfCashFlow === "inflow").length} inflow entries
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden bg-card border shadow-lg p-0 rounded-[32px]">
+          <CardHeader className="relative px-6 pt-6">
+            <div className="flex items-start justify-between">
+              <div className="p-3 rounded-lg bg-red-500/10 dark:bg-red-500/20">
+                <TrendingDown className="h-6 w-6 text-red-600 dark:text-red-400" />
+              </div>
+            </div>
+            <CardTitle className="text-sm font-medium mt-4 text-muted-foreground">Total Outflow</CardTitle>
+            <div className="text-3xl font-bold text-red-600 dark:text-red-400 mt-2">
+              {formatCurrency(totalOutflow)}
+            </div>
+          </CardHeader>
+          <CardContent className="bg-muted/30 dark:bg-muted/20 rounded-b-[32px] px-6 py-4 border-t">
+            <p className="text-xs text-muted-foreground">
+              {filteredPayrolls.filter(p => p.modeOfCashFlow === "outflow").length} outflow entries
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="relative overflow-hidden bg-card border shadow-lg p-0 rounded-[32px]">
+          <CardHeader className="relative px-6 pt-6">
+            <div className="flex items-start justify-between">
+              <div className={`p-3 rounded-lg ${(totalInflow - totalOutflow) >= 0 ? 'bg-green-500/10 dark:bg-green-500/20' : 'bg-red-500/10 dark:bg-red-500/20'}`}>
+                <DollarSign className={`h-6 w-6 ${(totalInflow - totalOutflow) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`} />
+              </div>
+            </div>
+            <CardTitle className="text-sm font-medium mt-4 text-muted-foreground">Net Cash Flow</CardTitle>
+            <div className={`text-3xl font-bold mt-2 ${(totalInflow - totalOutflow) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+              {formatCurrency(totalInflow - totalOutflow)}
+            </div>
+          </CardHeader>
+          <CardContent className="bg-muted/30 dark:bg-muted/20 rounded-b-[32px] px-6 py-4 border-t">
+            <p className="text-xs text-muted-foreground">
+              {totalInflow > totalOutflow ? "Positive" : "Negative"} cash flow
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Charts Section */}
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-3">
+      <div className="grid gap-6 grid-cols-1 md:grid-cols-3">
         {/* Area Chart - Monthly Inflow/Outflow Trends */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Cash Flow Trends</CardTitle>
+        <Card className="shadow-card border">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg font-semibold">Cash Flow Trends</CardTitle>
             <CardDescription className="text-xs">
               Monthly inflow and outflow totals
             </CardDescription>
@@ -875,9 +950,9 @@ const Payroll = () => {
         </Card>
 
         {/* Pie Chart - Inflow vs Outflow Distribution */}
-        <Card className="flex flex-col">
-          <CardHeader className="items-center pb-3">
-            <CardTitle className="text-lg">Cash Flow Distribution</CardTitle>
+        <Card className="flex flex-col shadow-card border">
+          <CardHeader className="items-center pb-4">
+            <CardTitle className="text-lg font-semibold">Cash Flow Distribution</CardTitle>
             <CardDescription className="text-xs">Inflow vs Outflow</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 pb-0">
@@ -926,9 +1001,9 @@ const Payroll = () => {
         </Card>
 
         {/* Bar Chart - Monthly Net Cash Flow */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg">Monthly Net Cash Flow</CardTitle>
+        <Card className="shadow-card border">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg font-semibold">Monthly Net Cash Flow</CardTitle>
             <CardDescription className="text-xs">
               Inflow minus Outflow by month
             </CardDescription>

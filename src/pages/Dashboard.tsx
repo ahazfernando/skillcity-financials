@@ -130,71 +130,93 @@ const Dashboard = () => {
         <p className="text-sm sm:text-base text-muted-foreground">Financial overview and key metrics</p>
       </div>
 
-      <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {isLoading ? (
           <>
             {[1, 2, 3, 4].map((i) => (
-              <Card key={i}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <Skeleton className="h-4 w-24" />
-                  <Skeleton className="h-4 w-4 rounded" />
+              <Card key={i} className="relative overflow-hidden bg-card border shadow-lg p-0 rounded-[32px]">
+                <CardHeader className="relative px-6 pt-6">
+                  <Skeleton className="h-16 w-16 rounded-lg mb-4" />
+                  <Skeleton className="h-4 w-32 mb-2" />
+                  <Skeleton className="h-8 w-40" />
                 </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-8 w-32 mb-2" />
-                  <Skeleton className="h-3 w-20" />
+                <CardContent className="bg-muted/30 dark:bg-muted/20 rounded-b-[32px] px-6 py-4 border-t">
+                  <Skeleton className="h-3 w-24" />
                 </CardContent>
               </Card>
             ))}
           </>
         ) : (
           <>
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <Card className="relative overflow-hidden bg-card border shadow-lg p-0 rounded-[32px]">
+              <CardHeader className="relative px-6 pt-6">
+                <div className="flex items-start justify-between">
+                  <div className="p-3 rounded-lg bg-green-500/10 dark:bg-green-500/20">
+                    <DollarSign className="h-6 w-6 text-green-600 dark:text-green-400" />
+                  </div>
+                </div>
+                <CardTitle className="text-sm font-medium mt-4 text-muted-foreground">Total Revenue</CardTitle>
+                <div className="text-3xl font-bold text-green-600 dark:text-green-400 mt-2">
+                  {formatCurrency(totalRevenue)}
+                </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(totalRevenue)}</div>
+              <CardContent className="bg-muted/30 dark:bg-muted/20 rounded-b-[32px] px-6 py-4 border-t">
                 <p className="text-xs text-muted-foreground">
                   {formatCurrency(pendingRevenue)} pending
                 </p>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
-                <Wallet className="h-4 w-4 text-muted-foreground" />
+            <Card className="relative overflow-hidden bg-card border shadow-lg p-0 rounded-[32px]">
+              <CardHeader className="relative px-6 pt-6">
+                <div className="flex items-start justify-between">
+                  <div className="p-3 rounded-lg bg-red-500/10 dark:bg-red-500/20">
+                    <Wallet className="h-6 w-6 text-red-600 dark:text-red-400" />
+                  </div>
+                </div>
+                <CardTitle className="text-sm font-medium mt-4 text-muted-foreground">Total Expenses</CardTitle>
+                <div className="text-3xl font-bold text-red-600 dark:text-red-400 mt-2">
+                  {formatCurrency(totalExpenses)}
+                </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(totalExpenses)}</div>
+              <CardContent className="bg-muted/30 dark:bg-muted/20 rounded-b-[32px] px-6 py-4 border-t">
                 <p className="text-xs text-muted-foreground">
                   {formatCurrency(pendingExpenses)} pending
                 </p>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Net Profit</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <Card className="relative overflow-hidden bg-card border shadow-lg p-0 rounded-[32px]">
+              <CardHeader className="relative px-6 pt-6">
+                <div className="flex items-start justify-between">
+                  <div className={`p-3 rounded-lg ${profit >= 0 ? 'bg-green-500/10 dark:bg-green-500/20' : 'bg-red-500/10 dark:bg-red-500/20'}`}>
+                    <TrendingUp className={`h-6 w-6 ${profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`} />
+                  </div>
+                </div>
+                <CardTitle className="text-sm font-medium mt-4 text-muted-foreground">Net Profit</CardTitle>
+                <div className={`text-3xl font-bold mt-2 ${profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                  {formatCurrency(profit)}
+                </div>
               </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(profit)}</div>
-                <p className="text-xs text-success">Cash flow method</p>
+              <CardContent className="bg-muted/30 dark:bg-muted/20 rounded-b-[32px] px-6 py-4 border-t">
+                <p className="text-xs text-muted-foreground">Cash flow method</p>
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Pending Items</CardTitle>
-                <FileText className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
+            <Card className="relative overflow-hidden bg-card border shadow-lg p-0 rounded-[32px]">
+              <CardHeader className="relative px-6 pt-6">
+                <div className="flex items-start justify-between">
+                  <div className="p-3 rounded-lg bg-blue-500/10 dark:bg-blue-500/20">
+                    <FileText className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                  </div>
+                </div>
+                <CardTitle className="text-sm font-medium mt-4 text-muted-foreground">Pending Items</CardTitle>
+                <div className="text-3xl font-bold text-blue-600 dark:text-blue-400 mt-2">
                   {invoices.filter(i => i.status === "pending").length + 
                    payrolls.filter(p => p.status === "pending").length}
                 </div>
+              </CardHeader>
+              <CardContent className="bg-muted/30 dark:bg-muted/20 rounded-b-[32px] px-6 py-4 border-t">
                 <p className="text-xs text-muted-foreground">Requires attention</p>
               </CardContent>
             </Card>
@@ -202,10 +224,10 @@ const Dashboard = () => {
         )}
       </div>
 
-      <div className="grid gap-3 sm:gap-4 grid-cols-1 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Monthly Cash Flow</CardTitle>
+      <div className="grid gap-6 grid-cols-1 md:grid-cols-2">
+        <Card className="shadow-card border">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg font-semibold">Monthly Cash Flow</CardTitle>
             <CardDescription>Revenue vs Expenses (Cash Flow Method)</CardDescription>
           </CardHeader>
           <CardContent>
@@ -259,9 +281,9 @@ const Dashboard = () => {
           </CardFooter>
         </Card>
 
-        <Card className="flex flex-col">
-          <CardHeader className="items-center pb-0">
-            <CardTitle>Invoice Status Distribution</CardTitle>
+        <Card className="flex flex-col shadow-card border">
+          <CardHeader className="items-center pb-4">
+            <CardTitle className="text-lg font-semibold">Invoice Status Distribution</CardTitle>
             <CardDescription>Current status of all invoices</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 pb-0">
