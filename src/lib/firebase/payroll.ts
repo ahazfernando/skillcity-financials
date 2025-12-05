@@ -49,6 +49,7 @@ const docToPayroll = (doc: any): Payroll => {
     receiptUrl: data.receiptUrl || undefined,
     createdAt: data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate().toISOString() : data.createdAt) : undefined,
     updatedAt: data.updatedAt ? (data.updatedAt.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt) : undefined,
+    movedToHistoryAt: data.movedToHistoryAt || undefined,
   };
 };
 
@@ -87,6 +88,7 @@ const payrollToDoc = (payroll: Omit<Payroll, "id">): any => {
   if (payroll.allowances !== undefined) doc.allowances = payroll.allowances;
   if (payroll.deductions !== undefined) doc.deductions = payroll.deductions;
   if (payroll.receiptUrl) doc.receiptUrl = payroll.receiptUrl;
+  if (payroll.movedToHistoryAt) doc.movedToHistoryAt = payroll.movedToHistoryAt;
 
   return doc;
 };
@@ -201,6 +203,88 @@ export const deletePayroll = async (id: string): Promise<void> => {
     await deleteDoc(payrollRef);
   } catch (error) {
     console.error("Error deleting payroll:", error);
+    throw error;
+  }
+};
+
+// Move paid invoices to history at end of day
+export const movePaidInvoicesToHistory = async (): Promise<number> => {
+  try {
+    const payrollRef = collection(db, PAYROLL_COLLECTION);
+    // Get all payroll records with status "paid" that haven't been moved to history
+    const q = query(
+      payrollRef,
+      where("status", "==", "paid")
+    );
+    const querySnapshot = await getDocs(q);
+    
+    const today = new Date();
+    today.setHours(23, 59, 59, 999); // End of day
+    const historyDate = today.toISOString();
+    
+    let movedCount = 0;
+    const updatePromises = querySnapshot.docs.map(async (docSnapshot) => {
+      const data = docSnapshot.data();
+      // Only move if not already in history
+      if (!data.movedToHistoryAt) {
+        const payrollRef = doc(db, PAYROLL_COLLECTION, docSnapshot.id);
+        await updateDoc(payrollRef, {
+          movedToHistoryAt: historyDate,
+          updatedAt: Timestamp.now(),
+        });
+        movedCount++;
+      }
+    });
+    
+    await Promise.all(updatePromises);
+    return movedCount;
+  } catch (error) {
+    console.error("Error moving paid invoices to history:", error);
+    throw error;
+  }
+};
+
+// Get payrolls by history status
+export const getPayrollsByHistoryStatus = async (inHistory: boolean): Promise<Payroll[]> => {
+  try {
+    const payrollRef = collection(db, PAYROLL_COLLECTION);
+    let q;
+    
+    if (inHistory) {
+      // Get payrolls that have been moved to history
+      // Note: Firestore doesn't support != null queries directly, so we'll get all and filter
+      // We'll order by date as fallback since movedToHistoryAt might not be indexed
+      try {
+        q = query(payrollRef, orderBy("movedToHistoryAt", "desc"));
+      } catch (e) {
+        // If index doesn't exist, fall back to ordering by date
+        q = query(payrollRef, orderBy("date", "desc"));
+      }
+    } else {
+      // Get payrolls that haven't been moved to history
+      q = query(payrollRef, orderBy("date", "asc"));
+    }
+    
+    const querySnapshot = await getDocs(q);
+    let payrolls = querySnapshot.docs.map(docToPayroll);
+    
+    if (inHistory) {
+      // Filter to only include payrolls that have been moved to history
+      payrolls = payrolls.filter(p => p.movedToHistoryAt);
+      // Sort by movedToHistoryAt descending
+      payrolls.sort((a, b) => {
+        if (!a.movedToHistoryAt) return 1;
+        if (!b.movedToHistoryAt) return -1;
+        return new Date(b.movedToHistoryAt).getTime() - new Date(a.movedToHistoryAt).getTime();
+      });
+    } else {
+      // Filter out payrolls that have been moved to history
+      payrolls = payrolls.filter(p => !p.movedToHistoryAt);
+    }
+    
+    return payrolls;
+  } catch (error) {
+    console.error("Error fetching payrolls by history status:", error);
     throw error;
   }
 };

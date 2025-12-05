@@ -13,7 +13,11 @@ import {
   UserCircle,
   DollarSign,
   Network,
-  Calculator
+  Calculator,
+  Receipt,
+  BarChart3,
+  History,
+  Archive
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -32,7 +36,10 @@ import { useAuth } from "@/contexts/AuthContext";
 const menuItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Invoices", url: "/invoices", icon: FileText },
+  { title: "Invoice History", url: "/invoice-history", icon: Archive },
   { title: "Payroll", url: "/payroll", icon: Wallet },
+  { title: "Expenses", url: "/expenses", icon: Receipt },
+  { title: "Reports & Analytics", url: "/reports", icon: BarChart3 },
   { title: "Employees", url: "/employees", icon: Users },
   { title: "Employee Pay Rates", url: "/employee-pay-rates", icon: DollarSign },
   { title: "Salary Calculator", url: "/salary-calculator", icon: Calculator },
@@ -41,6 +48,7 @@ const menuItems = [
   { title: "Clients", url: "/clients", icon: UserCircle },
   { title: "Work Schedule", url: "/schedule", icon: Calendar },
   { title: "Reminders", url: "/reminders", icon: Bell },
+  { title: "Activity Log", url: "/activity-log", icon: History },
 ];
 
 const adminItems = [

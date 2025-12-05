@@ -67,6 +67,7 @@ import { getAllEmployees, addEmployee } from "@/lib/firebase/employees";
 import { getAllPayrolls, addPayroll, updatePayroll, deletePayroll } from "@/lib/firebase/payroll";
 import { getAllSites } from "@/lib/firebase/sites";
 import { toast } from "sonner";
+import { calculatePaymentDate } from "@/lib/paymentCycle";
 
 const Payroll = () => {
   const [searchValue, setSearchValue] = useState("");
@@ -182,12 +183,29 @@ const Payroll = () => {
         updated.totalAmount = total.toFixed(2);
       }
       
-      // Auto-calculate status based on payment cycle when date or paymentCycle changes
+      // Auto-calculate status and payment date based on payment cycle when date or paymentCycle changes
       if (field === "date" || field === "paymentCycle") {
         const date = field === "date" ? (value as string) : updated.date;
         const cycle = field === "paymentCycle" ? (value as number) : updated.paymentCycle;
         if (date && cycle) {
           updated.status = calculatePaymentStatus(date, cycle);
+          // Auto-calculate payment date: work date + payment cycle (only if payment date not manually set)
+          if (date && !updated.paymentDate) {
+            try {
+              // Convert date to DD.MM.YYYY if needed
+              let dateStr = date;
+              if (date.includes('-')) {
+                // Convert from YYYY-MM-DD to DD.MM.YYYY
+                const parts = date.split('-');
+                if (parts.length === 3) {
+                  dateStr = `${parts[2]}.${parts[1]}.${parts[0]}`;
+                }
+              }
+              updated.paymentDate = calculatePaymentDate(dateStr, cycle);
+            } catch (error) {
+              console.error("Error calculating payment date:", error);
+            }
+          }
         }
       }
       

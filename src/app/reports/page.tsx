@@ -2,20 +2,16 @@
 
 import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import UserManagement from "@/pages/UserManagement";
+import Reports from "@/pages/Reports";
 
-export default function UserManagementPage() {
+export default function ReportsPage() {
   return (
-    <ProtectedRoute requireApproval={true} requireAdmin={true}>
+    <ProtectedRoute>
       <Layout>
-        <UserManagement />
+        <Reports />
       </Layout>
     </ProtectedRoute>
   );
 }
-
-
-
-
 
 

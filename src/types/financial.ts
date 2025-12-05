@@ -58,6 +58,7 @@ export interface Payroll {
   receiptUrl?: string;
   createdAt?: string;
   updatedAt?: string;
+  movedToHistoryAt?: string; // Date when invoice was moved to history (ISO string)
 }
 
 export type EmployeeType = "employee" | "client";
@@ -172,3 +173,58 @@ export interface SiteEmployeeAllocation {
   createdAt?: string;
   updatedAt?: string;
 }
+
+export interface Expense {
+  id: string;
+  category: ExpenseCategory;
+  description: string;
+  amount: number;
+  date: string; // DD.MM.YYYY format
+  paymentMethod: PaymentMethod;
+  vendor?: string; // Vendor or supplier name
+  receiptUrl?: string; // Receipt/document URL
+  notes?: string;
+  status: "pending" | "approved" | "rejected";
+  approvedBy?: string; // User ID who approved
+  approvedAt?: string; // Approval date
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export type ExpenseCategory = 
+  | "office_supplies"
+  | "equipment"
+  | "travel"
+  | "utilities"
+  | "rent"
+  | "marketing"
+  | "professional_services"
+  | "insurance"
+  | "maintenance"
+  | "other";
+
+export interface ActivityLog {
+  id: string;
+  type: ActivityType;
+  action: string; // e.g., "Created invoice", "Updated employee"
+  description: string;
+  userId: string;
+  userName: string;
+  entityType?: string; // "invoice", "employee", "payroll", etc.
+  entityId?: string;
+  metadata?: Record<string, any>; // Additional data
+  timestamp: string;
+  ipAddress?: string;
+}
+
+export type ActivityType = 
+  | "create"
+  | "update"
+  | "delete"
+  | "view"
+  | "export"
+  | "login"
+  | "logout"
+  | "approve"
+  | "reject"
+  | "payment";

@@ -34,8 +34,9 @@ import {
 } from "@/components/ui/select";
 import { Invoice, PaymentStatus, Employee, PaymentMethod, Payroll, CashFlowMode, CashFlowType } from "@/types/financial";
 import { getAllInvoices, addInvoice, updateInvoice } from "@/lib/firebase/invoices";
-import { getAllPayrolls, updatePayroll } from "@/lib/firebase/payroll";
+import { getAllPayrolls, updatePayroll, movePaidInvoicesToHistory, getPayrollsByHistoryStatus } from "@/lib/firebase/payroll";
 import { getAllEmployees, addEmployee } from "@/lib/firebase/employees";
+import { calculatePaymentDateAsDate, calculatePaymentDate } from "@/lib/paymentCycle";
 import { getAllSites } from "@/lib/firebase/sites";
 import { getAllReminders, addReminder, updateReminder, queryReminders } from "@/lib/firebase/reminders";
 import { uploadReceipt } from "@/lib/firebase/storage";
@@ -190,10 +191,16 @@ const Invoices = () => {
         // Get the actual status from the payroll record
         const actualStatus = payroll.status;
         
-        // Use payment date if available, otherwise use issue date as due date
-        const dueDate = payroll.paymentDate 
-          ? parseDateFromPayroll(payroll.paymentDate) 
-          : parseDateFromPayroll(payroll.date);
+        // Calculate due date: use payment date if available, otherwise calculate from work date + payment cycle
+        let dueDate: Date | null = null;
+        if (payroll.paymentDate) {
+          dueDate = parseDateFromPayroll(payroll.paymentDate);
+        } else if (payroll.date && payroll.paymentCycle) {
+          // Calculate due date: work date + payment cycle (e.g., November work -> December 15th payment)
+          dueDate = calculatePaymentDateAsDate(payroll.date, payroll.paymentCycle);
+        } else {
+          dueDate = parseDateFromPayroll(payroll.date);
+        }
         
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -258,8 +265,22 @@ const Invoices = () => {
       try {
         setIsLoading(true);
         setIsLoadingEmployees(true);
+        
+        // Check if we need to move paid invoices to history (run once per day)
+        const lastMoveCheck = localStorage.getItem('lastHistoryMoveCheck');
+        const today = new Date().toDateString();
+        if (!lastMoveCheck || lastMoveCheck !== today) {
+          try {
+            await movePaidInvoicesToHistory();
+            localStorage.setItem('lastHistoryMoveCheck', today);
+          } catch (error) {
+            console.error("Error moving paid invoices to history:", error);
+            // Don't block the UI if this fails
+          }
+        }
+        
         const [fetchedPayrolls, fetchedEmployees, fetchedSites] = await Promise.all([
-          getAllPayrolls(),
+          getPayrollsByHistoryStatus(false),
           getAllEmployees(),
           getAllSites(),
         ]);
@@ -444,8 +465,9 @@ const Invoices = () => {
 
       await updatePayroll(editingPayrollId, updatedPayroll);
       
-      // Reload payrolls
-      const updatedPayrolls = await getAllPayrolls();
+      // If status changed to paid and not in history, it will be moved at end of day
+      // Reload active payrolls
+      const updatedPayrolls = await getPayrollsByHistoryStatus(false);
       setPayrolls(updatedPayrolls);
       
       // Sync reminders after update
@@ -504,17 +526,18 @@ const Invoices = () => {
       (payroll.siteOfWork && payroll.siteOfWork.toLowerCase().includes(searchValue.toLowerCase()));
     const matchesStatus = statusFilter === "all" || payroll.status === statusFilter;
     
-    // Date range filtering
+    // Date range filtering - use invoice date for active invoices
     let matchesDate = true;
     if (dateRange?.from || dateRange?.to) {
-      const payrollDate = parseDate(payroll.date);
-      if (payrollDate) {
+      const dateToCheck = parseDate(payroll.date);
+      
+      if (dateToCheck) {
         if (dateRange.from && dateRange.to) {
-          matchesDate = payrollDate >= dateRange.from && payrollDate <= dateRange.to;
+          matchesDate = dateToCheck >= dateRange.from && dateToCheck <= dateRange.to;
         } else if (dateRange.from) {
-          matchesDate = payrollDate >= dateRange.from;
+          matchesDate = dateToCheck >= dateRange.from;
         } else if (dateRange.to) {
-          matchesDate = payrollDate <= dateRange.to;
+          matchesDate = dateToCheck <= dateRange.to;
         }
       } else {
         matchesDate = false;
@@ -559,7 +582,7 @@ const Invoices = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Invoice List</CardTitle>
+          <CardTitle>Active Invoices</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex gap-4 flex-wrap items-end mb-6">
@@ -589,7 +612,7 @@ const Invoices = () => {
                       format(dateRange.from, "LLL dd, y")
                     )
                   ) : (
-                    <span>Pick a date range</span>
+                    <span>Pick a date range (invoice date)</span>
                   )}
                 </Button>
               </PopoverTrigger>
@@ -682,7 +705,13 @@ const Invoices = () => {
                       <TableCell>${payroll.gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                       <TableCell className="font-semibold">${payroll.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                       <TableCell>{formatDate(payroll.date)}</TableCell>
-                      <TableCell>-</TableCell>
+                      <TableCell>
+                        {payroll.paymentDate 
+                          ? formatDate(payroll.paymentDate)
+                          : payroll.date && payroll.paymentCycle
+                          ? formatDate(calculatePaymentDate(payroll.date, payroll.paymentCycle))
+                          : "-"}
+                      </TableCell>
                       <TableCell>
                         <StatusBadge status={payroll.status} />
                       </TableCell>
