@@ -17,6 +17,7 @@ import {
 import { getAllInvoices } from "@/lib/firebase/invoices";
 import { getAllPayrolls } from "@/lib/firebase/payroll";
 import { Invoice, Payroll } from "@/types/financial";
+import { formatCurrency } from "@/lib/utils";
 
 const Dashboard = () => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -153,9 +154,9 @@ const Dashboard = () => {
                 <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">${totalRevenue.toLocaleString()}</div>
+                <div className="text-2xl font-bold">{formatCurrency(totalRevenue)}</div>
                 <p className="text-xs text-muted-foreground">
-                  ${pendingRevenue.toLocaleString()} pending
+                  {formatCurrency(pendingRevenue)} pending
                 </p>
               </CardContent>
             </Card>
@@ -166,9 +167,9 @@ const Dashboard = () => {
                 <Wallet className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">${totalExpenses.toLocaleString()}</div>
+                <div className="text-2xl font-bold">{formatCurrency(totalExpenses)}</div>
                 <p className="text-xs text-muted-foreground">
-                  ${pendingExpenses.toLocaleString()} pending
+                  {formatCurrency(pendingExpenses)} pending
                 </p>
               </CardContent>
             </Card>
@@ -179,7 +180,7 @@ const Dashboard = () => {
                 <TrendingUp className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">${profit.toLocaleString()}</div>
+                <div className="text-2xl font-bold">{formatCurrency(profit)}</div>
                 <p className="text-xs text-success">Cash flow method</p>
               </CardContent>
             </Card>
@@ -223,7 +224,14 @@ const Dashboard = () => {
                   tickMargin={10}
                   axisLine={false}
                 />
-                <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+                <ChartTooltip 
+                  content={
+                    <ChartTooltipContent 
+                      hideLabel 
+                      formatter={(value) => formatCurrency(Number(value))}
+                    />
+                  } 
+                />
                 <ChartLegend content={<ChartLegendContent />} />
                 <Bar
                   dataKey="revenue"
@@ -243,7 +251,7 @@ const Dashboard = () => {
           </CardContent>
           <CardFooter className="flex-col items-start gap-2 text-sm">
             <div className="flex gap-2 leading-none font-medium">
-              Net Profit: ${profit.toLocaleString()} <TrendingUp className="h-4 w-4" />
+              Net Profit: {formatCurrency(profit)} <TrendingUp className="h-4 w-4" />
             </div>
             <div className="text-muted-foreground leading-none">
               Based on received payments

@@ -17,7 +17,8 @@ import {
   Receipt,
   BarChart3,
   History,
-  Archive
+  Archive,
+  MessageSquare
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -35,6 +36,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const menuItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Chat", url: "/chat", icon: MessageSquare },
   { title: "Invoices", url: "/invoices", icon: FileText },
   { title: "Invoice History", url: "/invoice-history", icon: Archive },
   { title: "Payroll", url: "/payroll", icon: Wallet },
