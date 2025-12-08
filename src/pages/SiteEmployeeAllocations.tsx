@@ -34,6 +34,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { Check, ChevronsUpDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { SiteEmployeeAllocation, Site, Employee } from "@/types/financial";
 import { getAllAllocations, addAllocation, updateAllocation, deleteAllocation, reorderEmployeesForSite } from "@/lib/firebase/siteEmployeeAllocations";
 import { getAllSites } from "@/lib/firebase/sites";
@@ -68,6 +79,10 @@ const SiteEmployeeAllocations = () => {
     extraTimeDay: "",
     notes: "",
   });
+  const [siteOpen, setSiteOpen] = useState(false);
+  const [employeeOpen, setEmployeeOpen] = useState(false);
+  const [editEmployeeOpen, setEditEmployeeOpen] = useState(false);
+  const [selectedSiteDetails, setSelectedSiteDetails] = useState<Site | null>(null);
 
   const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -87,7 +102,11 @@ const SiteEmployeeAllocations = () => {
         const actualEmployees = fetchedEmployees.filter(
           (emp) => !emp.type || emp.type === "employee"
         );
-        setEmployees(actualEmployees);
+        // Sort employees alphabetically by name
+        const sortedEmployees = actualEmployees.sort((a, b) =>
+          a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+        );
+        setEmployees(sortedEmployees);
       } catch (error) {
         console.error("Error loading data:", error);
         toast.error("Failed to load data. Please try again.");
@@ -110,6 +129,10 @@ const SiteEmployeeAllocations = () => {
       notes: "",
     });
     setEditingAllocationId(null);
+    setSiteOpen(false);
+    setEmployeeOpen(false);
+    setEditEmployeeOpen(false);
+    setSelectedSiteDetails(null);
   };
 
   const toggleSiteExpansion = (siteId: string) => {
@@ -575,47 +598,144 @@ const SiteEmployeeAllocations = () => {
                 <div className="grid gap-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="site">Site</Label>
-              <Select
-                value={formData.siteId}
-                onValueChange={(value) => setFormData({ ...formData, siteId: value })}
-              >
-                <SelectTrigger id="site">
-                  <SelectValue placeholder="Select a site" />
-                </SelectTrigger>
-                <SelectContent>
-                  {sites.map((site) => (
-                    <SelectItem key={site.id} value={site.id}>
-                      {site.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={siteOpen} onOpenChange={setSiteOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={siteOpen}
+                    className="w-full justify-between"
+                  >
+                    {formData.siteId
+                      ? sites.find((site) => site.id === formData.siteId)?.name
+                      : "Select a site..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[300px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search sites..." />
+                    <CommandList>
+                      <CommandEmpty>No site found.</CommandEmpty>
+                      <CommandGroup>
+                        {sites.map((site) => (
+                          <CommandItem
+                            key={site.id}
+                            value={site.name}
+                            onSelect={() => {
+                              setFormData({ ...formData, siteId: site.id });
+                              setSiteOpen(false);
+                              // Use site from already loaded sites array
+                              const siteFromArray = sites.find(s => s.id === site.id);
+                              if (siteFromArray) {
+                                setSelectedSiteDetails(siteFromArray);
+                              }
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                formData.siteId === site.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {site.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
+            
+            {/* Display Work Rates when site is selected */}
+            {selectedSiteDetails && formData.siteId && (
+              <Card className="bg-muted/50">
+                <CardContent className="pt-6">
+                  <div className="space-y-3">
+                    <h4 className="font-semibold text-sm">Site Work Rates</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Hourly Rate</p>
+                        <p className="font-medium">
+                          {selectedSiteDetails.hourlyRate 
+                            ? `$${selectedSiteDetails.hourlyRate.toLocaleString()}` 
+                            : "Not set"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Day Rate</p>
+                        <p className="font-medium">
+                          {selectedSiteDetails.dayRate 
+                            ? `$${selectedSiteDetails.dayRate.toLocaleString()}` 
+                            : "Not set"}
+                        </p>
+                      </div>
+                    </div>
+                    {selectedSiteDetails.invoicingWorkingHours && (
+                      <div>
+                        <p className="text-xs text-muted-foreground mb-1">Invoicing Working Hours</p>
+                        <p className="font-medium">{selectedSiteDetails.invoicingWorkingHours} hours</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            
             <div className="space-y-2">
               <Label htmlFor="employee">Employee</Label>
-              <Select
-                value={formData.employeeId}
-                onValueChange={(value) => setFormData({ ...formData, employeeId: value })}
-              >
-                <SelectTrigger id="employee">
-                  <SelectValue placeholder="Select an employee" />
-                </SelectTrigger>
-                <SelectContent>
-                  {employees
-                    .filter((emp) => {
-                      // Don't show employees already allocated to this site
-                      if (!formData.siteId) return true;
-                      return !allocations.some(
-                        (a) => a.siteId === formData.siteId && a.employeeId === emp.id
-                      );
-                    })
-                    .map((employee) => (
-                      <SelectItem key={employee.id} value={employee.id}>
-                        {employee.name}
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
+              <Popover open={employeeOpen} onOpenChange={setEmployeeOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={employeeOpen}
+                    className="w-full justify-between"
+                  >
+                    {formData.employeeId
+                      ? employees.find((emp) => emp.id === formData.employeeId)?.name
+                      : "Select an employee..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[300px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search employees..." />
+                    <CommandList>
+                      <CommandEmpty>No employee found.</CommandEmpty>
+                      <CommandGroup>
+                        {employees
+                          .filter((emp) => {
+                            // Don't show employees already allocated to this site
+                            if (!formData.siteId) return true;
+                            return !allocations.some(
+                              (a) => a.siteId === formData.siteId && a.employeeId === emp.id
+                            );
+                          })
+                          .map((employee) => (
+                            <CommandItem
+                              key={employee.id}
+                              value={employee.name}
+                              onSelect={() => {
+                                setFormData({ ...formData, employeeId: employee.id });
+                                setEmployeeOpen(false);
+                              }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  formData.employeeId === employee.id ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {employee.name}
+                            </CommandItem>
+                          ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="space-y-2">
               <Label htmlFor="actualWorkingTime">Actual Working Time</Label>
@@ -759,21 +879,49 @@ const SiteEmployeeAllocations = () => {
                 <div className="grid gap-4 py-4">
             <div className="space-y-2">
               <Label htmlFor="edit-employee">Employee</Label>
-              <Select
-                value={formData.employeeId}
-                onValueChange={(value) => setFormData({ ...formData, employeeId: value })}
-              >
-                <SelectTrigger id="edit-employee">
-                  <SelectValue placeholder="Select an employee" />
-                </SelectTrigger>
-                <SelectContent>
-                  {employees.map((employee) => (
-                    <SelectItem key={employee.id} value={employee.id}>
-                      {employee.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={editEmployeeOpen} onOpenChange={setEditEmployeeOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={editEmployeeOpen}
+                    className="w-full justify-between"
+                  >
+                    {formData.employeeId
+                      ? employees.find((emp) => emp.id === formData.employeeId)?.name
+                      : "Select an employee..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[300px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search employees..." />
+                    <CommandList>
+                      <CommandEmpty>No employee found.</CommandEmpty>
+                      <CommandGroup>
+                        {employees.map((employee) => (
+                          <CommandItem
+                            key={employee.id}
+                            value={employee.name}
+                            onSelect={() => {
+                              setFormData({ ...formData, employeeId: employee.id });
+                              setEditEmployeeOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                formData.employeeId === employee.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {employee.name}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="space-y-2">
               <Label htmlFor="edit-actualWorkingTime">Actual Working Time</Label>

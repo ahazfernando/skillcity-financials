@@ -33,9 +33,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Employee, Invoice } from "@/types/financial";
+import { Employee, Invoice, EmployeePayRate, SiteEmployeeAllocation } from "@/types/financial";
 import { getAllEmployees, addEmployee, updateEmployee, deleteEmployee } from "@/lib/firebase/employees";
 import { getAllInvoices } from "@/lib/firebase/invoices";
+import { getEmployeePayRatesByEmployee } from "@/lib/firebase/employeePayRates";
+import { getAllAllocations } from "@/lib/firebase/siteEmployeeAllocations";
 import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -71,6 +73,9 @@ const Employees = () => {
   const [modalInvoiceFrequencyFilter, setModalInvoiceFrequencyFilter] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 8;
+  const [employeePayRates, setEmployeePayRates] = useState<EmployeePayRate[]>([]);
+  const [employeeSiteAllocations, setEmployeeSiteAllocations] = useState<SiteEmployeeAllocation[]>([]);
+  const [isLoadingEmployeeDetails, setIsLoadingEmployeeDetails] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     role: "",
@@ -93,7 +98,11 @@ const Employees = () => {
         const actualEmployees = fetchedEmployees.filter(
           (emp) => !emp.type || emp.type === "employee"
         );
-        setEmployees(actualEmployees);
+        // Sort employees alphabetically by name
+        const sortedEmployees = actualEmployees.sort((a, b) =>
+          a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+        );
+        setEmployees(sortedEmployees);
       } catch (error) {
         console.error("Error loading employees:", error);
         toast.error("Failed to load employees. Please try again.");
@@ -136,9 +145,11 @@ const Employees = () => {
       type: "employee",
     });
     setEditingEmployeeId(null);
+    setEmployeePayRates([]);
+    setEmployeeSiteAllocations([]);
   };
 
-  const handleEditEmployee = (employee: Employee) => {
+  const handleEditEmployee = async (employee: Employee) => {
     setEditingEmployeeId(employee.id);
     setFormData({
       name: employee.name,
@@ -151,6 +162,27 @@ const Employees = () => {
       invoiceCollectionFrequency: employee.invoiceCollectionFrequency || "",
       type: employee.type || "employee",
     });
+    
+    // Fetch employee pay rates and site allocations
+    setIsLoadingEmployeeDetails(true);
+    try {
+      const [payRates, allAllocations] = await Promise.all([
+        getEmployeePayRatesByEmployee(employee.id),
+        getAllAllocations(),
+      ]);
+      setEmployeePayRates(payRates);
+      // Filter allocations for this employee
+      const employeeAllocations = allAllocations.filter(
+        (allocation) => allocation.employeeId === employee.id
+      );
+      setEmployeeSiteAllocations(employeeAllocations);
+    } catch (error) {
+      console.error("Error loading employee details:", error);
+      toast.error("Failed to load employee pay rates and site information.");
+    } finally {
+      setIsLoadingEmployeeDetails(false);
+    }
+    
     setIsEditDialogOpen(true);
   };
 
@@ -183,7 +215,11 @@ const Employees = () => {
         const actualEmployees = updatedEmployees.filter(
           (emp) => !emp.type || emp.type === "employee"
         );
-        setEmployees(actualEmployees);
+        // Sort employees alphabetically by name
+        const sortedEmployees = actualEmployees.sort((a, b) =>
+          a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+        );
+        setEmployees(sortedEmployees);
         
         toast.success("Employee updated successfully!");
         setIsEditDialogOpen(false);
@@ -210,7 +246,11 @@ const Employees = () => {
         const actualEmployees = updatedEmployees.filter(
           (emp) => !emp.type || emp.type === "employee"
         );
-        setEmployees(actualEmployees);
+        // Sort employees alphabetically by name
+        const sortedEmployees = actualEmployees.sort((a, b) =>
+          a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+        );
+        setEmployees(sortedEmployees);
         
         toast.success("Employee added successfully!");
         setIsAddDialogOpen(false);
@@ -1157,6 +1197,133 @@ const Employees = () => {
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
+                </div>
+
+                {/* Employee Pay Rates and Sites Section */}
+                <div className="mt-6 pt-6 border-t">
+                  <div className="mb-4">
+                    <h3 className="text-lg font-semibold mb-4">Employee Work Information</h3>
+                    
+                    {isLoadingEmployeeDetails ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        <span>Loading employee details...</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {/* Invoice Collection Frequency */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <Card className="bg-muted/50">
+                            <CardContent className="pt-6">
+                              <div className="space-y-2">
+                                <p className="text-xs text-muted-foreground">Invoice Collection Frequency</p>
+                                <p className="font-semibold text-lg">
+                                  {formData.invoiceCollectionFrequency || "Not set"}
+                                </p>
+                              </div>
+                            </CardContent>
+                          </Card>
+                          
+                          <Card className="bg-muted/50">
+                            <CardContent className="pt-6">
+                              <div className="space-y-2">
+                                <p className="text-xs text-muted-foreground">Total Sites</p>
+                                <p className="font-semibold text-lg">
+                                  {employeeSiteAllocations.length} {employeeSiteAllocations.length === 1 ? "Site" : "Sites"}
+                                </p>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        </div>
+
+                        {/* Hourly Rates by Site */}
+                        {employeePayRates.length > 0 && (
+                          <Card>
+                            <CardHeader>
+                              <CardTitle className="text-base">Hourly Rates by Site</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="space-y-3">
+                                {employeePayRates.map((payRate) => (
+                                  <div
+                                    key={payRate.id}
+                                    className="flex items-center justify-between p-3 rounded-lg border bg-card"
+                                  >
+                                    <div className="flex-1">
+                                      <p className="font-medium">{payRate.siteName}</p>
+                                      <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
+                                        <span>
+                                          Rate: <span className="font-semibold text-foreground">${payRate.hourlyRate.toLocaleString()}/hr</span>
+                                        </span>
+                                        {payRate.travelAllowance && (
+                                          <span>
+                                            Travel: <span className="font-semibold text-foreground">${payRate.travelAllowance.toLocaleString()}</span>
+                                          </span>
+                                        )}
+                                      </div>
+                                      {payRate.notes && (
+                                        <p className="text-xs text-muted-foreground mt-1">{payRate.notes}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
+
+                        {/* Sites Employee Works On */}
+                        {employeeSiteAllocations.length > 0 && (
+                          <Card>
+                            <CardHeader>
+                              <CardTitle className="text-base">Sites</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <div className="space-y-3">
+                                {employeeSiteAllocations.map((allocation) => (
+                                  <div
+                                    key={allocation.id}
+                                    className="flex items-center justify-between p-3 rounded-lg border bg-card"
+                                  >
+                                    <div className="flex-1">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <p className="font-medium">{allocation.siteName}</p>
+                                        <Badge variant="secondary">Employee #{allocation.employeeNumber}</Badge>
+                                      </div>
+                                      <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
+                                        <span>
+                                          Working Time: <span className="font-semibold text-foreground">{allocation.actualWorkingTime || allocation.allocatedHours || "Not set"}</span>
+                                        </span>
+                                        {allocation.hasExtraTime && allocation.extraTime && (
+                                          <span>
+                                            Extra: <span className="font-semibold text-foreground">{allocation.extraTime}</span>
+                                            {allocation.extraTimeDay && ` (${allocation.extraTimeDay})`}
+                                          </span>
+                                        )}
+                                      </div>
+                                      {allocation.notes && (
+                                        <p className="text-xs text-muted-foreground mt-1">{allocation.notes}</p>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
+
+                        {employeePayRates.length === 0 && employeeSiteAllocations.length === 0 && (
+                          <Card className="bg-muted/50">
+                            <CardContent className="pt-6">
+                              <div className="text-center py-8 text-muted-foreground">
+                                <p>No pay rates or site allocations found for this employee.</p>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
 
