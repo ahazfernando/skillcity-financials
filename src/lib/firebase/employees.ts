@@ -31,6 +31,7 @@ const docToEmployee = (doc: any): Employee => {
     status: (data.status as "active" | "inactive") || "active",
     invoiceCollectionFrequency: data.invoiceCollectionFrequency || undefined,
     type: (data.type as "employee" | "client") || "employee", // Default to "employee" for backward compatibility
+    isSkillCityEmployee: data.isSkillCityEmployee !== undefined ? data.isSkillCityEmployee : false, // Default to false for backward compatibility
   };
 };
 
@@ -46,6 +47,7 @@ const employeeToDoc = (employee: Omit<Employee, "id">): any => {
     status: employee.status,
     invoiceCollectionFrequency: employee.invoiceCollectionFrequency || null,
     type: employee.type || "employee", // Default to "employee" for backward compatibility
+    isSkillCityEmployee: employee.isSkillCityEmployee !== undefined ? employee.isSkillCityEmployee : false, // Default to false for backward compatibility
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
   };

@@ -6,8 +6,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Search, UserPlus, Loader2, Trash2, FileText } from "lucide-react";
+import { Search, UserPlus, Loader2, Trash2, FileText, Building2, MapPin, Clock } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -37,7 +38,7 @@ import { Employee, Invoice, EmployeePayRate, SiteEmployeeAllocation } from "@/ty
 import { getAllEmployees, addEmployee, updateEmployee, deleteEmployee } from "@/lib/firebase/employees";
 import { getAllInvoices } from "@/lib/firebase/invoices";
 import { getEmployeePayRatesByEmployee } from "@/lib/firebase/employeePayRates";
-import { getAllAllocations } from "@/lib/firebase/siteEmployeeAllocations";
+import { getAllAllocations, getAllocationsByEmployee } from "@/lib/firebase/siteEmployeeAllocations";
 import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -86,6 +87,7 @@ const Employees = () => {
     status: "active" as "active" | "inactive",
     invoiceCollectionFrequency: "" as "" | "Monthly" | "Fortnightly" | "Weekly",
     type: "employee" as "employee" | "client",
+    isSkillCityEmployee: false,
   });
 
   // Load employees from Firebase (excluding clients)
@@ -143,6 +145,7 @@ const Employees = () => {
       status: "active",
       invoiceCollectionFrequency: "",
       type: "employee",
+      isSkillCityEmployee: false,
     });
     setEditingEmployeeId(null);
     setEmployeePayRates([]);
@@ -161,20 +164,17 @@ const Employees = () => {
       status: employee.status,
       invoiceCollectionFrequency: employee.invoiceCollectionFrequency || "",
       type: employee.type || "employee",
+      isSkillCityEmployee: employee.isSkillCityEmployee || false,
     });
     
     // Fetch employee pay rates and site allocations
     setIsLoadingEmployeeDetails(true);
     try {
-      const [payRates, allAllocations] = await Promise.all([
+      const [payRates, employeeAllocations] = await Promise.all([
         getEmployeePayRatesByEmployee(employee.id),
-        getAllAllocations(),
+        getAllocationsByEmployee(employee.id),
       ]);
       setEmployeePayRates(payRates);
-      // Filter allocations for this employee
-      const employeeAllocations = allAllocations.filter(
-        (allocation) => allocation.employeeId === employee.id
-      );
       setEmployeeSiteAllocations(employeeAllocations);
     } catch (error) {
       console.error("Error loading employee details:", error);
@@ -207,6 +207,7 @@ const Employees = () => {
           status: formData.status,
           invoiceCollectionFrequency: formData.invoiceCollectionFrequency || undefined,
           type: formData.type,
+          isSkillCityEmployee: formData.isSkillCityEmployee,
         });
 
         // Reload employees to get the latest data from Firebase
@@ -235,6 +236,7 @@ const Employees = () => {
           status: formData.status,
           invoiceCollectionFrequency: formData.invoiceCollectionFrequency || undefined,
           type: formData.type,
+          isSkillCityEmployee: formData.isSkillCityEmployee,
         };
 
         // Add employee to Firebase
@@ -390,21 +392,34 @@ const Employees = () => {
   };
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Employees</h2>
-          <p className="text-sm sm:text-base text-muted-foreground">Manage your workforce</p>
+    <div className="space-y-6 sm:space-y-8">
+      {/* Modern Header Section */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-violet-500/10 via-purple-500/5 to-background border border-violet-500/20 p-6 sm:p-8">
+        <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+        <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="space-y-2">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+              Employees
+            </h2>
+            <p className="text-sm sm:text-base text-muted-foreground">Manage your workforce and Skill City employees</p>
+          </div>
+          <Button 
+            onClick={handleAddEmployee} 
+            className="w-full sm:w-auto shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
+            size="lg"
+          >
+            <UserPlus className="mr-2 h-4 w-4" />
+            Add Employee
+          </Button>
         </div>
-        <Button onClick={handleAddEmployee} className="w-full sm:w-auto">
-          <UserPlus className="mr-2 h-4 w-4" />
-          Add Employee
-        </Button>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Employee List</CardTitle>
+      <Card className="border-2 shadow-xl">
+        <CardHeader className="bg-gradient-to-r from-violet-500/10 via-purple-500/5 to-muted/30 border-b-2">
+          <div>
+            <CardTitle className="text-xl font-bold">Employee List</CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">View and manage all employees</p>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="relative mb-6">
@@ -417,21 +432,22 @@ const Employees = () => {
             />
           </div>
 
-          <div className="rounded-md border overflow-x-auto">
+          <div className="rounded-xl border-2 overflow-x-auto shadow-lg">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead className="min-w-[120px]">Name</TableHead>
-                  <TableHead className="min-w-[100px]">Type</TableHead>
-                  <TableHead className="min-w-[120px]">Role</TableHead>
-                  <TableHead className="min-w-[180px]">Invoice Collection Frequency</TableHead>
-                  <TableHead className="min-w-[100px]">Status</TableHead>
+                <TableRow className="bg-gradient-to-r from-violet-500/20 via-purple-500/10 to-violet-500/5 border-b-2">
+                  <TableHead className="min-w-[120px] font-bold text-foreground">Name</TableHead>
+                  <TableHead className="min-w-[100px] font-bold text-foreground">Type</TableHead>
+                  <TableHead className="min-w-[140px] font-bold text-foreground">Organization</TableHead>
+                  <TableHead className="min-w-[120px] font-bold text-foreground">Role</TableHead>
+                  <TableHead className="min-w-[180px] font-bold text-foreground">Invoice Collection Frequency</TableHead>
+                  <TableHead className="min-w-[100px] font-bold text-foreground">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8">
+                    <TableCell colSpan={6} className="text-center py-8">
                       <div className="flex items-center justify-center gap-2">
                         <Loader2 className="h-4 w-4 animate-spin" />
                         <span>Loading employees...</span>
@@ -440,7 +456,7 @@ const Employees = () => {
                   </TableRow>
                 ) : filteredEmployees.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                       No employees found
                     </TableCell>
                   </TableRow>
@@ -448,29 +464,63 @@ const Employees = () => {
                   paginatedEmployees.map((employee) => (
                     <TableRow 
                       key={employee.id}
-                      className="cursor-pointer hover:bg-muted/50"
+                      className="cursor-pointer hover:bg-gradient-to-r hover:from-violet-500/5 hover:to-transparent transition-all duration-200 border-b"
                       onClick={() => handleEditEmployee(employee)}
                     >
-                      <TableCell className="font-medium">{employee.name}</TableCell>
+                      <TableCell className="font-semibold">{employee.name}</TableCell>
                       <TableCell>
-                        <Badge variant={employee.type === "client" ? "default" : "secondary"}>
+                        <Badge 
+                          variant={employee.type === "client" ? "default" : "secondary"}
+                          className={employee.type === "client" 
+                            ? "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20" 
+                            : "bg-muted text-muted-foreground"}
+                        >
                           {employee.type === "client" ? "Client" : "Employee"}
                         </Badge>
                       </TableCell>
-                      <TableCell>{employee.role}</TableCell>
                       <TableCell>
-                        {employee.invoiceCollectionFrequency || "-"}
+                        <Badge 
+                          variant={employee.isSkillCityEmployee ? "default" : "outline"}
+                          className={employee.isSkillCityEmployee 
+                            ? "bg-gradient-to-r from-violet-500/20 to-purple-500/20 text-violet-700 dark:text-violet-400 border-violet-500/30 font-semibold shadow-sm" 
+                            : "bg-muted/50 text-muted-foreground border-muted"}
+                        >
+                          {employee.isSkillCityEmployee ? (
+                            <span className="flex items-center gap-1.5">
+                              <Building2 className="h-3 w-3" />
+                              Skill City
+                            </span>
+                          ) : (
+                            "External"
+                          )}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm">{employee.role || "-"}</span>
+                      </TableCell>
+                      <TableCell>
+                        {employee.invoiceCollectionFrequency ? (
+                          <Badge variant="outline" className="text-xs">
+                            {employee.invoiceCollectionFrequency}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-2">
-                          <Badge className={employee.status === "active" ? "bg-success" : "bg-muted"}>
+                          <Badge 
+                            className={employee.status === "active" 
+                              ? "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20" 
+                              : "bg-muted text-muted-foreground"}
+                          >
                             {employee.status}
                           </Badge>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDeleteEmployee(employee)}
-                            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                            className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10 transition-all duration-200"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -753,6 +803,18 @@ const Employees = () => {
                     Fill in the employee details. All fields are optional and can be filled partially.
                   </DialogDescription>
                 </DialogHeader>
+                
+                {/* Default Work Site Section - For new employees */}
+                <div className="mb-4 p-4 rounded-lg border-2 border-dashed bg-muted/30">
+                  <div className="flex items-center gap-2 mb-2">
+                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                    <Label className="text-sm font-semibold">Default Work Site</Label>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Work sites will be available after the employee is created. You can assign sites in the Site Employee Allocation section.
+                  </p>
+                </div>
+
                 <div className="grid gap-4 py-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -856,6 +918,27 @@ const Employees = () => {
                           <SelectItem value="Monthly">Monthly</SelectItem>
                         </SelectContent>
                       </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2 p-4 rounded-lg border bg-muted/50">
+                      <Checkbox
+                        id="isSkillCityEmployee"
+                        checked={formData.isSkillCityEmployee}
+                        onCheckedChange={(checked) => setFormData({ ...formData, isSkillCityEmployee: checked as boolean })}
+                      />
+                      <div className="flex-1">
+                        <Label htmlFor="isSkillCityEmployee" className="cursor-pointer font-medium">
+                          Skill City Employee
+                        </Label>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Check if this employee works for Skill City organization
+                        </p>
+                      </div>
+                      {formData.isSkillCityEmployee && (
+                        <Building2 className="h-5 w-5 text-primary" />
+                      )}
                     </div>
                   </div>
 
@@ -1075,6 +1158,72 @@ const Employees = () => {
                     Update the employee details. All fields matching the table columns are available.
                   </DialogDescription>
                 </DialogHeader>
+                
+                {/* Default Work Site Section - For existing employees */}
+                {isLoadingEmployeeDetails ? (
+                  <div className="mb-4 p-4 rounded-lg border-2 bg-muted/30">
+                    <div className="flex items-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      <Label className="text-sm font-semibold">Loading work sites...</Label>
+                    </div>
+                  </div>
+                ) : employeeSiteAllocations.length > 0 ? (
+                  <div className="mb-4 p-4 rounded-lg border-2 border-primary/20 bg-gradient-to-br from-primary/5 via-primary/3 to-muted/30">
+                    <div className="flex items-center gap-2 mb-3">
+                      <MapPin className="h-5 w-5 text-primary" />
+                      <Label className="text-sm font-bold">Default Work Site(s)</Label>
+                    </div>
+                    <div className="space-y-2">
+                      {employeeSiteAllocations.slice(0, 3).map((allocation) => (
+                        <div 
+                          key={allocation.id}
+                          className="flex items-start justify-between p-3 rounded-lg bg-card border border-primary/10 shadow-sm hover:shadow-md transition-shadow"
+                        >
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="font-semibold text-sm">{allocation.siteName}</span>
+                              <Badge variant="secondary" className="text-xs">
+                                Employee #{allocation.employeeNumber}
+                              </Badge>
+                            </div>
+                            <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
+                              {allocation.actualWorkingTime && (
+                                <div className="flex items-center gap-1">
+                                  <Clock className="h-3 w-3" />
+                                  <span>Working Time: <span className="font-medium text-foreground">{allocation.actualWorkingTime}</span></span>
+                                </div>
+                              )}
+                              {allocation.hasExtraTime && allocation.extraTime && (
+                                <div className="flex items-center gap-1">
+                                  <span className="text-primary font-medium">+{allocation.extraTime}</span>
+                                  {allocation.extraTimeDay && (
+                                    <span className="text-muted-foreground">({allocation.extraTimeDay})</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {employeeSiteAllocations.length > 3 && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          +{employeeSiteAllocations.length - 3} more site(s). See details below.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mb-4 p-4 rounded-lg border-2 border-dashed bg-muted/30">
+                    <div className="flex items-center gap-2 mb-2">
+                      <MapPin className="h-4 w-4 text-muted-foreground" />
+                      <Label className="text-sm font-semibold">Default Work Site</Label>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      No work sites assigned yet. You can assign sites in the Site Employee Allocation section.
+                    </p>
+                  </div>
+                )}
+
                 <div className="grid gap-4 py-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -1178,6 +1327,27 @@ const Employees = () => {
                           <SelectItem value="Monthly">Monthly</SelectItem>
                         </SelectContent>
                       </Select>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2 p-4 rounded-lg border bg-muted/50">
+                      <Checkbox
+                        id="edit-isSkillCityEmployee"
+                        checked={formData.isSkillCityEmployee}
+                        onCheckedChange={(checked) => setFormData({ ...formData, isSkillCityEmployee: checked as boolean })}
+                      />
+                      <div className="flex-1">
+                        <Label htmlFor="edit-isSkillCityEmployee" className="cursor-pointer font-medium">
+                          Skill City Employee
+                        </Label>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Check if this employee works for Skill City organization
+                        </p>
+                      </div>
+                      {formData.isSkillCityEmployee && (
+                        <Building2 className="h-5 w-5 text-primary" />
+                      )}
                     </div>
                   </div>
 

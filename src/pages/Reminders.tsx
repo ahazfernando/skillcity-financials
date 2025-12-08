@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Bell, CheckCircle2, Loader2, Trash2, Edit } from "lucide-react";
+import { Bell, CheckCircle2, Loader2, Trash2, Edit, Calendar } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -201,21 +201,34 @@ const Reminders = () => {
   const completedReminders = reminders.filter(r => r.status === "completed");
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Reminders</h2>
-          <p className="text-muted-foreground">Manage notifications and alerts</p>
+    <div className="space-y-6 sm:space-y-8">
+      {/* Modern Header Section */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-yellow-500/10 via-orange-500/5 to-background border border-yellow-500/20 p-6 sm:p-8">
+        <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+        <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="space-y-2">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+              Reminders
+            </h2>
+            <p className="text-sm sm:text-base text-muted-foreground">Manage notifications and alerts efficiently</p>
+          </div>
+          <Button 
+            onClick={handleAddReminder}
+            className="w-full sm:w-auto shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
+            size="lg"
+          >
+            <Bell className="mr-2 h-4 w-4" />
+            New Reminder
+          </Button>
         </div>
-        <Button onClick={handleAddReminder}>
-          <Bell className="mr-2 h-4 w-4" />
-          New Reminder
-        </Button>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Pending Reminders</CardTitle>
+      <Card className="border-2 shadow-xl">
+        <CardHeader className="bg-gradient-to-r from-yellow-500/10 via-orange-500/5 to-muted/30 border-b-2">
+          <div>
+            <CardTitle className="text-xl font-bold">Pending Reminders</CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">Active reminders requiring attention</p>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
@@ -233,31 +246,48 @@ const Reminders = () => {
               pendingReminders.map((reminder) => (
                 <div 
                   key={reminder.id} 
-                  className="flex items-start justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                  className="flex items-start justify-between p-5 border-2 rounded-xl hover:border-yellow-500/50 hover:bg-gradient-to-r hover:from-yellow-500/5 hover:to-transparent transition-all duration-300 cursor-pointer shadow-md hover:shadow-lg group"
                   onClick={() => handleEditReminder(reminder)}
                 >
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h4 className="font-semibold">{reminder.title}</h4>
-                      <Badge variant={
-                        reminder.priority === "high" ? "destructive" : 
-                        reminder.priority === "medium" ? "default" : "secondary"
-                      }>
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className={`p-2 rounded-lg ${
+                        reminder.priority === "high" ? "bg-red-500/10" : 
+                        reminder.priority === "medium" ? "bg-yellow-500/10" : "bg-blue-500/10"
+                      }`}>
+                        <Bell className={`h-4 w-4 ${
+                          reminder.priority === "high" ? "text-red-600 dark:text-red-400" : 
+                          reminder.priority === "medium" ? "text-yellow-600 dark:text-yellow-400" : "text-blue-600 dark:text-blue-400"
+                        }`} />
+                      </div>
+                      <h4 className="font-bold text-lg">{reminder.title}</h4>
+                      <Badge 
+                        variant={reminder.priority === "high" ? "destructive" : reminder.priority === "medium" ? "default" : "secondary"}
+                        className={
+                          reminder.priority === "high" ? "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20" :
+                          reminder.priority === "medium" ? "bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20" :
+                          "bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/20"
+                        }
+                      >
                         {reminder.priority}
                       </Badge>
-                      <Badge variant="outline">{reminder.type}</Badge>
+                      <Badge variant="outline" className="text-xs">{reminder.type}</Badge>
                     </div>
-                    <p className="text-sm text-muted-foreground mb-2">{reminder.description}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Due: {new Date(reminder.dueDate).toLocaleDateString()}
-                    </p>
+                    <p className="text-sm text-muted-foreground mb-3 leading-relaxed">{reminder.description}</p>
+                    <div className="flex items-center gap-2">
+                      <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+                      <p className="text-xs font-medium text-muted-foreground">
+                        Due: {new Date(reminder.dueDate).toLocaleDateString()}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-2 ml-4" onClick={(e) => e.stopPropagation()}>
                     <Button 
                       variant="ghost" 
                       size="sm"
                       onClick={() => handleMarkComplete(reminder.id)}
                       title="Mark as completed"
+                      className="h-9 w-9 hover:bg-green-500/10 text-green-600 dark:text-green-400 transition-all duration-200"
                     >
                       <CheckCircle2 className="h-4 w-4" />
                     </Button>
@@ -265,7 +295,7 @@ const Reminders = () => {
                       variant="ghost"
                       size="sm"
                       onClick={() => handleDeleteReminder(reminder)}
-                      className="text-destructive hover:text-destructive"
+                      className="h-9 w-9 text-destructive hover:text-destructive hover:bg-destructive/10 transition-all duration-200"
                       title="Delete reminder"
                     >
                       <Trash2 className="h-4 w-4" />
@@ -279,22 +309,28 @@ const Reminders = () => {
       </Card>
 
       {completedReminders.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Completed Reminders</CardTitle>
+        <Card className="border-2 shadow-xl">
+          <CardHeader className="bg-gradient-to-r from-green-500/10 via-emerald-500/5 to-muted/30 border-b-2">
+            <div>
+              <CardTitle className="text-xl font-bold">Completed Reminders</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">Finished reminder tasks</p>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {completedReminders.map((reminder) => (
-                <div key={reminder.id} className="flex items-start justify-between p-4 border rounded-lg opacity-60">
+                <div 
+                  key={reminder.id} 
+                  className="flex items-start justify-between p-5 border-2 rounded-xl bg-muted/30 opacity-75 hover:opacity-100 transition-opacity"
+                >
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h4 className="font-semibold line-through">{reminder.title}</h4>
-                      <Badge variant="outline">{reminder.type}</Badge>
+                    <div className="flex items-center gap-3 mb-2">
+                      <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400" />
+                      <h4 className="font-semibold line-through text-muted-foreground">{reminder.title}</h4>
+                      <Badge variant="outline" className="text-xs">{reminder.type}</Badge>
                     </div>
                     <p className="text-sm text-muted-foreground">{reminder.description}</p>
                   </div>
-                  <CheckCircle2 className="h-5 w-5 text-success" />
                 </div>
               ))}
             </div>

@@ -321,27 +321,41 @@ const SiteEmployeeAllocations = () => {
   });
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight">Employees Standard Time Allocation for Sites</h2>
-          <p className="text-sm sm:text-base text-muted-foreground">Manage employee allocations and hours for each site</p>
+    <div className="space-y-6 sm:space-y-8">
+      {/* Modern Header Section */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-background border border-primary/20 p-6 sm:p-8">
+        <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+        <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="space-y-2">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+              Employees Standard Time Allocation for Sites
+            </h2>
+            <p className="text-sm sm:text-base text-muted-foreground">Manage employee allocations and hours for each site with precision</p>
+          </div>
+          <Button 
+            onClick={handleAddAllocation} 
+            className="w-full sm:w-auto shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
+            size="lg"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Allocation
+          </Button>
         </div>
-        <Button onClick={handleAddAllocation} className="w-full sm:w-auto">
-          <Plus className="mr-2 h-4 w-4" />
-          Add Allocation
-        </Button>
       </div>
 
-      <Card>
-        <CardHeader>
+      <Card className="border-2 shadow-xl">
+        <CardHeader className="bg-gradient-to-r from-muted/50 to-muted/30 border-b">
           <div className="flex items-center justify-between">
-            <CardTitle>Site Allocations</CardTitle>
+            <div>
+              <CardTitle className="text-xl font-bold">Site Allocations</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">View and manage employee time allocations</p>
+            </div>
             <div className="flex items-center gap-2">
               <Button
                 variant={viewMode === "card" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setViewMode("card")}
+                className="transition-all duration-200"
               >
                 <LayoutGrid className="h-4 w-4 mr-2" />
                 Card View
@@ -350,6 +364,7 @@ const SiteEmployeeAllocations = () => {
                 variant={viewMode === "table" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setViewMode("table")}
+                className="transition-all duration-200"
               >
                 <TableIcon className="h-4 w-4 mr-2" />
                 Table View
@@ -357,14 +372,14 @@ const SiteEmployeeAllocations = () => {
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="relative mb-6">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <CardContent className="pt-6">
+          <div className="relative mb-6 group">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
             <Input
               placeholder="Search by site name..."
               value={searchValue}
               onChange={(e) => setSearchValue(e.target.value)}
-              className="pl-9"
+              className="pl-9 border-2 focus:border-primary transition-all duration-200"
             />
           </div>
 
@@ -378,55 +393,87 @@ const SiteEmployeeAllocations = () => {
               <p>No sites with allocations found</p>
             </div>
           ) : viewMode === "table" ? (
-            <div className="rounded-md border">
+            <div className="rounded-xl border-2 overflow-hidden shadow-lg">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Site</TableHead>
-                    <TableHead className="w-[150px]">Employee #</TableHead>
-                    <TableHead className="w-[200px]">Employee Name</TableHead>
-                    <TableHead>Working Time</TableHead>
-                    <TableHead className="w-[150px]">Extra Time</TableHead>
-                    <TableHead>Extra Time Day</TableHead>
-                    <TableHead>Notes</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
+                  <TableRow className="bg-gradient-to-r from-primary/10 via-primary/5 to-muted/30 border-b-2">
+                    <TableHead className="font-bold text-foreground">Site</TableHead>
+                    <TableHead className="w-[150px] font-bold text-foreground">Employee #</TableHead>
+                    <TableHead className="w-[200px] font-bold text-foreground">Employee Name</TableHead>
+                    <TableHead className="font-bold text-foreground">Working Time</TableHead>
+                    <TableHead className="w-[150px] font-bold text-foreground">Extra Time</TableHead>
+                    <TableHead className="font-bold text-foreground">Extra Time Day</TableHead>
+                    <TableHead className="font-bold text-foreground">Notes</TableHead>
+                    <TableHead className="text-right font-bold text-foreground">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredSites.map((site) => {
                     const siteAllocations = allocationsBySite[site.id] || [];
                     return siteAllocations.map((allocation, index) => (
-                      <TableRow key={allocation.id}>
-                        <TableCell className="font-medium">
-                          {index === 0 && site.name}
+                      <TableRow 
+                        key={allocation.id}
+                        className="hover:bg-gradient-to-r hover:from-primary/5 hover:to-transparent transition-all duration-200 border-b"
+                      >
+                        <TableCell className="font-semibold">
+                          {index === 0 && (
+                            <div className="flex items-center gap-2">
+                              <div className="p-1 rounded bg-primary/10">
+                                <GripVertical className="h-4 w-4 text-primary" />
+                              </div>
+                              <span>{site.name}</span>
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell className="w-[150px]">
-                          <Badge variant="secondary">Employee {allocation.employeeNumber}</Badge>
+                          <Badge variant="secondary" className="font-semibold">
+                            #{allocation.employeeNumber}
+                          </Badge>
                         </TableCell>
-                        <TableCell className="w-[200px]">{allocation.employeeName}</TableCell>
-                        <TableCell>{allocation.actualWorkingTime || allocation.allocatedHours || "-"}</TableCell>
+                        <TableCell className="w-[200px] font-medium">{allocation.employeeName}</TableCell>
+                        <TableCell>
+                          <span className="px-2 py-1 rounded-md bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300 font-medium text-sm">
+                            {allocation.actualWorkingTime || allocation.allocatedHours || "-"}
+                          </span>
+                        </TableCell>
                         <TableCell className="w-[150px]">
-                          {allocation.hasExtraTime && allocation.extraTime ? allocation.extraTime : "No Extra time"}
+                          {allocation.hasExtraTime && allocation.extraTime ? (
+                            <span className="px-2 py-1 rounded-md bg-amber-50 dark:bg-amber-950/30 text-amber-700 dark:text-amber-300 font-medium text-sm">
+                              {allocation.extraTime}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">No Extra time</span>
+                          )}
                         </TableCell>
                         <TableCell>
-                          {allocation.hasExtraTime && allocation.extraTimeDay ? allocation.extraTimeDay : "-"}
+                          {allocation.hasExtraTime && allocation.extraTimeDay ? (
+                            <Badge variant="outline" className="text-xs">
+                              {allocation.extraTimeDay}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
                         </TableCell>
-                        <TableCell>{allocation.notes || "-"}</TableCell>
+                        <TableCell>
+                          <span className="text-sm text-muted-foreground">
+                            {allocation.notes || "-"}
+                          </span>
+                        </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-2">
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => handleEditAllocation(allocation)}
-                              className="h-8 w-8 p-0 bg-primary/10 hover:bg-primary/20 border-primary/20"
+                              className="h-8 w-8 p-0 bg-primary/10 hover:bg-primary/20 border-primary/30 hover:border-primary/50 transition-all duration-200"
                             >
-                              <Edit2 className="h-4 w-4" />
+                              <Edit2 className="h-4 w-4 text-primary" />
                             </Button>
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => handleDeleteAllocation(allocation)}
-                              className="h-8 w-8 p-0 bg-destructive/10 hover:bg-destructive/20 text-destructive border-destructive/20 hover:text-destructive"
+                              className="h-8 w-8 p-0 bg-destructive/10 hover:bg-destructive/20 text-destructive border-destructive/30 hover:border-destructive/50 transition-all duration-200"
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -452,92 +499,132 @@ const SiteEmployeeAllocations = () => {
                     open={isExpanded}
                     onOpenChange={() => toggleSiteExpansion(site.id)}
                   >
-                    <Card>
+                    <Card className="overflow-hidden border-2 hover:border-primary/50 transition-all duration-300 shadow-md hover:shadow-lg">
                       <CollapsibleTrigger asChild>
-                        <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+                        <CardHeader className="cursor-pointer hover:bg-gradient-to-r hover:from-primary/5 hover:to-primary/10 transition-all duration-300 bg-gradient-to-r from-muted/30 to-muted/20">
                           <div className="flex items-center justify-between">
-                            <CardTitle className="text-lg">{site.name}</CardTitle>
-                            <Badge variant="outline">{siteAllocations.length} Employee{siteAllocations.length !== 1 ? "s" : ""}</Badge>
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 rounded-lg bg-primary/10">
+                                <GripVertical className="h-5 w-5 text-primary" />
+                              </div>
+                              <div>
+                                <CardTitle className="text-lg font-bold">{site.name}</CardTitle>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  {siteAllocations.length} Employee{siteAllocations.length !== 1 ? "s" : ""} allocated
+                                </p>
+                              </div>
+                            </div>
+                            <Badge variant="outline" className="text-sm font-semibold px-3 py-1">
+                              {siteAllocations.length} {siteAllocations.length !== 1 ? "Employees" : "Employee"}
+                            </Badge>
                           </div>
                         </CardHeader>
                       </CollapsibleTrigger>
                       <CollapsibleContent>
-                        <CardContent>
-                          <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
+                        <CardContent className="pt-6 bg-gradient-to-b from-background to-muted/20">
+                          <div className="grid gap-4 sm:gap-5 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                             {siteAllocations.map((allocation) => (
-                              <Card key={allocation.id} className="relative">
-                                <CardContent className="pt-6">
-                                  <div className="flex items-start justify-between mb-2">
+                              <Card 
+                                key={allocation.id} 
+                                className="relative overflow-hidden border-2 hover:border-primary/50 transition-all duration-300 shadow-md hover:shadow-xl group bg-gradient-to-br from-card to-card/95"
+                              >
+                                <div className="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 group-hover:bg-primary/10 transition-colors"></div>
+                                <CardContent className="pt-6 relative z-10">
+                                  <div className="flex items-start justify-between mb-4">
                                     <div className="flex items-center gap-2">
-                                      <GripVertical className="h-4 w-4 text-muted-foreground" />
-                                      <Badge variant="secondary">Employee {allocation.employeeNumber}</Badge>
+                                      <div className="p-1.5 rounded-md bg-primary/10 group-hover:bg-primary/20 transition-colors">
+                                        <GripVertical className="h-3.5 w-3.5 text-primary" />
+                                      </div>
+                                      <Badge variant="secondary" className="font-semibold">
+                                        #{allocation.employeeNumber}
+                                      </Badge>
                                     </div>
                                     <div className="flex items-center gap-1">
                                       <Button
                                         variant="ghost"
                                         size="sm"
-                                        className="h-6 w-6 p-0"
-                                        onClick={() => handleMoveEmployee(allocation, "up")}
+                                        className="h-7 w-7 p-0 hover:bg-primary/10"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleMoveEmployee(allocation, "up");
+                                        }}
                                         disabled={allocation.employeeNumber === 1}
                                       >
-                                        <ArrowUp className="h-3 w-3" />
+                                        <ArrowUp className="h-3.5 w-3.5" />
                                       </Button>
                                       <Button
                                         variant="ghost"
                                         size="sm"
-                                        className="h-6 w-6 p-0"
-                                        onClick={() => handleMoveEmployee(allocation, "down")}
+                                        className="h-7 w-7 p-0 hover:bg-primary/10"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleMoveEmployee(allocation, "down");
+                                        }}
                                         disabled={allocation.employeeNumber === siteAllocations.length}
                                       >
-                                        <ArrowDown className="h-3 w-3" />
+                                        <ArrowDown className="h-3.5 w-3.5" />
                                       </Button>
                                     </div>
                                   </div>
-                                  <div className="space-y-2">
-                                    <div>
-                                      <p className="font-semibold text-sm text-muted-foreground">Employee</p>
-                                      <p className="font-medium">{allocation.employeeName}</p>
+                                  <div className="space-y-3">
+                                    <div className="p-3 rounded-lg bg-muted/50 border border-border/50">
+                                      <p className="text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide">Employee</p>
+                                      <p className="font-semibold text-base">{allocation.employeeName}</p>
                                     </div>
-                                    <div>
-                                      <p className="font-semibold text-sm text-muted-foreground">Working Time</p>
-                                      <p className="text-sm">{allocation.actualWorkingTime || allocation.allocatedHours || "-"}</p>
+                                    <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/50">
+                                      <p className="text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide">Working Time</p>
+                                      <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                                        {allocation.actualWorkingTime || allocation.allocatedHours || "-"}
+                                      </p>
                                     </div>
-                                    <div>
-                                      <p className="font-semibold text-sm text-muted-foreground">Extra Time</p>
-                                      <p className="text-sm">
+                                    <div className="p-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/50">
+                                      <p className="text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide">Extra Time</p>
+                                      <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
                                         {allocation.hasExtraTime && allocation.extraTime ? (
                                           <>
                                             {allocation.extraTime}
-                                            {allocation.extraTimeDay && ` on ${allocation.extraTimeDay}`}
+                                            {allocation.extraTimeDay && (
+                                              <span className="block text-xs mt-1 text-amber-600 dark:text-amber-400">
+                                                on {allocation.extraTimeDay}
+                                              </span>
+                                            )}
                                           </>
                                         ) : (
-                                          "No Extra time"
+                                          <span className="text-muted-foreground">No Extra time</span>
                                         )}
                                       </p>
                                     </div>
-                                    <div>
-                                      <p className="font-semibold text-sm text-muted-foreground">Notes</p>
-                                      <p className="text-sm">{allocation.notes || "-"}</p>
-                                    </div>
+                                    {allocation.notes && (
+                                      <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
+                                        <p className="text-xs font-semibold text-muted-foreground mb-1 uppercase tracking-wide">Notes</p>
+                                        <p className="text-sm">{allocation.notes}</p>
+                                      </div>
+                                    )}
                                   </div>
-                                  <div className="flex items-center gap-2 mt-4 pt-4 border-t">
+                                  <div className="flex items-center gap-2 mt-5 pt-4 border-t border-border/50">
                                     <Button
                                       variant="outline"
                                       size="sm"
-                                      onClick={() => handleEditAllocation(allocation)}
-                                      className="flex-1 bg-primary/10 hover:bg-primary/20 border-primary/20"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleEditAllocation(allocation);
+                                      }}
+                                      className="flex-1 bg-primary/10 hover:bg-primary/20 border-primary/30 hover:border-primary/50 text-primary font-medium transition-all duration-200"
                                     >
-                                      <Edit2 className="h-3 w-3 mr-1" />
-                                      Update
+                                      <Edit2 className="h-3.5 w-3.5 mr-1.5" />
+                                      Edit
                                     </Button>
                                     <Button
                                       variant="outline"
                                       size="sm"
-                                      onClick={() => handleDeleteAllocation(allocation)}
-                                      className="flex-1 bg-destructive/10 hover:bg-destructive/20 text-destructive border-destructive/20 hover:text-destructive"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDeleteAllocation(allocation);
+                                      }}
+                                      className="flex-1 bg-destructive/10 hover:bg-destructive/20 text-destructive border-destructive/30 hover:border-destructive/50 font-medium transition-all duration-200"
                                     >
-                                      <Trash2 className="h-3 w-3 mr-1" />
-                                      Remove
+                                      <Trash2 className="h-3.5 w-3.5 mr-1.5" />
+                                      Delete
                                     </Button>
                                   </div>
                                 </CardContent>

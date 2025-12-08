@@ -74,6 +74,7 @@ export interface Employee {
   status: "active" | "inactive";
   invoiceCollectionFrequency?: "Monthly" | "Fortnightly" | "Weekly";
   type?: EmployeeType; // "employee" or "client" - defaults to "employee" for backward compatibility
+  isSkillCityEmployee?: boolean; // true if employee works for Skill City organization, false for external employees
 }
 
 export interface Site {

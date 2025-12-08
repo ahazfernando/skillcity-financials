@@ -97,6 +97,25 @@ export const getAllocationsBySite = async (siteId: string): Promise<SiteEmployee
   }
 };
 
+// Get allocations by employee ID
+export const getAllocationsByEmployee = async (employeeId: string): Promise<SiteEmployeeAllocation[]> => {
+  try {
+    const allocationsRef = collection(db, SITE_EMPLOYEE_ALLOCATIONS_COLLECTION);
+    const q = query(
+      allocationsRef,
+      where("employeeId", "==", employeeId)
+    );
+    const querySnapshot = await getDocs(q);
+    const allocations = querySnapshot.docs.map(docToAllocation);
+    
+    // Sort by siteName (client-side sort to avoid index requirement)
+    return allocations.sort((a, b) => a.siteName.localeCompare(b.siteName));
+  } catch (error) {
+    console.error("Error fetching allocations by employee:", error);
+    throw error;
+  }
+};
+
 // Get allocation by ID
 export const getAllocationById = async (id: string): Promise<SiteEmployeeAllocation | null> => {
   try {

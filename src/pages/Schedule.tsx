@@ -252,21 +252,34 @@ const Schedule = () => {
   const activeSites = sites.filter(site => site.status === "active");
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Work Hours</h2>
-          <p className="text-muted-foreground">Track daily work hours for cleaners at sites</p>
+    <div className="space-y-6 sm:space-y-8">
+      {/* Modern Header Section */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-indigo-500/10 via-purple-500/5 to-background border border-indigo-500/20 p-6 sm:p-8">
+        <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+        <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="space-y-2">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+              Work Hours
+            </h2>
+            <p className="text-sm sm:text-base text-muted-foreground">Track daily work hours for cleaners at sites</p>
+          </div>
+          <Button 
+            onClick={handleAddWorkHours}
+            className="w-full sm:w-auto shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
+            size="lg"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Work Hours
+          </Button>
         </div>
-        <Button onClick={handleAddWorkHours}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Work Hours
-        </Button>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Work Hours List</CardTitle>
+      <Card className="border-2 shadow-xl">
+        <CardHeader className="bg-gradient-to-r from-indigo-500/10 via-purple-500/5 to-muted/30 border-b-2">
+          <div>
+            <CardTitle className="text-xl font-bold">Work Hours List</CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">View and manage all work hour records</p>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="relative mb-6">
@@ -279,18 +292,18 @@ const Schedule = () => {
             />
           </div>
 
-          <div className="rounded-md border">
+          <div className="rounded-xl border-2 overflow-x-auto shadow-lg">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Employee</TableHead>
-                  <TableHead>Site</TableHead>
-                  <TableHead>Start Time</TableHead>
-                  <TableHead>End Time</TableHead>
-                  <TableHead>Hours Worked</TableHead>
-                  <TableHead>Notes</TableHead>
-                  <TableHead>Actions</TableHead>
+                <TableRow className="bg-gradient-to-r from-indigo-500/20 via-purple-500/10 to-indigo-500/5 border-b-2">
+                  <TableHead className="font-bold text-foreground">Date</TableHead>
+                  <TableHead className="font-bold text-foreground">Employee</TableHead>
+                  <TableHead className="font-bold text-foreground">Site</TableHead>
+                  <TableHead className="font-bold text-foreground">Start Time</TableHead>
+                  <TableHead className="font-bold text-foreground">End Time</TableHead>
+                  <TableHead className="font-bold text-foreground">Hours Worked</TableHead>
+                  <TableHead className="font-bold text-foreground">Notes</TableHead>
+                  <TableHead className="font-bold text-foreground">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -311,28 +324,37 @@ const Schedule = () => {
                   </TableRow>
                 ) : (
                   filteredWorkHours.map((wh) => (
-                    <TableRow key={wh.id}>
-                      <TableCell className="font-medium">
+                    <TableRow 
+                      key={wh.id}
+                      className="hover:bg-gradient-to-r hover:from-indigo-500/5 hover:to-transparent transition-all duration-200 border-b"
+                    >
+                      <TableCell className="font-semibold">
                         {new Date(wh.date).toLocaleDateString()}
                       </TableCell>
-                      <TableCell>{wh.employeeName}</TableCell>
-                      <TableCell>{wh.siteName}</TableCell>
+                      <TableCell className="font-medium">{wh.employeeName}</TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Clock className="h-3 w-3 text-muted-foreground" />
-                          {wh.startTime}
+                        <Badge variant="outline" className="text-xs">
+                          {wh.siteName}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                          <span className="font-medium text-blue-600 dark:text-blue-400">{wh.startTime}</span>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-1">
-                          <Clock className="h-3 w-3 text-muted-foreground" />
-                          {wh.endTime}
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
+                          <span className="font-medium text-red-600 dark:text-red-400">{wh.endTime}</span>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{wh.hoursWorked} hrs</Badge>
+                        <Badge variant="outline" className="font-semibold bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-900/50 text-indigo-700 dark:text-indigo-400">
+                          {wh.hoursWorked} hrs
+                        </Badge>
                       </TableCell>
-                      <TableCell className="max-w-[200px] truncate">
+                      <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground">
                         {wh.notes || "-"}
                       </TableCell>
                       <TableCell>
@@ -341,15 +363,15 @@ const Schedule = () => {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleEditWorkHours(wh)}
-                            className="h-8 w-8 p-0"
+                            className="h-8 w-8 p-0 hover:bg-primary/10 transition-all duration-200"
                           >
-                            <Edit2 className="h-4 w-4" />
+                            <Edit2 className="h-4 w-4 text-primary" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDeleteWorkHours(wh)}
-                            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                            className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10 transition-all duration-200"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>

@@ -778,74 +778,87 @@ const Payroll = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Payroll</h2>
-          <p className="text-sm sm:text-base text-muted-foreground">Manage employee payroll (includes 10% GST)</p>
-        </div>
-        <div className="flex gap-2 w-full sm:w-auto">
-          <Button onClick={() => setIsAddDialogOpen(true)} className="w-full sm:w-auto">
-            <Plus className="mr-2 h-4 w-4" />
-            Add Payroll
-          </Button>
+    <div className="space-y-6 sm:space-y-8">
+      {/* Modern Header Section */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500/10 via-indigo-500/5 to-background border border-blue-500/20 p-6 sm:p-8">
+        <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+        <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="space-y-2">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+              Payroll
+            </h2>
+            <p className="text-sm sm:text-base text-muted-foreground">Manage employee payroll with comprehensive cash flow tracking (includes 10% GST)</p>
+          </div>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <Button 
+              onClick={() => setIsAddDialogOpen(true)} 
+              className="w-full sm:w-auto shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
+              size="lg"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add Payroll
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Statistical Summary Cards */}
+      {/* Enhanced Statistical Summary Cards */}
       <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-        <Card className="relative overflow-hidden bg-card border shadow-lg p-0 rounded-[32px]">
+        <Card className="relative overflow-hidden bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950/30 dark:to-green-900/20 border-2 border-green-200 dark:border-green-900/50 shadow-xl hover:shadow-2xl transition-all duration-300 p-0 rounded-2xl group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-green-400/20 rounded-full -mr-16 -mt-16 group-hover:bg-green-400/30 transition-colors"></div>
           <CardHeader className="relative px-6 pt-6">
             <div className="flex items-start justify-between">
-              <div className="p-3 rounded-lg bg-green-500/10 dark:bg-green-500/20">
-                <TrendingUp className="h-6 w-6 text-green-600 dark:text-green-400" />
+              <div className="p-3 rounded-xl bg-gradient-to-br from-green-500 to-green-600 shadow-lg">
+                <TrendingUp className="h-6 w-6 text-white" />
               </div>
             </div>
-            <CardTitle className="text-sm font-medium mt-4 text-muted-foreground">Total Inflow</CardTitle>
-            <div className="text-3xl font-bold text-green-600 dark:text-green-400 mt-2">
+            <CardTitle className="text-sm font-semibold mt-4 text-muted-foreground uppercase tracking-wide">Total Inflow</CardTitle>
+            <div className="text-3xl font-bold text-green-700 dark:text-green-400 mt-2">
               {formatCurrency(totalInflow)}
             </div>
           </CardHeader>
-          <CardContent className="bg-muted/30 dark:bg-muted/20 rounded-b-[32px] px-6 py-4 border-t">
-            <p className="text-xs text-muted-foreground">
+          <CardContent className="bg-green-50/50 dark:bg-green-950/20 rounded-b-2xl px-6 py-4 border-t border-green-200 dark:border-green-900/50">
+            <p className="text-xs text-muted-foreground font-medium">
               {filteredPayrolls.filter(p => p.modeOfCashFlow === "inflow").length} inflow entries
             </p>
           </CardContent>
         </Card>
 
-        <Card className="relative overflow-hidden bg-card border shadow-lg p-0 rounded-[32px]">
+        <Card className="relative overflow-hidden bg-gradient-to-br from-red-50 to-red-100/50 dark:from-red-950/30 dark:to-red-900/20 border-2 border-red-200 dark:border-red-900/50 shadow-xl hover:shadow-2xl transition-all duration-300 p-0 rounded-2xl group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-red-400/20 rounded-full -mr-16 -mt-16 group-hover:bg-red-400/30 transition-colors"></div>
           <CardHeader className="relative px-6 pt-6">
             <div className="flex items-start justify-between">
-              <div className="p-3 rounded-lg bg-red-500/10 dark:bg-red-500/20">
-                <TrendingDown className="h-6 w-6 text-red-600 dark:text-red-400" />
+              <div className="p-3 rounded-xl bg-gradient-to-br from-red-500 to-red-600 shadow-lg">
+                <TrendingDown className="h-6 w-6 text-white" />
               </div>
             </div>
-            <CardTitle className="text-sm font-medium mt-4 text-muted-foreground">Total Outflow</CardTitle>
-            <div className="text-3xl font-bold text-red-600 dark:text-red-400 mt-2">
+            <CardTitle className="text-sm font-semibold mt-4 text-muted-foreground uppercase tracking-wide">Total Outflow</CardTitle>
+            <div className="text-3xl font-bold text-red-700 dark:text-red-400 mt-2">
               {formatCurrency(totalOutflow)}
             </div>
           </CardHeader>
-          <CardContent className="bg-muted/30 dark:bg-muted/20 rounded-b-[32px] px-6 py-4 border-t">
-            <p className="text-xs text-muted-foreground">
+          <CardContent className="bg-red-50/50 dark:bg-red-950/20 rounded-b-2xl px-6 py-4 border-t border-red-200 dark:border-red-900/50">
+            <p className="text-xs text-muted-foreground font-medium">
               {filteredPayrolls.filter(p => p.modeOfCashFlow === "outflow").length} outflow entries
             </p>
           </CardContent>
         </Card>
 
-        <Card className="relative overflow-hidden bg-card border shadow-lg p-0 rounded-[32px]">
+        <Card className={`relative overflow-hidden bg-gradient-to-br ${(totalInflow - totalOutflow) >= 0 ? 'from-green-50 to-emerald-100/50 dark:from-green-950/30 dark:to-emerald-900/20 border-2 border-green-200 dark:border-green-900/50' : 'from-red-50 to-rose-100/50 dark:from-red-950/30 dark:to-rose-900/20 border-2 border-red-200 dark:border-red-900/50'} shadow-xl hover:shadow-2xl transition-all duration-300 p-0 rounded-2xl group`}>
+          <div className={`absolute top-0 right-0 w-32 h-32 ${(totalInflow - totalOutflow) >= 0 ? 'bg-green-400/20 group-hover:bg-green-400/30' : 'bg-red-400/20 group-hover:bg-red-400/30'} rounded-full -mr-16 -mt-16 transition-colors`}></div>
           <CardHeader className="relative px-6 pt-6">
             <div className="flex items-start justify-between">
-              <div className={`p-3 rounded-lg ${(totalInflow - totalOutflow) >= 0 ? 'bg-green-500/10 dark:bg-green-500/20' : 'bg-red-500/10 dark:bg-red-500/20'}`}>
-                <DollarSign className={`h-6 w-6 ${(totalInflow - totalOutflow) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`} />
+              <div className={`p-3 rounded-xl bg-gradient-to-br ${(totalInflow - totalOutflow) >= 0 ? 'from-green-500 to-green-600' : 'from-red-500 to-red-600'} shadow-lg`}>
+                <DollarSign className="h-6 w-6 text-white" />
               </div>
             </div>
-            <CardTitle className="text-sm font-medium mt-4 text-muted-foreground">Net Cash Flow</CardTitle>
-            <div className={`text-3xl font-bold mt-2 ${(totalInflow - totalOutflow) >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+            <CardTitle className="text-sm font-semibold mt-4 text-muted-foreground uppercase tracking-wide">Net Cash Flow</CardTitle>
+            <div className={`text-3xl font-bold mt-2 ${(totalInflow - totalOutflow) >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
               {formatCurrency(totalInflow - totalOutflow)}
             </div>
           </CardHeader>
-          <CardContent className="bg-muted/30 dark:bg-muted/20 rounded-b-[32px] px-6 py-4 border-t">
-            <p className="text-xs text-muted-foreground">
+          <CardContent className={`${(totalInflow - totalOutflow) >= 0 ? 'bg-green-50/50 dark:bg-green-950/20 border-t border-green-200 dark:border-green-900/50' : 'bg-red-50/50 dark:bg-red-950/20 border-t border-red-200 dark:border-red-900/50'} rounded-b-2xl px-6 py-4`}>
+            <p className="text-xs text-muted-foreground font-medium">
               {totalInflow > totalOutflow ? "Positive" : "Negative"} cash flow
             </p>
           </CardContent>
@@ -1077,15 +1090,19 @@ const Payroll = () => {
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
+      <Card className="border-2 shadow-xl">
+        <CardHeader className="bg-gradient-to-r from-blue-500/10 via-indigo-500/5 to-muted/30 border-b-2">
           <div className="flex items-center justify-between">
-            <CardTitle>Payroll List</CardTitle>
+            <div>
+              <CardTitle className="text-xl font-bold">Payroll List</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">View and manage all payroll records</p>
+            </div>
             <div className="flex items-center gap-2">
               <Button
                 variant={viewMode === "card" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setViewMode("card")}
+                className="transition-all duration-200"
               >
                 <LayoutGrid className="h-4 w-4 mr-2" />
                 Card View
@@ -1094,6 +1111,7 @@ const Payroll = () => {
                 variant={viewMode === "table" ? "default" : "outline"}
                 size="sm"
                 onClick={() => setViewMode("table")}
+                className="transition-all duration-200"
               >
                 <TableIcon className="h-4 w-4 mr-2" />
                 Table View
@@ -1230,28 +1248,28 @@ const Payroll = () => {
               No payroll records found
             </div>
           ) : viewMode === "table" ? (
-          <div className="rounded-md border overflow-x-auto">
+          <div className="rounded-xl border-2 overflow-x-auto shadow-lg">
             <Table>
               <TableHeader>
-                <TableRow className="bg-green-50 dark:bg-green-950">
-                  <TableHead className="w-[50px]">ID</TableHead>
-                  <TableHead>Mode</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Site of Work</TableHead>
-                  <TableHead>ABN</TableHead>
-                  <TableHead>GST</TableHead>
-                  <TableHead>Invoice #</TableHead>
-                  <TableHead>Amount (Excl. GST)</TableHead>
-                  <TableHead>GST Amount</TableHead>
-                  <TableHead>Total Amount</TableHead>
-                  <TableHead>Payment Method</TableHead>
-                  <TableHead>Payment Date</TableHead>
-                  <TableHead>Receipt #</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Notes</TableHead>
-                  <TableHead className="w-[100px]">Actions</TableHead>
+                <TableRow className="bg-gradient-to-r from-blue-500/20 via-indigo-500/10 to-blue-500/5 border-b-2">
+                  <TableHead className="w-[50px] font-bold text-foreground">ID</TableHead>
+                  <TableHead className="font-bold text-foreground">Mode</TableHead>
+                  <TableHead className="font-bold text-foreground">Type</TableHead>
+                  <TableHead className="font-bold text-foreground">Date</TableHead>
+                  <TableHead className="font-bold text-foreground">Name</TableHead>
+                  <TableHead className="font-bold text-foreground">Site of Work</TableHead>
+                  <TableHead className="font-bold text-foreground">ABN</TableHead>
+                  <TableHead className="font-bold text-foreground">GST</TableHead>
+                  <TableHead className="font-bold text-foreground">Invoice #</TableHead>
+                  <TableHead className="font-bold text-foreground">Amount (Excl. GST)</TableHead>
+                  <TableHead className="font-bold text-foreground">GST Amount</TableHead>
+                  <TableHead className="font-bold text-foreground">Total Amount</TableHead>
+                  <TableHead className="font-bold text-foreground">Payment Method</TableHead>
+                  <TableHead className="font-bold text-foreground">Payment Date</TableHead>
+                  <TableHead className="font-bold text-foreground">Receipt #</TableHead>
+                  <TableHead className="font-bold text-foreground">Status</TableHead>
+                  <TableHead className="font-bold text-foreground">Notes</TableHead>
+                  <TableHead className="w-[100px] font-bold text-foreground">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1316,64 +1334,120 @@ const Payroll = () => {
                   ))
                 ) : (
                   filteredPayrolls.map((payroll, index) => (
-                    <TableRow key={payroll.id}>
-                      <TableCell className="font-medium">{index + 1}</TableCell>
+                    <TableRow 
+                      key={payroll.id}
+                      className="hover:bg-gradient-to-r hover:from-blue-500/5 hover:to-transparent transition-all duration-200 border-b"
+                    >
+                      <TableCell className="font-semibold">{index + 1}</TableCell>
                       <TableCell>
-                        <Badge variant={payroll.modeOfCashFlow === "inflow" ? "default" : "destructive"}>
+                        <Badge 
+                          variant={payroll.modeOfCashFlow === "inflow" ? "default" : "destructive"}
+                          className={payroll.modeOfCashFlow === "inflow" 
+                            ? "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20" 
+                            : "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20"}
+                        >
                           {payroll.modeOfCashFlow === "inflow" ? "Inflow" : "Outflow"}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {payroll.typeOfCashFlow === "invoice" ? "Invoice" : 
+                        <span className="text-sm">{payroll.typeOfCashFlow === "invoice" ? "Invoice" : 
                          payroll.typeOfCashFlow === "internal_payroll" ? "Internal Payroll" : 
-                         "Cleaner Payroll"}
+                         "Cleaner Payroll"}</span>
                       </TableCell>
-                      <TableCell>{formatDate(payroll.date)}</TableCell>
-                      <TableCell className="font-medium">{payroll.name}</TableCell>
-                      <TableCell>{payroll.siteOfWork || "-"}</TableCell>
                       <TableCell>
-                        <Badge variant={payroll.abnRegistered ? "default" : "destructive"}>
+                        <span className="text-sm">{formatDate(payroll.date)}</span>
+                      </TableCell>
+                      <TableCell className="font-semibold">{payroll.name}</TableCell>
+                      <TableCell>
+                        {payroll.siteOfWork ? (
+                          <Badge variant="outline" className="text-xs">
+                            {payroll.siteOfWork}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant={payroll.abnRegistered ? "default" : "destructive"}
+                          className={payroll.abnRegistered 
+                            ? "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20" 
+                            : "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20"}
+                        >
                           {payroll.abnRegistered ? "Yes" : "No"}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={payroll.gstRegistered ? "default" : "destructive"}>
+                        <Badge 
+                          variant={payroll.gstRegistered ? "default" : "destructive"}
+                          className={payroll.gstRegistered 
+                            ? "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20" 
+                            : "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20"}
+                        >
                           {payroll.gstRegistered ? "Yes" : "No"}
                         </Badge>
                       </TableCell>
-                      <TableCell>{payroll.invoiceNumber || "N/A"}</TableCell>
-                      <TableCell>${payroll.amountExclGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                      <TableCell>${payroll.gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="font-semibold">${payroll.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                       <TableCell>
-                        <Badge variant="outline">
+                        {payroll.invoiceNumber ? (
+                          <span className="px-2 py-1 rounded-md bg-primary/10 text-primary font-mono text-sm">
+                            {payroll.invoiceNumber}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">N/A</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-medium text-foreground">
+                          ${payroll.amountExclGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-muted-foreground">
+                          ${payroll.gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </TableCell>
+                      <TableCell className="font-bold text-green-600 dark:text-green-400">
+                        ${payroll.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
                           {payroll.paymentMethod === "bank_transfer" ? "Bank Transfer" :
                            payroll.paymentMethod === "cash" ? "Cash" :
                            payroll.paymentMethod === "cheque" ? "Cheque" :
                            payroll.paymentMethod === "credit_card" ? "Credit Card" : "Other"}
                         </Badge>
                       </TableCell>
-                      <TableCell>{payroll.paymentDate ? formatDate(payroll.paymentDate) : "-"}</TableCell>
-                      <TableCell className="max-w-[150px] truncate">{payroll.paymentReceiptNumber || "-"}</TableCell>
+                      <TableCell>
+                        {payroll.paymentDate ? (
+                          <span className="text-sm">{formatDate(payroll.paymentDate)}</span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="max-w-[150px] truncate text-sm text-muted-foreground">
+                        {payroll.paymentReceiptNumber || "-"}
+                      </TableCell>
                       <TableCell>
                         <StatusBadge status={payroll.status} />
                       </TableCell>
-                      <TableCell className="max-w-[200px] truncate">{payroll.notes || "-"}</TableCell>
+                      <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground">
+                        {payroll.notes || "-"}
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
                         <Button
                           variant="ghost"
                           size="icon"
                           onClick={() => handleEditPayroll(payroll)}
-                          className="h-8 w-8"
+                          className="h-8 w-8 hover:bg-primary/10 transition-all duration-200"
                         >
-                          <Edit2 className="h-4 w-4" />
+                          <Edit2 className="h-4 w-4 text-primary" />
                         </Button>
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => handleDeleteClick(payroll)}
-                            className="h-8 w-8 text-destructive hover:text-destructive"
+                            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10 transition-all duration-200"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>

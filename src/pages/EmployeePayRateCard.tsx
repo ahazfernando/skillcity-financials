@@ -4,10 +4,11 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Search, Plus, Loader2, Trash2, Edit2, Save, X, Check, ChevronsUpDown } from "lucide-react";
+import { Search, Plus, Loader2, Trash2, Edit2, Save, X, Check, ChevronsUpDown, LayoutGrid, Table as TableIcon, Building2, Users, DollarSign, TrendingUp, Sparkles } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -53,6 +54,7 @@ const EmployeePayRateCard = () => {
   const [employeePopoverOpen, setEmployeePopoverOpen] = useState(false);
   const [siteSearchValue, setSiteSearchValue] = useState("");
   const [employeeSearchValue, setEmployeeSearchValue] = useState("");
+  const [viewMode, setViewMode] = useState<"card" | "table">("table");
   const [formData, setFormData] = useState({
     siteId: "",
     employeeId: "",
@@ -307,134 +309,418 @@ const EmployeePayRateCard = () => {
     return rate;
   };
 
+  // Calculate statistics
+  const totalSites = filteredSites.length;
+  const totalEmployees = useMemo(() => {
+    return filteredSites.reduce((sum, site) => sum + getEmployeesForSite(site.id).length, 0);
+  }, [filteredSites, getEmployeesForSite]);
+  const avgRate = useMemo(() => {
+    const rates = payRates.filter(pr => pr.hourlyRate > 0).map(pr => pr.hourlyRate);
+    if (rates.length === 0) return 0;
+    return rates.reduce((sum, rate) => sum + rate, 0) / rates.length;
+  }, [payRates]);
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-3xl font-bold tracking-tight">Employee Pay Rate Card</h2>
-          <p className="text-muted-foreground">Manage employee pay rates by site</p>
+      {/* Modern Header Section */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-background border shadow-lg">
+        <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+        <div className="relative p-6 md:p-8">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-primary/10 dark:bg-primary/20">
+                  <DollarSign className="h-6 w-6 text-primary" />
+                </div>
+                <div>
+                  <h1 className="text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text">
+                    Employee Pay Rate Card
+                  </h1>
+                  <p className="text-muted-foreground mt-1">Manage and track employee pay rates across all sites</p>
+                </div>
+              </div>
+            </div>
+            <Button onClick={handleAddPayRate} size="lg" className="shadow-md hover:shadow-lg transition-shadow">
+              <Plus className="mr-2 h-5 w-5" />
+              Add Pay Rate
+            </Button>
+          </div>
+
+          {/* Statistics Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
+            <div className="rounded-xl bg-background/80 backdrop-blur-sm border p-4 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Total Sites</p>
+                  <p className="text-2xl font-bold mt-1">{totalSites}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-blue-500/10 dark:bg-blue-500/20">
+                  <Building2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                </div>
+              </div>
+            </div>
+            <div className="rounded-xl bg-background/80 backdrop-blur-sm border p-4 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Total Employees</p>
+                  <p className="text-2xl font-bold mt-1">{totalEmployees}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-green-500/10 dark:bg-green-500/20">
+                  <Users className="h-5 w-5 text-green-600 dark:text-green-400" />
+                </div>
+              </div>
+            </div>
+            <div className="rounded-xl bg-background/80 backdrop-blur-sm border p-4 shadow-sm hover:shadow-md transition-shadow">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Avg. Hourly Rate</p>
+                  <p className="text-2xl font-bold mt-1">${avgRate.toFixed(0)}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-purple-500/10 dark:bg-purple-500/20">
+                  <TrendingUp className="h-5 w-5 text-purple-600 dark:text-purple-400" />
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <Button onClick={handleAddPayRate}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Pay Rate
-        </Button>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Pay Rate Card</CardTitle>
+      <Card className="shadow-lg border-2">
+        <CardHeader className="bg-muted/30 dark:bg-muted/20 border-b">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div>
+              <CardTitle className="text-xl font-bold flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                Pay Rate Overview
+              </CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">Browse and manage pay rates by site</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant={viewMode === "card" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("card")}
+                className="shadow-sm"
+              >
+                <LayoutGrid className="h-4 w-4 mr-2" />
+                Card View
+              </Button>
+              <Button
+                variant={viewMode === "table" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("table")}
+                className="shadow-sm"
+              >
+                <TableIcon className="h-4 w-4 mr-2" />
+                Table View
+              </Button>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-6">
           <div className="relative mb-6">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
             <Input
               placeholder="Search by site name or client..."
               value={searchValue}
               onChange={(e) => setSearchValue(e.target.value)}
-              className="pl-9"
+              className="pl-12 h-12 text-base shadow-sm border-2 focus:border-primary/50 transition-colors"
             />
           </div>
 
-          <div className="rounded-md border overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-green-50 dark:bg-green-950">
-                  <TableHead className="font-semibold">Cleaning Site</TableHead>
-                  {Array.from({ length: maxEmployeesPerSite }, (_, i) => (
-                    <React.Fragment key={i}>
-                      <TableHead className="font-semibold">Employee {i + 1}</TableHead>
-                      <TableHead className="font-semibold">Hourly Rate</TableHead>
-                    </React.Fragment>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={maxEmployeesPerSite * 2 + 1} className="text-center py-8">
-                      <div className="flex items-center justify-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Loading pay rates...</span>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ) : filteredSites.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={maxEmployeesPerSite * 2 + 1} className="text-center py-8 text-muted-foreground">
-                      No sites found
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredSites.map((site, siteIndex) => {
+          {viewMode === "card" ? (
+            // Card View
+            <div className="space-y-4">
+              {isLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  <span>Loading pay rates...</span>
+                </div>
+              ) : filteredSites.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  No sites found
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredSites.map((site, siteIndex) => {
                     const siteEmployees = getEmployeesForSite(site.id);
-                    const rows: (EmployeePayRate | null)[] = [];
-                    for (let i = 0; i < maxEmployeesPerSite; i++) {
-                      rows.push(siteEmployees[i] || null);
-                    }
-
-                    // Alternate row colors like in the spreadsheet
-                    const rowColors = [
-                      "bg-orange-50 dark:bg-orange-950/30",
-                      "bg-yellow-50 dark:bg-yellow-950/30",
-                      "bg-green-50 dark:bg-green-950/30",
-                      "bg-blue-50 dark:bg-blue-950/30",
-                      "bg-purple-50 dark:bg-purple-950/30",
-                      "bg-red-50 dark:bg-red-950/30",
-                      "bg-cyan-50 dark:bg-cyan-950/30",
+                    const gradientColors = [
+                      "from-orange-500/20 via-orange-500/10 to-transparent border-orange-500/30 dark:from-orange-500/30 dark:via-orange-500/20 dark:to-transparent dark:border-orange-500/50",
+                      "from-yellow-500/20 via-yellow-500/10 to-transparent border-yellow-500/30 dark:from-yellow-500/30 dark:via-yellow-500/20 dark:to-transparent dark:border-yellow-500/50",
+                      "from-green-500/20 via-green-500/10 to-transparent border-green-500/30 dark:from-green-500/30 dark:via-green-500/20 dark:to-transparent dark:border-green-500/50",
+                      "from-blue-500/20 via-blue-500/10 to-transparent border-blue-500/30 dark:from-blue-500/30 dark:via-blue-500/20 dark:to-transparent dark:border-blue-500/50",
+                      "from-purple-500/20 via-purple-500/10 to-transparent border-purple-500/30 dark:from-purple-500/30 dark:via-purple-500/20 dark:to-transparent dark:border-purple-500/50",
+                      "from-red-500/20 via-red-500/10 to-transparent border-red-500/30 dark:from-red-500/30 dark:via-red-500/20 dark:to-transparent dark:border-red-500/50",
+                      "from-cyan-500/20 via-cyan-500/10 to-transparent border-cyan-500/30 dark:from-cyan-500/30 dark:via-cyan-500/20 dark:to-transparent dark:border-cyan-500/50",
                     ];
-                    const siteColor = rowColors[siteIndex % rowColors.length];
+                    const gradientColor = gradientColors[siteIndex % gradientColors.length];
 
                     return (
-                      <TableRow key={site.id} className="hover:bg-muted/50">
-                        <TableCell className={`font-medium ${siteColor}`}>
-                          {site.name}
-                        </TableCell>
-                        {rows.map((payRate, index) => (
-                          <React.Fragment key={index}>
-                            <TableCell>
-                              {payRate ? (
-                                <Button
-                                  variant="link"
-                                  className="h-auto p-0 text-left font-normal justify-start hover:underline"
-                                  onClick={() => {
-                                    // Only allow editing if it's not a placeholder
-                                    if (!payRate.id.startsWith('placeholder-')) {
-                                      handleEditPayRate(payRate);
-                                    } else {
-                                      // If it's a placeholder, open add dialog with pre-filled data
-                                      setFormData({
-                                        siteId: payRate.siteId,
-                                        employeeId: payRate.employeeId,
-                                        hourlyRate: "",
-                                        travelAllowance: "",
-                                        notes: "",
-                                      });
-                                      setIsAddDialogOpen(true);
-                                    }
-                                  }}
-                                >
-                                  {payRate.employeeName}
-                                </Button>
-                              ) : (
-                                <span className="text-muted-foreground">-</span>
+                      <Card 
+                        key={site.id} 
+                        className={`relative overflow-hidden border-2 bg-gradient-to-br ${gradientColor} shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] group`}
+                      >
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/10 to-transparent rounded-bl-full"></div>
+                        <CardHeader className="relative pb-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <CardTitle className="text-lg font-bold mb-1 line-clamp-2 group-hover:text-primary transition-colors">
+                                {site.name}
+                              </CardTitle>
+                              {site.clientName && (
+                                <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                                  <Building2 className="h-3 w-3" />
+                                  {site.clientName}
+                                </p>
                               )}
-                            </TableCell>
-                            <TableCell>
-                              {payRate ? (
-                                <span>{formatPayRate(payRate)}</span>
-                              ) : (
-                                <span className="text-muted-foreground">-</span>
-                              )}
-                            </TableCell>
-                          </React.Fragment>
-                        ))}
-                      </TableRow>
+                            </div>
+                            <Badge variant="outline" className="shrink-0 bg-background/50 backdrop-blur-sm">
+                              {siteEmployees.length} {siteEmployees.length === 1 ? 'employee' : 'employees'}
+                            </Badge>
+                          </div>
+                        </CardHeader>
+                        <CardContent className="relative space-y-3 pt-2">
+                          {siteEmployees.length === 0 ? (
+                            <div className="text-center py-8 rounded-lg border-2 border-dashed bg-muted/30">
+                              <Users className="h-8 w-8 mx-auto mb-2 text-muted-foreground/50" />
+                              <p className="text-sm text-muted-foreground font-medium">No employees assigned</p>
+                            </div>
+                          ) : (
+                            siteEmployees.map((payRate, index) => (
+                              <div
+                                key={payRate.id || index}
+                                className="group/emp relative p-4 rounded-xl border bg-background/80 backdrop-blur-sm hover:bg-background hover:shadow-md transition-all duration-200 hover:border-primary/50"
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <Button
+                                        variant="link"
+                                        className="h-auto p-0 text-left font-bold justify-start hover:text-primary transition-colors text-base"
+                                        onClick={() => {
+                                          if (!payRate.id.startsWith('placeholder-')) {
+                                            handleEditPayRate(payRate);
+                                          } else {
+                                            setFormData({
+                                              siteId: payRate.siteId,
+                                              employeeId: payRate.employeeId,
+                                              hourlyRate: "",
+                                              travelAllowance: "",
+                                              notes: "",
+                                            });
+                                            setIsAddDialogOpen(true);
+                                          }
+                                        }}
+                                      >
+                                        {payRate.employeeName}
+                                      </Button>
+                                      <Badge variant="secondary" className="text-xs font-semibold bg-primary/10 text-primary border-primary/20">
+                                        #{index + 1}
+                                      </Badge>
+                                    </div>
+                                    {payRate.id.startsWith('placeholder-') && payRate.hourlyRate === 0 ? (
+                                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                        <DollarSign className="h-4 w-4" />
+                                        <span>No rate set</span>
+                                      </div>
+                                    ) : (
+                                      <div className="space-y-2">
+                                        <div className="flex items-baseline gap-2">
+                                          <span className="text-2xl font-bold text-foreground">
+                                            ${payRate.hourlyRate.toLocaleString()}
+                                          </span>
+                                          <span className="text-sm font-medium text-muted-foreground">/hr</span>
+                                        </div>
+                                        {payRate.travelAllowance && (
+                                          <div className="flex items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400 bg-green-500/10 dark:bg-green-500/20 px-2 py-1 rounded-md w-fit">
+                                            <TrendingUp className="h-3 w-3" />
+                                            + ${payRate.travelAllowance.toLocaleString()} Travel
+                                          </div>
+                                        )}
+                                        {payRate.notes && (
+                                          <div className="text-xs text-muted-foreground italic bg-muted/50 px-2 py-1 rounded border-l-2 border-primary/30">
+                                            {payRate.notes}
+                                          </div>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                  {!payRate.id.startsWith('placeholder-') && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-9 w-9 p-0 rounded-lg hover:bg-primary/10 hover:text-primary transition-colors shrink-0"
+                                      onClick={() => handleEditPayRate(payRate)}
+                                    >
+                                      <Edit2 className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </CardContent>
+                      </Card>
                     );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                  })}
+                </div>
+              )}
+            </div>
+          ) : (
+            // Modern Table View
+            <div className="rounded-xl border-2 overflow-hidden shadow-lg">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-b-2">
+                      <TableHead className="font-bold text-base sticky left-0 z-30 bg-background border-r-2 border-primary/20 min-w-[220px] shadow-[2px_0_4px_rgba(0,0,0,0.1)]">
+                        Cleaning Site
+                      </TableHead>
+                      {Array.from({ length: maxEmployeesPerSite }, (_, i) => (
+                        <React.Fragment key={i}>
+                          <TableHead className="font-bold text-base min-w-[180px]">
+                            <div className="flex items-center gap-2">
+                              <Users className="h-4 w-4" />
+                              Employee {i + 1}
+                            </div>
+                          </TableHead>
+                          <TableHead className="font-bold text-base min-w-[150px]">
+                            <div className="flex items-center gap-2">
+                              <DollarSign className="h-4 w-4" />
+                              Hourly Rate
+                            </div>
+                          </TableHead>
+                        </React.Fragment>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {isLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={maxEmployeesPerSite * 2 + 1} className="text-center py-12">
+                          <div className="flex flex-col items-center justify-center gap-3">
+                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                            <span className="text-muted-foreground font-medium">Loading pay rates...</span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : filteredSites.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={maxEmployeesPerSite * 2 + 1} className="text-center py-12">
+                          <div className="flex flex-col items-center justify-center gap-3">
+                            <Building2 className="h-12 w-12 text-muted-foreground/30" />
+                            <span className="text-muted-foreground font-medium">No sites found</span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredSites.map((site, siteIndex) => {
+                        const siteEmployees = getEmployeesForSite(site.id);
+                        const rows: (EmployeePayRate | null)[] = [];
+                        for (let i = 0; i < maxEmployeesPerSite; i++) {
+                          rows.push(siteEmployees[i] || null);
+                        }
+
+                        // Modern gradient row colors
+                        const rowGradients = [
+                          "bg-gradient-to-r from-orange-500/10 via-orange-500/5 to-transparent border-l-4 border-orange-500/50",
+                          "bg-gradient-to-r from-yellow-500/10 via-yellow-500/5 to-transparent border-l-4 border-yellow-500/50",
+                          "bg-gradient-to-r from-green-500/10 via-green-500/5 to-transparent border-l-4 border-green-500/50",
+                          "bg-gradient-to-r from-blue-500/10 via-blue-500/5 to-transparent border-l-4 border-blue-500/50",
+                          "bg-gradient-to-r from-purple-500/10 via-purple-500/5 to-transparent border-l-4 border-purple-500/50",
+                          "bg-gradient-to-r from-red-500/10 via-red-500/5 to-transparent border-l-4 border-red-500/50",
+                          "bg-gradient-to-r from-cyan-500/10 via-cyan-500/5 to-transparent border-l-4 border-cyan-500/50",
+                        ];
+                        const rowGradient = rowGradients[siteIndex % rowGradients.length];
+
+                        // Sticky cell background that matches the row gradient - using solid backgrounds to hide content behind
+                        const stickyCellBg = [
+                          "bg-gradient-to-r from-orange-500/20 via-orange-500/15 to-orange-500/10 dark:from-orange-500/30 dark:via-orange-500/25 dark:to-orange-500/20 border-r-2 border-orange-500/30 dark:border-orange-500/50",
+                          "bg-gradient-to-r from-yellow-500/20 via-yellow-500/15 to-yellow-500/10 dark:from-yellow-500/30 dark:via-yellow-500/25 dark:to-yellow-500/20 border-r-2 border-yellow-500/30 dark:border-yellow-500/50",
+                          "bg-gradient-to-r from-green-500/20 via-green-500/15 to-green-500/10 dark:from-green-500/30 dark:via-green-500/25 dark:to-green-500/20 border-r-2 border-green-500/30 dark:border-green-500/50",
+                          "bg-gradient-to-r from-blue-500/20 via-blue-500/15 to-blue-500/10 dark:from-blue-500/30 dark:via-blue-500/25 dark:to-blue-500/20 border-r-2 border-blue-500/30 dark:border-blue-500/50",
+                          "bg-gradient-to-r from-purple-500/20 via-purple-500/15 to-purple-500/10 dark:from-purple-500/30 dark:via-purple-500/25 dark:to-purple-500/20 border-r-2 border-purple-500/30 dark:border-purple-500/50",
+                          "bg-gradient-to-r from-red-500/20 via-red-500/15 to-red-500/10 dark:from-red-500/30 dark:via-red-500/25 dark:to-red-500/20 border-r-2 border-red-500/30 dark:border-red-500/50",
+                          "bg-gradient-to-r from-cyan-500/20 via-cyan-500/15 to-cyan-500/10 dark:from-cyan-500/30 dark:via-cyan-500/25 dark:to-cyan-500/20 border-r-2 border-cyan-500/30 dark:border-cyan-500/50",
+                        ];
+                        const stickyBg = stickyCellBg[siteIndex % stickyCellBg.length];
+
+                        return (
+                          <TableRow key={site.id} className={`${rowGradient} hover:shadow-md transition-all duration-200`}>
+                            <TableCell className={`font-bold text-base sticky left-0 z-20 ${stickyBg} min-w-[220px] border-l-4 shadow-[2px_0_8px_rgba(0,0,0,0.15)] dark:shadow-[2px_0_8px_rgba(0,0,0,0.3)]`}>
+                              <div className="flex items-center gap-2">
+                                <Building2 className="h-4 w-4 text-primary" />
+                                {site.name}
+                              </div>
+                              {site.clientName && (
+                                <p className="text-xs text-muted-foreground mt-1">{site.clientName}</p>
+                              )}
+                            </TableCell>
+                            {rows.map((payRate, index) => (
+                              <React.Fragment key={index}>
+                                <TableCell className="py-4 min-w-[180px]">
+                                  {payRate ? (
+                                    <Button
+                                      variant="link"
+                                      className="h-auto p-0 text-left font-semibold justify-start hover:text-primary transition-colors"
+                                      onClick={() => {
+                                        if (!payRate.id.startsWith('placeholder-')) {
+                                          handleEditPayRate(payRate);
+                                        } else {
+                                          setFormData({
+                                            siteId: payRate.siteId,
+                                            employeeId: payRate.employeeId,
+                                            hourlyRate: "",
+                                            travelAllowance: "",
+                                            notes: "",
+                                          });
+                                          setIsAddDialogOpen(true);
+                                        }
+                                      }}
+                                    >
+                                      <div className="flex items-center gap-2">
+                                        <Badge variant="secondary" className="text-xs bg-primary/10 text-primary">
+                                          #{index + 1}
+                                        </Badge>
+                                        {payRate.employeeName}
+                                      </div>
+                                    </Button>
+                                  ) : (
+                                    <span className="text-muted-foreground/50">-</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="py-4 min-w-[150px]">
+                                  {payRate ? (
+                                    <div className="space-y-1">
+                                      <div className="font-bold text-lg text-foreground">
+                                        ${payRate.hourlyRate.toLocaleString()}/hr
+                                      </div>
+                                      {payRate.travelAllowance && (
+                                        <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                          + ${payRate.travelAllowance.toLocaleString()} Travel
+                                        </div>
+                                      )}
+                                      {payRate.notes && (
+                                        <div className="text-xs text-muted-foreground italic">
+                                          {payRate.notes}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-muted-foreground/50">-</span>
+                                  )}
+                                </TableCell>
+                              </React.Fragment>
+                            ))}
+                          </TableRow>
+                        );
+                      })
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

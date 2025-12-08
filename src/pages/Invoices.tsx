@@ -37,7 +37,7 @@ import { getAllInvoices, addInvoice, updateInvoice } from "@/lib/firebase/invoic
 import { getAllPayrolls, updatePayroll, movePaidInvoicesToHistory, getPayrollsByHistoryStatus } from "@/lib/firebase/payroll";
 import { getAllEmployees, addEmployee } from "@/lib/firebase/employees";
 import { calculatePaymentDateAsDate, calculatePaymentDate } from "@/lib/paymentCycle";
-import { getAllSites } from "@/lib/firebase/sites";
+import { getAllSites, addSite } from "@/lib/firebase/sites";
 import { getAllReminders, addReminder, updateReminder, queryReminders } from "@/lib/firebase/reminders";
 import { uploadReceipt } from "@/lib/firebase/storage";
 import { toast } from "sonner";
@@ -70,6 +70,9 @@ const Invoices = () => {
   const [employeePopoverOpen, setEmployeePopoverOpen] = useState(false);
   const [employeeSearchValue, setEmployeeSearchValue] = useState("");
   const [isAddingEmployee, setIsAddingEmployee] = useState(false);
+  const [sitePopoverOpen, setSitePopoverOpen] = useState(false);
+  const [siteSearchValue, setSiteSearchValue] = useState("");
+  const [isAddingSite, setIsAddingSite] = useState(false);
   const [formData, setFormData] = useState({
     invoiceNumber: "",
     name: "",
@@ -362,6 +365,62 @@ const Invoices = () => {
     }
   };
 
+  const handleSiteSelect = (siteName: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      siteOfWork: siteName,
+    }));
+    setSitePopoverOpen(false);
+    setSiteSearchValue("");
+  };
+
+  const handleAddNewSite = async (siteName: string) => {
+    if (!siteName.trim()) {
+      toast.error("Please enter a site name");
+      return;
+    }
+
+    // Check if site already exists
+    const existingSite = sites.find(
+      site => site.name.toLowerCase() === siteName.trim().toLowerCase()
+    );
+    if (existingSite) {
+      handleSiteSelect(existingSite.name);
+      return;
+    }
+
+    try {
+      setIsAddingSite(true);
+      const newSiteId = await addSite({
+        name: siteName.trim(),
+        address: "",
+        clientName: "",
+        contactPerson: "",
+        contactPhone: "",
+        contractValue: 0,
+        status: "active",
+      });
+
+      // Reload sites list
+      const updatedSites = await getAllSites();
+      setSites(updatedSites.filter(s => s.status === "active"));
+
+      // Select the newly added site
+      setFormData((prev) => ({
+        ...prev,
+        siteOfWork: siteName.trim(),
+      }));
+      setSitePopoverOpen(false);
+      setSiteSearchValue("");
+      toast.success(`Site "${siteName.trim()}" added successfully!`);
+    } catch (error) {
+      console.error("Error adding site:", error);
+      toast.error("Failed to add site. Please try again.");
+    } finally {
+      setIsAddingSite(false);
+    }
+  };
+
   // Convert DD.MM.YYYY to YYYY-MM-DD for date inputs
   const convertDateToInputFormat = (dateStr: string): string => {
     if (!dateStr) return "";
@@ -399,6 +458,8 @@ const Invoices = () => {
     setEditingPayrollId(null);
     setEmployeePopoverOpen(false);
     setEmployeeSearchValue("");
+    setSitePopoverOpen(false);
+    setSiteSearchValue("");
   };
 
   const handleEditPayroll = (payroll: Payroll) => {
@@ -548,43 +609,53 @@ const Invoices = () => {
   });
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Invoices</h2>
-          <p className="text-sm sm:text-base text-muted-foreground">Manage client invoices and payments</p>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-          <Button
-            variant="outline"
-            onClick={async () => {
-              try {
-                const monthLabel = dateRange?.from && dateRange?.to
-                  ? `${format(dateRange.from, "MMM dd, yyyy")} - ${format(dateRange.to, "MMM dd, yyyy")}`
-                  : dateRange?.from
-                  ? format(dateRange.from, "MMMM yyyy")
-                  : new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" });
-                
-                await generateMonthlyReport(filteredPayrolls, monthLabel, "/logo/skillcityyy.png");
-                toast.success("Monthly report downloaded successfully!");
-              } catch (error: any) {
-                console.error("Error generating report:", error);
-                toast.error(error.message || "Failed to generate report. Please try again.");
-              }
-            }}
-            disabled={isLoading || filteredPayrolls.length === 0}
-          >
-            <Download className="mr-2 h-4 w-4" />
-            Download Monthly Report
-          </Button>
+    <div className="space-y-6 sm:space-y-8">
+      {/* Modern Header Section */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-green-500/10 via-emerald-500/5 to-background border border-green-500/20 p-6 sm:p-8">
+        <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+        <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="space-y-2">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+              Invoices
+            </h2>
+            <p className="text-sm sm:text-base text-muted-foreground">Manage client invoices and payments efficiently</p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <Button
+              variant="outline"
+              onClick={async () => {
+                try {
+                  const monthLabel = dateRange?.from && dateRange?.to
+                    ? `${format(dateRange.from, "MMM dd, yyyy")} - ${format(dateRange.to, "MMM dd, yyyy")}`
+                    : dateRange?.from
+                    ? format(dateRange.from, "MMMM yyyy")
+                    : new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+                  
+                  await generateMonthlyReport(filteredPayrolls, monthLabel, "/logo/skillcityyy.png");
+                  toast.success("Monthly report downloaded successfully!");
+                } catch (error: any) {
+                  console.error("Error generating report:", error);
+                  toast.error(error.message || "Failed to generate report. Please try again.");
+                }
+              }}
+              disabled={isLoading || filteredPayrolls.length === 0}
+              className="shadow-md hover:shadow-lg transition-all duration-300 border-2"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Download Monthly Report
+            </Button>
+          </div>
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Active Invoices</CardTitle>
+      <Card className="border-2 shadow-xl">
+        <CardHeader className="bg-gradient-to-r from-green-500/10 via-emerald-500/5 to-muted/30 border-b-2">
+          <div>
+            <CardTitle className="text-xl font-bold">Active Invoices</CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">View and manage all active invoice records</p>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           <div className="flex gap-4 flex-wrap items-end mb-6">
             <div className="flex-1 min-w-[200px]">
               <SearchFilter
@@ -599,7 +670,7 @@ const Invoices = () => {
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
-                  className="w-[280px] justify-start text-left font-normal"
+                  className="w-[280px] justify-start text-left font-normal border-2 hover:border-primary transition-all duration-200"
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
                   {dateRange?.from ? (
@@ -629,21 +700,19 @@ const Invoices = () => {
             </Popover>
           </div>
 
-          <div className="rounded-md border overflow-x-auto">
+          <div className="rounded-xl border-2 overflow-x-auto shadow-lg">
             <Table>
               <TableHeader>
-                <TableRow className="bg-green-50 dark:bg-green-950">
-                  <TableHead>Invoice #</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Site of Work</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>GST</TableHead>
-                  <TableHead>Total</TableHead>
-                  <TableHead>Issue Date</TableHead>
-                  <TableHead>Due Date</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Payment Method</TableHead>
-                  <TableHead>Payment Date</TableHead>
+                <TableRow className="bg-gradient-to-r from-green-500/20 via-emerald-500/10 to-green-500/5 border-b-2">
+                  <TableHead className="font-bold text-foreground">Invoice #</TableHead>
+                  <TableHead className="font-bold text-foreground">Name</TableHead>
+                  <TableHead className="font-bold text-foreground">Site of Work</TableHead>
+                  <TableHead className="font-bold text-foreground">Amount</TableHead>
+                  <TableHead className="font-bold text-foreground">GST</TableHead>
+                  <TableHead className="font-bold text-foreground">Total</TableHead>
+                  <TableHead className="font-bold text-foreground">Date</TableHead>
+                  <TableHead className="font-bold text-foreground">Status</TableHead>
+                  <TableHead className="font-bold text-foreground">Payment Method</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -672,22 +741,16 @@ const Invoices = () => {
                         <Skeleton className="h-4 w-24" />
                       </TableCell>
                       <TableCell>
-                        <Skeleton className="h-4 w-16" />
-                      </TableCell>
-                      <TableCell>
                         <Skeleton className="h-5 w-16 rounded-full" />
                       </TableCell>
                       <TableCell>
                         <Skeleton className="h-5 w-24 rounded-full" />
                       </TableCell>
-                      <TableCell>
-                        <Skeleton className="h-4 w-24" />
-                      </TableCell>
                     </TableRow>
                   ))
                 ) : filteredPayrolls.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center py-8 text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                       No records found
                     </TableCell>
                   </TableRow>
@@ -695,39 +758,59 @@ const Invoices = () => {
                   filteredPayrolls.map((payroll) => (
                     <TableRow 
                       key={payroll.id}
-                      className="cursor-pointer hover:bg-muted/50"
+                      className="cursor-pointer hover:bg-gradient-to-r hover:from-green-500/5 hover:to-transparent transition-all duration-200 border-b group"
                       onClick={() => handleEditPayroll(payroll)}
                     >
-                      <TableCell className="font-medium">{payroll.invoiceNumber || "-"}</TableCell>
-                      <TableCell className="font-medium">{payroll.name || "-"}</TableCell>
-                      <TableCell>{payroll.siteOfWork || "-"}</TableCell>
-                      <TableCell>${payroll.amountExclGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                      <TableCell>${payroll.gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="font-semibold">${payroll.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                      <TableCell>{formatDate(payroll.date)}</TableCell>
+                      <TableCell className="font-semibold">
+                        {payroll.invoiceNumber ? (
+                          <span className="px-2 py-1 rounded-md bg-primary/10 text-primary font-mono text-sm">
+                            {payroll.invoiceNumber}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-semibold">{payroll.name || "-"}</TableCell>
                       <TableCell>
-                        {payroll.paymentDate 
-                          ? formatDate(payroll.paymentDate)
-                          : payroll.date && payroll.paymentCycle
-                          ? formatDate(calculatePaymentDate(payroll.date, payroll.paymentCycle))
-                          : "-"}
+                        {payroll.siteOfWork ? (
+                          <Badge variant="outline" className="text-xs">
+                            {payroll.siteOfWork}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-medium text-foreground">
+                          ${payroll.amountExclGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-muted-foreground">
+                          ${payroll.gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </TableCell>
+                      <TableCell className="font-bold text-green-600 dark:text-green-400">
+                        ${payroll.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm font-medium">{formatDate(payroll.date)}</span>
                       </TableCell>
                       <TableCell>
                         <StatusBadge status={payroll.status} />
                       </TableCell>
                       <TableCell>
                         {payroll.paymentMethod ? (
-                          <Badge variant="outline">
+                          <Badge variant="outline" className="text-xs">
                             {payroll.paymentMethod === "bank_transfer" ? "Bank Transfer" :
                              payroll.paymentMethod === "cash" ? "Cash" :
                              payroll.paymentMethod === "cheque" ? "Cheque" :
                              payroll.paymentMethod === "credit_card" ? "Credit Card" : "Other"}
                           </Badge>
                         ) : (
-                          "-"
+                          <span className="text-muted-foreground">-</span>
                         )}
                       </TableCell>
-                      <TableCell>{payroll.paymentDate ? formatDate(payroll.paymentDate) : "-"}</TableCell>
                     </TableRow>
                   ))
                 )}
@@ -883,21 +966,83 @@ const Invoices = () => {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-siteOfWork">Site of Work</Label>
-                <Select
-                  value={formData.siteOfWork}
-                  onValueChange={(value) => handleInputChange("siteOfWork", value)}
-                >
-                  <SelectTrigger id="edit-siteOfWork">
-                    <SelectValue placeholder="Select site" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {sites.map((site) => (
-                      <SelectItem key={site.id} value={site.name}>
-                        {site.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Popover open={sitePopoverOpen} onOpenChange={setSitePopoverOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={sitePopoverOpen}
+                      className="w-full justify-between"
+                    >
+                      {formData.siteOfWork || "Select site..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[350px] p-0" align="start">
+                    <Command>
+                      <CommandInput 
+                        placeholder="Search site..." 
+                        value={siteSearchValue}
+                        onValueChange={setSiteSearchValue}
+                      />
+                      <CommandList>
+                        <CommandGroup>
+                          {sites
+                            .filter(site => 
+                              !siteSearchValue || 
+                              site.name.toLowerCase().includes(siteSearchValue.toLowerCase())
+                            )
+                            .map((site) => (
+                              <CommandItem
+                                key={site.id}
+                                value={site.name}
+                                onSelect={() => handleSiteSelect(site.name)}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    formData.siteOfWork === site.name
+                                      ? "opacity-100"
+                                      : "opacity-0"
+                                  )}
+                                />
+                                {site.name}
+                              </CommandItem>
+                            ))}
+                        </CommandGroup>
+                        {siteSearchValue && 
+                         !sites.some(site => 
+                           site.name.toLowerCase() === siteSearchValue.trim().toLowerCase()
+                         ) && 
+                         siteSearchValue.trim().length > 0 && (
+                          <CommandGroup>
+                            <CommandItem
+                              value={`add-${siteSearchValue}`}
+                              onSelect={() => handleAddNewSite(siteSearchValue)}
+                              disabled={isAddingSite}
+                              className="text-primary"
+                            >
+                              {isAddingSite ? (
+                                <>
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                  Adding...
+                                </>
+                              ) : (
+                                <>
+                                  <Plus className="mr-2 h-4 w-4" />
+                                  Add "{siteSearchValue}"
+                                </>
+                              )}
+                            </CommandItem>
+                          </CommandGroup>
+                        )}
+                        {!siteSearchValue && sites.length === 0 && (
+                          <CommandEmpty>No sites found.</CommandEmpty>
+                        )}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
 

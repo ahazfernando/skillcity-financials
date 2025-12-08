@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Search, Plus, Loader2, Trash2, Edit2, Check, X, Receipt } from "lucide-react";
+import { Search, Plus, Loader2, Trash2, Edit2, Check, X, Receipt, Clock, FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -282,49 +282,89 @@ const Expenses = () => {
     .reduce((sum, exp) => sum + exp.amount, 0);
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Expenses</h2>
-          <p className="text-sm sm:text-base text-muted-foreground">Track and manage business expenses</p>
+    <div className="space-y-6 sm:space-y-8">
+      {/* Modern Header Section */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-orange-500/10 via-amber-500/5 to-background border border-orange-500/20 p-6 sm:p-8">
+        <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+        <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="space-y-2">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+              Expenses
+            </h2>
+            <p className="text-sm sm:text-base text-muted-foreground">Track and manage business expenses efficiently</p>
+          </div>
+          <Button 
+            onClick={handleAddExpense} 
+            className="w-full sm:w-auto shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
+            size="lg"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Expense
+          </Button>
         </div>
-        <Button onClick={handleAddExpense} className="w-full sm:w-auto">
-          <Plus className="mr-2 h-4 w-4" />
-          Add Expense
-        </Button>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid gap-3 sm:gap-4 grid-cols-1 sm:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
+      {/* Enhanced Summary Cards */}
+      <div className="grid gap-6 grid-cols-1 sm:grid-cols-3">
+        <Card className="relative overflow-hidden bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20 border-2 border-blue-200 dark:border-blue-900/50 shadow-xl hover:shadow-2xl transition-all duration-300 p-0 rounded-2xl group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-400/20 rounded-full -mr-16 -mt-16 group-hover:bg-blue-400/30 transition-colors"></div>
+          <CardHeader className="relative px-6 pt-6">
+            <div className="flex items-start justify-between">
+              <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg">
+                <Receipt className="h-6 w-6 text-white" />
+              </div>
+            </div>
+            <CardTitle className="text-sm font-semibold mt-4 text-muted-foreground uppercase tracking-wide">Total Expenses</CardTitle>
+            <div className="text-3xl font-bold text-blue-700 dark:text-blue-400 mt-2">
+              ${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          <CardContent className="bg-blue-50/50 dark:bg-blue-950/20 rounded-b-2xl px-6 py-4 border-t border-blue-200 dark:border-blue-900/50">
+            <p className="text-xs text-muted-foreground font-medium">All expense records</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Pending Approval</CardTitle>
+        <Card className="relative overflow-hidden bg-gradient-to-br from-amber-50 to-amber-100/50 dark:from-amber-950/30 dark:to-amber-900/20 border-2 border-amber-200 dark:border-amber-900/50 shadow-xl hover:shadow-2xl transition-all duration-300 p-0 rounded-2xl group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-amber-400/20 rounded-full -mr-16 -mt-16 group-hover:bg-amber-400/30 transition-colors"></div>
+          <CardHeader className="relative px-6 pt-6">
+            <div className="flex items-start justify-between">
+              <div className="p-3 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 shadow-lg">
+                <Clock className="h-6 w-6 text-white" />
+              </div>
+            </div>
+            <CardTitle className="text-sm font-semibold mt-4 text-muted-foreground uppercase tracking-wide">Pending Approval</CardTitle>
+            <div className="text-3xl font-bold text-amber-700 dark:text-amber-400 mt-2">
+              ${pendingAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-warning">${pendingAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          <CardContent className="bg-amber-50/50 dark:bg-amber-950/20 rounded-b-2xl px-6 py-4 border-t border-amber-200 dark:border-amber-900/50">
+            <p className="text-xs text-muted-foreground font-medium">Awaiting admin approval</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium">Total Records</CardTitle>
+        <Card className="relative overflow-hidden bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-950/30 dark:to-purple-900/20 border-2 border-purple-200 dark:border-purple-900/50 shadow-xl hover:shadow-2xl transition-all duration-300 p-0 rounded-2xl group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-purple-400/20 rounded-full -mr-16 -mt-16 group-hover:bg-purple-400/30 transition-colors"></div>
+          <CardHeader className="relative px-6 pt-6">
+            <div className="flex items-start justify-between">
+              <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 shadow-lg">
+                <FileText className="h-6 w-6 text-white" />
+              </div>
+            </div>
+            <CardTitle className="text-sm font-semibold mt-4 text-muted-foreground uppercase tracking-wide">Total Records</CardTitle>
+            <div className="text-3xl font-bold text-purple-700 dark:text-purple-400 mt-2">
+              {filteredExpenses.length}
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{filteredExpenses.length}</div>
+          <CardContent className="bg-purple-50/50 dark:bg-purple-950/20 rounded-b-2xl px-6 py-4 border-t border-purple-200 dark:border-purple-900/50">
+            <p className="text-xs text-muted-foreground font-medium">Expense entries</p>
           </CardContent>
         </Card>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Expense List</CardTitle>
+      <Card className="border-2 shadow-xl">
+        <CardHeader className="bg-gradient-to-r from-orange-500/10 via-amber-500/5 to-muted/30 border-b-2">
+          <div>
+            <CardTitle className="text-xl font-bold">Expense List</CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">View and manage all expense records</p>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -361,17 +401,17 @@ const Expenses = () => {
             </Select>
           </div>
 
-          <div className="rounded-md border overflow-x-auto">
+          <div className="rounded-xl border-2 overflow-x-auto shadow-lg">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead className="min-w-[120px]">Date</TableHead>
-                  <TableHead className="min-w-[150px]">Description</TableHead>
-                  <TableHead className="min-w-[120px]">Category</TableHead>
-                  <TableHead className="min-w-[100px]">Amount</TableHead>
-                  <TableHead className="min-w-[120px]">Vendor</TableHead>
-                  <TableHead className="min-w-[100px]">Status</TableHead>
-                  <TableHead className="min-w-[150px]">Actions</TableHead>
+                <TableRow className="bg-gradient-to-r from-orange-500/20 via-amber-500/10 to-orange-500/5 border-b-2">
+                  <TableHead className="min-w-[120px] font-bold text-foreground">Date</TableHead>
+                  <TableHead className="min-w-[150px] font-bold text-foreground">Description</TableHead>
+                  <TableHead className="min-w-[120px] font-bold text-foreground">Category</TableHead>
+                  <TableHead className="min-w-[100px] font-bold text-foreground">Amount</TableHead>
+                  <TableHead className="min-w-[120px] font-bold text-foreground">Vendor</TableHead>
+                  <TableHead className="min-w-[100px] font-bold text-foreground">Status</TableHead>
+                  <TableHead className="min-w-[150px] font-bold text-foreground">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -392,20 +432,37 @@ const Expenses = () => {
                   </TableRow>
                 ) : (
                   paginatedExpenses.map((expense) => (
-                    <TableRow key={expense.id}>
-                      <TableCell>{expense.date}</TableCell>
-                      <TableCell className="font-medium">{expense.description}</TableCell>
-                      <TableCell>{categoryLabels[expense.category]}</TableCell>
-                      <TableCell>${expense.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
-                      <TableCell>{expense.vendor || "-"}</TableCell>
+                    <TableRow 
+                      key={expense.id}
+                      className="hover:bg-gradient-to-r hover:from-orange-500/5 hover:to-transparent transition-all duration-200 border-b"
+                    >
+                      <TableCell>
+                        <span className="text-sm">{expense.date}</span>
+                      </TableCell>
+                      <TableCell className="font-semibold">{expense.description}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {categoryLabels[expense.category]}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-bold text-blue-600 dark:text-blue-400">
+                        ${expense.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </TableCell>
+                      <TableCell>
+                        {expense.vendor ? (
+                          <span className="text-sm">{expense.vendor}</span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge
                           className={
                             expense.status === "approved"
-                              ? "bg-success"
+                              ? "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20"
                               : expense.status === "rejected"
-                              ? "bg-destructive"
-                              : "bg-warning"
+                              ? "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20"
+                              : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
                           }
                         >
                           {expense.status}
@@ -417,9 +474,9 @@ const Expenses = () => {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleEditExpense(expense)}
-                            className="h-8 w-8 p-0"
+                            className="h-8 w-8 p-0 hover:bg-primary/10 transition-all duration-200"
                           >
-                            <Edit2 className="h-4 w-4" />
+                            <Edit2 className="h-4 w-4 text-primary" />
                           </Button>
                           {isAdmin && expense.status === "pending" && (
                             <>
@@ -427,7 +484,7 @@ const Expenses = () => {
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleApproveExpense(expense.id)}
-                                className="h-8 w-8 p-0 text-success hover:text-success"
+                                className="h-8 w-8 p-0 text-green-600 dark:text-green-400 hover:bg-green-500/10 transition-all duration-200"
                               >
                                 <Check className="h-4 w-4" />
                               </Button>
@@ -435,7 +492,7 @@ const Expenses = () => {
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handleRejectExpense(expense.id)}
-                                className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                                className="h-8 w-8 p-0 text-red-600 dark:text-red-400 hover:bg-red-500/10 transition-all duration-200"
                               >
                                 <X className="h-4 w-4" />
                               </Button>
@@ -445,7 +502,7 @@ const Expenses = () => {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDeleteExpense(expense)}
-                            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                            className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10 transition-all duration-200"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -672,6 +729,7 @@ const Expenses = () => {
 };
 
 export default Expenses;
+
 
 
 

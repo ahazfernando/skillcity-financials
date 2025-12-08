@@ -356,21 +356,34 @@ const Sites = () => {
   });
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Sites</h2>
-          <p className="text-sm sm:text-base text-muted-foreground">Manage cleaning sites and locations</p>
+    <div className="space-y-6 sm:space-y-8">
+      {/* Modern Header Section */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-teal-500/10 via-cyan-500/5 to-background border border-teal-500/20 p-6 sm:p-8">
+        <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+        <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="space-y-2">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+              Sites
+            </h2>
+            <p className="text-sm sm:text-base text-muted-foreground">Manage cleaning sites and locations efficiently</p>
+          </div>
+          <Button 
+            onClick={handleAddSite} 
+            className="w-full sm:w-auto shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
+            size="lg"
+          >
+            <Building2 className="mr-2 h-4 w-4" />
+            Add Site
+          </Button>
         </div>
-        <Button onClick={handleAddSite} className="w-full sm:w-auto">
-          <Building2 className="mr-2 h-4 w-4" />
-          Add Site
-        </Button>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Site List</CardTitle>
+      <Card className="border-2 shadow-xl">
+        <CardHeader className="bg-gradient-to-r from-teal-500/10 via-cyan-500/5 to-muted/30 border-b-2">
+          <div>
+            <CardTitle className="text-xl font-bold">Site List</CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">View and manage all cleaning sites</p>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="relative mb-6">
@@ -383,17 +396,17 @@ const Sites = () => {
             />
           </div>
 
-          <div className="rounded-md border">
+          <div className="rounded-xl border-2 overflow-x-auto shadow-lg">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Site Name</TableHead>
-                  <TableHead>Working Days</TableHead>
-                  <TableHead>Invoicing Hours</TableHead>
-                  <TableHead>Hourly Rate</TableHead>
-                  <TableHead>Day Rate</TableHead>
-                  <TableHead>Frequency</TableHead>
-                  <TableHead>Status</TableHead>
+                <TableRow className="bg-gradient-to-r from-teal-500/20 via-cyan-500/10 to-teal-500/5 border-b-2">
+                  <TableHead className="font-bold text-foreground">Site Name</TableHead>
+                  <TableHead className="font-bold text-foreground">Working Days</TableHead>
+                  <TableHead className="font-bold text-foreground">Invoicing Hours</TableHead>
+                  <TableHead className="font-bold text-foreground">Hourly Rate</TableHead>
+                  <TableHead className="font-bold text-foreground">Day Rate</TableHead>
+                  <TableHead className="font-bold text-foreground">Frequency</TableHead>
+                  <TableHead className="font-bold text-foreground">Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -416,15 +429,15 @@ const Sites = () => {
                   filteredSites.map((site) => (
                     <TableRow 
                       key={site.id}
-                      className="cursor-pointer hover:bg-muted/50"
+                      className="cursor-pointer hover:bg-gradient-to-r hover:from-teal-500/5 hover:to-transparent transition-all duration-200 border-b"
                       onClick={() => handleEditSite(site)}
                     >
-                      <TableCell className="font-medium">{site.name}</TableCell>
+                      <TableCell className="font-semibold">{site.name}</TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {site.workingDays && site.workingDays.length > 0 ? (
                             site.workingDays.map((day) => (
-                              <Badge key={day} variant="outline" className="text-xs">
+                              <Badge key={day} variant="outline" className="text-xs bg-teal-50 dark:bg-teal-950/30 border-teal-200 dark:border-teal-900/50">
                                 {day.slice(0, 3)}
                               </Badge>
                             ))
@@ -434,36 +447,64 @@ const Sites = () => {
                         </div>
                       </TableCell>
                       <TableCell>
-                        {site.invoicingWorkingHours ? `${site.invoicingWorkingHours}Hrs/day` : "-"}
+                        {site.invoicingWorkingHours ? (
+                          <Badge variant="outline" className="text-xs">
+                            {site.invoicingWorkingHours}Hrs/day
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
                       </TableCell>
                       <TableCell>
-                        {site.hourlyRate ? `$${site.hourlyRate}` : "-"}
+                        {site.hourlyRate ? (
+                          <span className="font-medium text-blue-600 dark:text-blue-400">
+                            ${site.hourlyRate}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
                       </TableCell>
                       <TableCell>
-                        {site.dayRate ? `$${site.dayRate.toLocaleString()}` : "-"}
+                        {site.dayRate ? (
+                          <span className="font-medium text-green-600 dark:text-green-400">
+                            ${site.dayRate.toLocaleString()}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
                       </TableCell>
                       <TableCell>
-                        {site.invoicingFrequency || "-"}
+                        {site.invoicingFrequency ? (
+                          <Badge variant="outline" className="text-xs">
+                            {site.invoicingFrequency}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
                       </TableCell>
                       <TableCell onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center gap-2">
-                          <Badge className={site.status === "active" ? "bg-success" : "bg-muted"}>
+                          <Badge 
+                            className={site.status === "active" 
+                              ? "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20" 
+                              : "bg-muted text-muted-foreground"}
+                          >
                             {site.status}
                           </Badge>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleViewEmployees(site)}
-                            className="h-8 w-8 p-0"
+                            className="h-8 w-8 p-0 hover:bg-primary/10 transition-all duration-200"
                             title="View employees"
                           >
-                            <Users className="h-4 w-4" />
+                            <Users className="h-4 w-4 text-primary" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => handleDeleteSite(site)}
-                            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                            className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10 transition-all duration-200"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>

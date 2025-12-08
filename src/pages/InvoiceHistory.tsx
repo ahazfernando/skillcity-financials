@@ -232,162 +232,176 @@ const InvoiceHistory = () => {
   const totalProfit = totalRevenue - totalExpenses;
 
   return (
-    <div className="space-y-4 sm:space-y-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Invoice History</h2>
-          <p className="text-sm sm:text-base text-muted-foreground">View historical invoices and monthly cash flow</p>
-        </div>
-        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-          <Button
-            variant="outline"
-            onClick={async () => {
-              try {
-                setIsLoading(true);
-                // Refresh data before generating report
-                const fetchedPayrolls = await getPayrollsByHistoryStatus(true);
-                setPayrolls(fetchedPayrolls);
-                
-                const monthLabel = dateRange?.from && dateRange?.to
-                  ? `${format(dateRange.from, "MMM dd, yyyy")} - ${format(dateRange.to, "MMM dd, yyyy")}`
-                  : dateRange?.from
-                  ? format(dateRange.from, "MMMM yyyy")
-                  : "All History";
-                
-                await generateMonthlyReport(fetchedPayrolls, monthLabel, "/logo/skillcityyy.png");
-                toast.success("Monthly report downloaded successfully!");
-              } catch (error: any) {
-                console.error("Error generating report:", error);
-                toast.error(error.message || "Failed to generate report. Please try again.");
-              } finally {
-                setIsLoading(false);
-              }
-            }}
-            disabled={isLoading || filteredPayrolls.length === 0}
-          >
-            <Download className="mr-2 h-4 w-4" />
-            Download Report
-          </Button>
-          <Button
-            variant="outline"
-            onClick={async () => {
-              try {
-                setIsLoading(true);
-                // Force refresh by moving paid invoices and reloading
-                await movePaidInvoicesToHistory();
-                const [fetchedPayrolls, fetchedInvoices] = await Promise.all([
-                  getPayrollsByHistoryStatus(true),
-                  getAllInvoices()
-                ]);
-                setPayrolls(fetchedPayrolls);
-                setInvoices(fetchedInvoices);
-                toast.success(`Refreshed! Loaded ${fetchedPayrolls.length} payroll and ${fetchedInvoices.length} invoice records.`);
-              } catch (error) {
-                console.error("Error refreshing data:", error);
-                toast.error("Failed to refresh data. Please try again.");
-              } finally {
-                setIsLoading(false);
-              }
-            }}
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Refreshing...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Refresh
-              </>
-            )}
-          </Button>
+    <div className="space-y-6 sm:space-y-8">
+      {/* Modern Header Section */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-purple-500/10 via-indigo-500/5 to-background border border-purple-500/20 p-6 sm:p-8">
+        <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
+        <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="space-y-2">
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+              Invoice History
+            </h2>
+            <p className="text-sm sm:text-base text-muted-foreground">View historical invoices and monthly cash flow analytics</p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <Button
+              variant="outline"
+              onClick={async () => {
+                try {
+                  setIsLoading(true);
+                  // Refresh data before generating report
+                  const fetchedPayrolls = await getPayrollsByHistoryStatus(true);
+                  setPayrolls(fetchedPayrolls);
+                  
+                  const monthLabel = dateRange?.from && dateRange?.to
+                    ? `${format(dateRange.from, "MMM dd, yyyy")} - ${format(dateRange.to, "MMM dd, yyyy")}`
+                    : dateRange?.from
+                    ? format(dateRange.from, "MMMM yyyy")
+                    : "All History";
+                  
+                  await generateMonthlyReport(fetchedPayrolls, monthLabel, "/logo/skillcityyy.png");
+                  toast.success("Monthly report downloaded successfully!");
+                } catch (error: any) {
+                  console.error("Error generating report:", error);
+                  toast.error(error.message || "Failed to generate report. Please try again.");
+                } finally {
+                  setIsLoading(false);
+                }
+              }}
+              disabled={isLoading || filteredPayrolls.length === 0}
+              className="shadow-md hover:shadow-lg transition-all duration-300 border-2"
+            >
+              <Download className="mr-2 h-4 w-4" />
+              Download Report
+            </Button>
+            <Button
+              variant="outline"
+              onClick={async () => {
+                try {
+                  setIsLoading(true);
+                  // Force refresh by moving paid invoices and reloading
+                  await movePaidInvoicesToHistory();
+                  const [fetchedPayrolls, fetchedInvoices] = await Promise.all([
+                    getPayrollsByHistoryStatus(true),
+                    getAllInvoices()
+                  ]);
+                  setPayrolls(fetchedPayrolls);
+                  setInvoices(fetchedInvoices);
+                  toast.success(`Refreshed! Loaded ${fetchedPayrolls.length} payroll and ${fetchedInvoices.length} invoice records.`);
+                } catch (error) {
+                  console.error("Error refreshing data:", error);
+                  toast.error("Failed to refresh data. Please try again.");
+                } finally {
+                  setIsLoading(false);
+                }
+              }}
+              disabled={isLoading}
+              className="shadow-md hover:shadow-lg transition-all duration-300 border-2"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Refreshing...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Refresh
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </div>
 
-      {/* Profit Summary Cards */}
+      {/* Enhanced Profit Summary Cards */}
       <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        <Card className="relative overflow-hidden bg-card border shadow-lg p-0 rounded-[32px]">
+        <Card className="relative overflow-hidden bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950/30 dark:to-green-900/20 border-2 border-green-200 dark:border-green-900/50 shadow-xl hover:shadow-2xl transition-all duration-300 p-0 rounded-2xl group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-green-400/20 rounded-full -mr-16 -mt-16 group-hover:bg-green-400/30 transition-colors"></div>
           <CardHeader className="relative px-6 pt-6">
             <div className="flex items-start justify-between">
-              <div className="p-3 rounded-lg bg-green-500/10 dark:bg-green-500/20">
-                <TrendingUp className="h-6 w-6 text-green-600 dark:text-green-400" />
+              <div className="p-3 rounded-xl bg-gradient-to-br from-green-500 to-green-600 shadow-lg">
+                <TrendingUp className="h-6 w-6 text-white" />
               </div>
             </div>
-            <CardTitle className="text-sm font-medium mt-4 text-muted-foreground">Total Revenue</CardTitle>
-            <div className="text-3xl font-bold text-green-600 dark:text-green-400 mt-2">
+            <CardTitle className="text-sm font-semibold mt-4 text-muted-foreground uppercase tracking-wide">Total Revenue</CardTitle>
+            <div className="text-3xl font-bold text-green-700 dark:text-green-400 mt-2">
               {formatCurrency(totalRevenue)}
             </div>
           </CardHeader>
-          <CardContent className="bg-muted/30 dark:bg-muted/20 rounded-b-[32px] px-6 py-4 border-t">
-            <p className="text-xs text-muted-foreground">From received invoices</p>
+          <CardContent className="bg-green-50/50 dark:bg-green-950/20 rounded-b-2xl px-6 py-4 border-t border-green-200 dark:border-green-900/50">
+            <p className="text-xs text-muted-foreground font-medium">From received invoices</p>
           </CardContent>
         </Card>
-        <Card className="relative overflow-hidden bg-card border shadow-lg p-0 rounded-[32px]">
+        <Card className="relative overflow-hidden bg-gradient-to-br from-red-50 to-red-100/50 dark:from-red-950/30 dark:to-red-900/20 border-2 border-red-200 dark:border-red-900/50 shadow-xl hover:shadow-2xl transition-all duration-300 p-0 rounded-2xl group">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-red-400/20 rounded-full -mr-16 -mt-16 group-hover:bg-red-400/30 transition-colors"></div>
           <CardHeader className="relative px-6 pt-6">
             <div className="flex items-start justify-between">
-              <div className="p-3 rounded-lg bg-red-500/10 dark:bg-red-500/20">
-                <TrendingDown className="h-6 w-6 text-red-600 dark:text-red-400" />
+              <div className="p-3 rounded-xl bg-gradient-to-br from-red-500 to-red-600 shadow-lg">
+                <TrendingDown className="h-6 w-6 text-white" />
               </div>
             </div>
-            <CardTitle className="text-sm font-medium mt-4 text-muted-foreground">Total Expenses</CardTitle>
-            <div className="text-3xl font-bold text-red-600 dark:text-red-400 mt-2">
+            <CardTitle className="text-sm font-semibold mt-4 text-muted-foreground uppercase tracking-wide">Total Expenses</CardTitle>
+            <div className="text-3xl font-bold text-red-700 dark:text-red-400 mt-2">
               {formatCurrency(totalExpenses)}
             </div>
           </CardHeader>
-          <CardContent className="bg-muted/30 dark:bg-muted/20 rounded-b-[32px] px-6 py-4 border-t">
-            <p className="text-xs text-muted-foreground">From received payroll outflows</p>
+          <CardContent className="bg-red-50/50 dark:bg-red-950/20 rounded-b-2xl px-6 py-4 border-t border-red-200 dark:border-red-900/50">
+            <p className="text-xs text-muted-foreground font-medium">From received payroll outflows</p>
           </CardContent>
         </Card>
-        <Card className="relative overflow-hidden bg-card border shadow-lg p-0 rounded-[32px]">
+        <Card className={`relative overflow-hidden bg-gradient-to-br ${totalProfit >= 0 ? 'from-green-50 to-emerald-100/50 dark:from-green-950/30 dark:to-emerald-900/20 border-2 border-green-200 dark:border-green-900/50' : 'from-red-50 to-rose-100/50 dark:from-red-950/30 dark:to-rose-900/20 border-2 border-red-200 dark:border-red-900/50'} shadow-xl hover:shadow-2xl transition-all duration-300 p-0 rounded-2xl group`}>
+          <div className={`absolute top-0 right-0 w-32 h-32 ${totalProfit >= 0 ? 'bg-green-400/20 group-hover:bg-green-400/30' : 'bg-red-400/20 group-hover:bg-red-400/30'} rounded-full -mr-16 -mt-16 transition-colors`}></div>
           <CardHeader className="relative px-6 pt-6">
             <div className="flex items-start justify-between">
-              <div className={`p-3 rounded-lg ${totalProfit >= 0 ? 'bg-green-500/10 dark:bg-green-500/20' : 'bg-red-500/10 dark:bg-red-500/20'}`}>
-                <DollarSign className={`h-6 w-6 ${totalProfit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`} />
+              <div className={`p-3 rounded-xl bg-gradient-to-br ${totalProfit >= 0 ? 'from-green-500 to-green-600' : 'from-red-500 to-red-600'} shadow-lg`}>
+                <DollarSign className="h-6 w-6 text-white" />
               </div>
             </div>
-            <CardTitle className="text-sm font-medium mt-4 text-muted-foreground">Net Profit</CardTitle>
-            <div className={`text-3xl font-bold mt-2 ${totalProfit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+            <CardTitle className="text-sm font-semibold mt-4 text-muted-foreground uppercase tracking-wide">Net Profit</CardTitle>
+            <div className={`text-3xl font-bold mt-2 ${totalProfit >= 0 ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-400'}`}>
               {formatCurrency(totalProfit)}
             </div>
           </CardHeader>
-          <CardContent className="bg-muted/30 dark:bg-muted/20 rounded-b-[32px] px-6 py-4 border-t">
-            <p className="text-xs text-muted-foreground">Revenue minus expenses</p>
+          <CardContent className={`${totalProfit >= 0 ? 'bg-green-50/50 dark:bg-green-950/20 border-t border-green-200 dark:border-green-900/50' : 'bg-red-50/50 dark:bg-red-950/20 border-t border-red-200 dark:border-red-900/50'} rounded-b-2xl px-6 py-4`}>
+            <p className="text-xs text-muted-foreground font-medium">Revenue minus expenses</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Monthly Profit Summary Table */}
+      {/* Enhanced Monthly Profit Summary Table */}
       {monthlySummaries.length > 0 && (
-        <Card className="shadow-card border">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-lg font-semibold">Monthly Profit Summary</CardTitle>
-            <CardDescription>Revenue, expenses, and profit breakdown by month</CardDescription>
+        <Card className="border-2 shadow-xl">
+          <CardHeader className="bg-gradient-to-r from-purple-500/10 via-indigo-500/5 to-muted/30 border-b-2 pb-4">
+            <CardTitle className="text-xl font-bold">Monthly Profit Summary</CardTitle>
+            <CardDescription className="text-sm">Revenue, expenses, and profit breakdown by month</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="rounded-xl border overflow-x-auto">
+          <CardContent className="pt-6">
+            <div className="rounded-xl border-2 overflow-x-auto shadow-lg">
               <Table>
                 <TableHeader>
-                  <TableRow className="bg-green-50 dark:bg-green-950">
-                    <TableHead>Month</TableHead>
-                    <TableHead className="text-right">Revenue</TableHead>
-                    <TableHead className="text-right">Expenses</TableHead>
-                    <TableHead className="text-right">Profit</TableHead>
+                  <TableRow className="bg-gradient-to-r from-green-500/20 via-emerald-500/10 to-green-500/5 border-b-2">
+                    <TableHead className="font-bold text-foreground">Month</TableHead>
+                    <TableHead className="text-right font-bold text-foreground">Revenue</TableHead>
+                    <TableHead className="text-right font-bold text-foreground">Expenses</TableHead>
+                    <TableHead className="text-right font-bold text-foreground">Profit</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {monthlySummaries.map((summary, index) => {
                     return (
-                      <TableRow key={index} className="hover:bg-muted/50">
-                        <TableCell className="font-medium">{summary.month}</TableCell>
-                        <TableCell className="text-right text-green-600 dark:text-green-400 font-semibold">
+                      <TableRow 
+                        key={index} 
+                        className="hover:bg-gradient-to-r hover:from-green-500/5 hover:to-transparent transition-all duration-200 border-b"
+                      >
+                        <TableCell className="font-semibold">{summary.month}</TableCell>
+                        <TableCell className="text-right text-green-600 dark:text-green-400 font-bold">
                           {formatCurrency(summary.revenue)}
                         </TableCell>
-                        <TableCell className="text-right text-red-600 dark:text-red-400 font-semibold">
+                        <TableCell className="text-right text-red-600 dark:text-red-400 font-bold">
                           {formatCurrency(summary.expenses)}
                         </TableCell>
-                        <TableCell className={`text-right font-semibold ${summary.profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
+                        <TableCell className={`text-right font-bold ${summary.profit >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                           {formatCurrency(summary.profit)}
                         </TableCell>
                       </TableRow>
@@ -400,13 +414,13 @@ const InvoiceHistory = () => {
         </Card>
       )}
 
-      {/* Invoice History Table */}
-      <Card className="shadow-card border">
-        <CardHeader className="pb-4">
-          <CardTitle className="text-lg font-semibold">Invoice History</CardTitle>
-          <CardDescription>View all historical invoices and payments</CardDescription>
+      {/* Enhanced Invoice History Table */}
+      <Card className="border-2 shadow-xl">
+        <CardHeader className="bg-gradient-to-r from-purple-500/10 via-indigo-500/5 to-muted/30 border-b-2 pb-4">
+          <CardTitle className="text-xl font-bold">Invoice History</CardTitle>
+          <CardDescription className="text-sm">View all historical invoices and payments</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           <div className="flex gap-4 flex-wrap items-end mb-6">
             <div className="flex-1 min-w-[200px]">
               <SearchFilter
@@ -421,7 +435,7 @@ const InvoiceHistory = () => {
               <PopoverTrigger asChild>
                 <Button
                   variant="outline"
-                  className="w-[280px] justify-start text-left font-normal"
+                  className="w-[280px] justify-start text-left font-normal border-2 hover:border-primary transition-all duration-200"
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
                   {dateRange?.from ? (
@@ -451,22 +465,22 @@ const InvoiceHistory = () => {
             </Popover>
           </div>
 
-          <div className="rounded-xl border overflow-x-auto">
+          <div className="rounded-xl border-2 overflow-x-auto shadow-lg">
             <Table>
               <TableHeader>
-                <TableRow className="bg-green-50 dark:bg-green-950">
-                  <TableHead>Invoice #</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Site of Work</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>GST</TableHead>
-                  <TableHead>Total</TableHead>
-                  <TableHead>Issue Date</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Payment Method</TableHead>
-                  <TableHead>Payment Date</TableHead>
-                  <TableHead>Moved to History</TableHead>
+                <TableRow className="bg-gradient-to-r from-purple-500/20 via-indigo-500/10 to-purple-500/5 border-b-2">
+                  <TableHead className="font-bold text-foreground">Invoice #</TableHead>
+                  <TableHead className="font-bold text-foreground">Name</TableHead>
+                  <TableHead className="font-bold text-foreground">Site of Work</TableHead>
+                  <TableHead className="font-bold text-foreground">Type</TableHead>
+                  <TableHead className="font-bold text-foreground">Amount</TableHead>
+                  <TableHead className="font-bold text-foreground">GST</TableHead>
+                  <TableHead className="font-bold text-foreground">Total</TableHead>
+                  <TableHead className="font-bold text-foreground">Issue Date</TableHead>
+                  <TableHead className="font-bold text-foreground">Status</TableHead>
+                  <TableHead className="font-bold text-foreground">Payment Method</TableHead>
+                  <TableHead className="font-bold text-foreground">Payment Date</TableHead>
+                  <TableHead className="font-bold text-foreground">Moved to History</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -521,40 +535,85 @@ const InvoiceHistory = () => {
                   filteredPayrolls.map((payroll) => (
                     <TableRow 
                       key={payroll.id}
-                      className="hover:bg-muted/50 transition-colors"
+                      className="hover:bg-gradient-to-r hover:from-purple-500/5 hover:to-transparent transition-all duration-200 border-b group"
                     >
-                      <TableCell className="font-medium">{payroll.invoiceNumber || "-"}</TableCell>
-                      <TableCell className="font-medium">{payroll.name || "-"}</TableCell>
-                      <TableCell>{payroll.siteOfWork || "-"}</TableCell>
+                      <TableCell className="font-semibold">
+                        {payroll.invoiceNumber ? (
+                          <span className="px-2 py-1 rounded-md bg-primary/10 text-primary font-mono text-sm">
+                            {payroll.invoiceNumber}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-semibold">{payroll.name || "-"}</TableCell>
                       <TableCell>
-                        <Badge variant={payroll.modeOfCashFlow === "inflow" ? "default" : "secondary"}>
+                        {payroll.siteOfWork ? (
+                          <Badge variant="outline" className="text-xs">
+                            {payroll.siteOfWork}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant={payroll.modeOfCashFlow === "inflow" ? "default" : "secondary"}
+                          className={payroll.modeOfCashFlow === "inflow" 
+                            ? "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20" 
+                            : "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20"}
+                        >
                           {payroll.modeOfCashFlow === "inflow" ? "Inflow" : "Outflow"}
                         </Badge>
                       </TableCell>
-                      <TableCell>{formatCurrency(payroll.amountExclGst)}</TableCell>
-                      <TableCell>{formatCurrency(payroll.gstAmount)}</TableCell>
-                      <TableCell className="font-semibold">{formatCurrency(payroll.totalAmount)}</TableCell>
-                      <TableCell>{formatDate(payroll.date)}</TableCell>
+                      <TableCell>
+                        <span className="font-medium text-foreground">
+                          {formatCurrency(payroll.amountExclGst)}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm text-muted-foreground">
+                          {formatCurrency(payroll.gstAmount)}
+                        </span>
+                      </TableCell>
+                      <TableCell className="font-bold text-green-600 dark:text-green-400">
+                        {formatCurrency(payroll.totalAmount)}
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm">{formatDate(payroll.date)}</span>
+                      </TableCell>
                       <TableCell>
                         <StatusBadge status={payroll.status} />
                       </TableCell>
                       <TableCell>
                         {payroll.paymentMethod ? (
-                          <Badge variant="outline">
+                          <Badge variant="outline" className="text-xs">
                             {payroll.paymentMethod === "bank_transfer" ? "Bank Transfer" :
                              payroll.paymentMethod === "cash" ? "Cash" :
                              payroll.paymentMethod === "cheque" ? "Cheque" :
                              payroll.paymentMethod === "credit_card" ? "Credit Card" : "Other"}
                           </Badge>
                         ) : (
-                          "-"
+                          <span className="text-muted-foreground">-</span>
                         )}
                       </TableCell>
-                      <TableCell>{payroll.paymentDate ? formatDate(payroll.paymentDate) : "-"}</TableCell>
+                      <TableCell>
+                        {payroll.paymentDate ? (
+                          <span className="text-sm">{formatDate(payroll.paymentDate)}</span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         {payroll.movedToHistoryAt 
-                          ? formatDate(new Date(payroll.movedToHistoryAt).toISOString().split('T')[0])
-                          : "-"}
+                          ? (
+                            <span className="text-sm text-muted-foreground">
+                              {formatDate(new Date(payroll.movedToHistoryAt).toISOString().split('T')[0])}
+                            </span>
+                          )
+                          : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
                       </TableCell>
                     </TableRow>
                   ))
