@@ -200,7 +200,7 @@ const Expenses = () => {
     try {
       await updateExpense(expenseId, {
         status: "approved",
-        approvedBy: userData?.id || "",
+        approvedBy: userData?.uid || "",
         approvedAt: new Date().toISOString(),
       });
       toast.success("Expense approved successfully!");
