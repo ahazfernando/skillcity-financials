@@ -2,6 +2,7 @@
 
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Button } from "@/components/ui/button";
 import { LogOut, User } from "lucide-react";
@@ -97,11 +98,12 @@ export function Layout({ children }: LayoutProps) {
               <ThemeToggle />
             </div>
           </header>
-          <div className="p-3 sm:p-4 md:p-6">
+          <div className="p-3 sm:p-4 md:p-6 pb-20 md:pb-6">
             {children}
           </div>
         </main>
       </div>
+      <MobileBottomNav />
     </SidebarProvider>
   );
 }

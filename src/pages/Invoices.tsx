@@ -619,31 +619,31 @@ const Invoices = () => {
               Invoices
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground">Manage client invoices and payments efficiently</p>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            <Button
-              variant="outline"
-              onClick={async () => {
-                try {
-                  const monthLabel = dateRange?.from && dateRange?.to
-                    ? `${format(dateRange.from, "MMM dd, yyyy")} - ${format(dateRange.to, "MMM dd, yyyy")}`
-                    : dateRange?.from
-                    ? format(dateRange.from, "MMMM yyyy")
-                    : new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" });
-                  
-                  await generateMonthlyReport(filteredPayrolls, monthLabel, "/logo/skillcityyy.png");
-                  toast.success("Monthly report downloaded successfully!");
-                } catch (error: any) {
-                  console.error("Error generating report:", error);
-                  toast.error(error.message || "Failed to generate report. Please try again.");
-                }
-              }}
-              disabled={isLoading || filteredPayrolls.length === 0}
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <Button
+            variant="outline"
+            onClick={async () => {
+              try {
+                const monthLabel = dateRange?.from && dateRange?.to
+                  ? `${format(dateRange.from, "MMM dd, yyyy")} - ${format(dateRange.to, "MMM dd, yyyy")}`
+                  : dateRange?.from
+                  ? format(dateRange.from, "MMMM yyyy")
+                  : new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" });
+                
+                await generateMonthlyReport(filteredPayrolls, monthLabel, "/logo/skillcityyy.png");
+                toast.success("Monthly report downloaded successfully!");
+              } catch (error: any) {
+                console.error("Error generating report:", error);
+                toast.error(error.message || "Failed to generate report. Please try again.");
+              }
+            }}
+            disabled={isLoading || filteredPayrolls.length === 0}
               className="shadow-md hover:shadow-lg transition-all duration-300 border-2"
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Download Monthly Report
-            </Button>
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Download Monthly Report
+          </Button>
           </div>
         </div>
       </div>
@@ -1006,7 +1006,7 @@ const Invoices = () => {
                                       : "opacity-0"
                                   )}
                                 />
-                                {site.name}
+                        {site.name}
                               </CommandItem>
                             ))}
                         </CommandGroup>

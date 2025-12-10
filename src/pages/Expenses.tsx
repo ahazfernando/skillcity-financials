@@ -292,15 +292,15 @@ const Expenses = () => {
               Expenses
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground">Track and manage business expenses efficiently</p>
-          </div>
+        </div>
           <Button 
             onClick={handleAddExpense} 
             className="w-full sm:w-auto shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
             size="lg"
           >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Expense
-          </Button>
+          <Plus className="mr-2 h-4 w-4" />
+          Add Expense
+        </Button>
         </div>
       </div>
 

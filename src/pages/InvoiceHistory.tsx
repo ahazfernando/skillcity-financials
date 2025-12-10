@@ -242,74 +242,74 @@ const InvoiceHistory = () => {
               Invoice History
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground">View historical invoices and monthly cash flow analytics</p>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
-            <Button
-              variant="outline"
-              onClick={async () => {
-                try {
-                  setIsLoading(true);
-                  // Refresh data before generating report
-                  const fetchedPayrolls = await getPayrollsByHistoryStatus(true);
-                  setPayrolls(fetchedPayrolls);
-                  
-                  const monthLabel = dateRange?.from && dateRange?.to
-                    ? `${format(dateRange.from, "MMM dd, yyyy")} - ${format(dateRange.to, "MMM dd, yyyy")}`
-                    : dateRange?.from
-                    ? format(dateRange.from, "MMMM yyyy")
-                    : "All History";
-                  
-                  await generateMonthlyReport(fetchedPayrolls, monthLabel, "/logo/skillcityyy.png");
-                  toast.success("Monthly report downloaded successfully!");
-                } catch (error: any) {
-                  console.error("Error generating report:", error);
-                  toast.error(error.message || "Failed to generate report. Please try again.");
-                } finally {
-                  setIsLoading(false);
-                }
-              }}
-              disabled={isLoading || filteredPayrolls.length === 0}
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <Button
+            variant="outline"
+            onClick={async () => {
+              try {
+                setIsLoading(true);
+                // Refresh data before generating report
+                const fetchedPayrolls = await getPayrollsByHistoryStatus(true);
+                setPayrolls(fetchedPayrolls);
+                
+                const monthLabel = dateRange?.from && dateRange?.to
+                  ? `${format(dateRange.from, "MMM dd, yyyy")} - ${format(dateRange.to, "MMM dd, yyyy")}`
+                  : dateRange?.from
+                  ? format(dateRange.from, "MMMM yyyy")
+                  : "All History";
+                
+                await generateMonthlyReport(fetchedPayrolls, monthLabel, "/logo/skillcityyy.png");
+                toast.success("Monthly report downloaded successfully!");
+              } catch (error: any) {
+                console.error("Error generating report:", error);
+                toast.error(error.message || "Failed to generate report. Please try again.");
+              } finally {
+                setIsLoading(false);
+              }
+            }}
+            disabled={isLoading || filteredPayrolls.length === 0}
               className="shadow-md hover:shadow-lg transition-all duration-300 border-2"
-            >
-              <Download className="mr-2 h-4 w-4" />
-              Download Report
-            </Button>
-            <Button
-              variant="outline"
-              onClick={async () => {
-                try {
-                  setIsLoading(true);
-                  // Force refresh by moving paid invoices and reloading
-                  await movePaidInvoicesToHistory();
-                  const [fetchedPayrolls, fetchedInvoices] = await Promise.all([
-                    getPayrollsByHistoryStatus(true),
-                    getAllInvoices()
-                  ]);
-                  setPayrolls(fetchedPayrolls);
-                  setInvoices(fetchedInvoices);
-                  toast.success(`Refreshed! Loaded ${fetchedPayrolls.length} payroll and ${fetchedInvoices.length} invoice records.`);
-                } catch (error) {
-                  console.error("Error refreshing data:", error);
-                  toast.error("Failed to refresh data. Please try again.");
-                } finally {
-                  setIsLoading(false);
-                }
-              }}
-              disabled={isLoading}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Download Report
+          </Button>
+          <Button
+            variant="outline"
+            onClick={async () => {
+              try {
+                setIsLoading(true);
+                // Force refresh by moving paid invoices and reloading
+                await movePaidInvoicesToHistory();
+                const [fetchedPayrolls, fetchedInvoices] = await Promise.all([
+                  getPayrollsByHistoryStatus(true),
+                  getAllInvoices()
+                ]);
+                setPayrolls(fetchedPayrolls);
+                setInvoices(fetchedInvoices);
+                toast.success(`Refreshed! Loaded ${fetchedPayrolls.length} payroll and ${fetchedInvoices.length} invoice records.`);
+              } catch (error) {
+                console.error("Error refreshing data:", error);
+                toast.error("Failed to refresh data. Please try again.");
+              } finally {
+                setIsLoading(false);
+              }
+            }}
+            disabled={isLoading}
               className="shadow-md hover:shadow-lg transition-all duration-300 border-2"
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Refreshing...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Refresh
-                </>
-              )}
-            </Button>
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Refreshing...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Refresh
+              </>
+            )}
+          </Button>
           </div>
         </div>
       </div>

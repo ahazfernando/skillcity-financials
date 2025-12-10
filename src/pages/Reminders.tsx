@@ -211,15 +211,15 @@ const Reminders = () => {
               Reminders
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground">Manage notifications and alerts efficiently</p>
-          </div>
+        </div>
           <Button 
             onClick={handleAddReminder}
             className="w-full sm:w-auto shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
             size="lg"
           >
-            <Bell className="mr-2 h-4 w-4" />
-            New Reminder
-          </Button>
+          <Bell className="mr-2 h-4 w-4" />
+          New Reminder
+        </Button>
         </div>
       </div>
 
@@ -277,8 +277,8 @@ const Reminders = () => {
                     <div className="flex items-center gap-2">
                       <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
                       <p className="text-xs font-medium text-muted-foreground">
-                        Due: {new Date(reminder.dueDate).toLocaleDateString()}
-                      </p>
+                      Due: {new Date(reminder.dueDate).toLocaleDateString()}
+                    </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 ml-4" onClick={(e) => e.stopPropagation()}>

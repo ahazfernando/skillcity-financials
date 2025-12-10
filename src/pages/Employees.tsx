@@ -402,15 +402,15 @@ const Employees = () => {
               Employees
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground">Manage your workforce and Skill City employees</p>
-          </div>
+        </div>
           <Button 
             onClick={handleAddEmployee} 
             className="w-full sm:w-auto shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
             size="lg"
           >
-            <UserPlus className="mr-2 h-4 w-4" />
-            Add Employee
-          </Button>
+          <UserPlus className="mr-2 h-4 w-4" />
+          Add Employee
+        </Button>
         </div>
       </div>
 

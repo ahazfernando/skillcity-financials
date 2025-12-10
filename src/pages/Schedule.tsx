@@ -262,15 +262,15 @@ const Schedule = () => {
               Work Hours
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground">Track daily work hours for cleaners at sites</p>
-          </div>
+        </div>
           <Button 
             onClick={handleAddWorkHours}
             className="w-full sm:w-auto shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
             size="lg"
           >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Work Hours
-          </Button>
+          <Plus className="mr-2 h-4 w-4" />
+          Add Work Hours
+        </Button>
         </div>
       </div>
 

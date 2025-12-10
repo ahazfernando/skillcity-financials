@@ -366,15 +366,15 @@ const Sites = () => {
               Sites
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground">Manage cleaning sites and locations efficiently</p>
-          </div>
+        </div>
           <Button 
             onClick={handleAddSite} 
             className="w-full sm:w-auto shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
             size="lg"
           >
-            <Building2 className="mr-2 h-4 w-4" />
-            Add Site
-          </Button>
+          <Building2 className="mr-2 h-4 w-4" />
+          Add Site
+        </Button>
         </div>
       </div>
 
