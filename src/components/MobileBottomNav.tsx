@@ -199,40 +199,39 @@ export function MobileBottomNav() {
                 </div>
               </div>
 
-              {isAdmin && (
-                <div>
-                  <h3 className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase">
-                    Admin
-                  </h3>
-                  <div className="space-y-1">
-                    {adminItems.map((item) => {
-                      const Icon = item.icon;
-                      const active = pathname === item.url || 
-                        (item.url !== "/" && pathname.startsWith(item.url));
-                      
-                      return (
-                        <NavLink
-                          key={item.title}
-                          to={item.url}
-                          end
-                          onClick={() => {
-                            setMenuOpen(false);
-                          }}
-                          className={cn(
-                            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-                            active
-                              ? "bg-primary text-primary-foreground"
-                              : "text-foreground hover:bg-muted"
-                          )}
-                        >
-                          <Icon className="h-4 w-4" />
-                          <span>{item.title}</span>
-                        </NavLink>
-                      );
-                    })}
-                  </div>
+              {/* Always show Admin section - pages handle permission checks */}
+              <div>
+                <h3 className="px-3 py-2 text-xs font-semibold text-muted-foreground uppercase">
+                  Admin
+                </h3>
+                <div className="space-y-1">
+                  {adminItems.map((item) => {
+                    const Icon = item.icon;
+                    const active = pathname === item.url || 
+                      (item.url !== "/" && pathname.startsWith(item.url));
+                    
+                    return (
+                      <NavLink
+                        key={item.title}
+                        to={item.url}
+                        end
+                        onClick={() => {
+                          setMenuOpen(false);
+                        }}
+                        className={cn(
+                          "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                          active
+                            ? "bg-primary text-primary-foreground"
+                            : "text-foreground hover:bg-muted"
+                        )}
+                      >
+                        <Icon className="h-4 w-4" />
+                        <span>{item.title}</span>
+                      </NavLink>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
             </div>
           </div>
         </SheetContent>
