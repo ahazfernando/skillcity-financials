@@ -16,7 +16,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 export default function SignInPage() {
   const router = useRouter();
-  const { user, loading } = useAuth();
+  const { user, userData, loading } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
@@ -24,12 +24,20 @@ export default function SignInPage() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
 
   useEffect(() => {
-    if (!loading && user) {
-      router.push("/");
+    if (!loading && user && userData) {
+      // Route based on role
+      const isAdmin = userData.role === "admin" || userData.isAdmin;
+      if (isAdmin) {
+        router.push("/");
+      } else {
+        router.push("/employee");
+      }
     }
-  }, [user, loading, router]);
+  }, [user, userData, loading, router]);
 
   async function handleSignIn() {
     try {
@@ -44,8 +52,21 @@ export default function SignInPage() {
 
       await authService.login(formData.email, formData.password);
 
-      toast.success("Signed in successfully!");
-      router.push("/");
+      // Get user data to determine role
+      const currentUser = authService.getCurrentUser();
+      if (currentUser) {
+        const userData = await authService.getUserData(currentUser.uid);
+        const isAdmin = userData?.role === "admin" || userData?.isAdmin;
+        
+        toast.success("Signed in successfully!");
+        if (isAdmin) {
+          router.push("/");
+        } else {
+          router.push("/employee");
+        }
+      } else {
+        router.push("/");
+      }
     } catch (e) {
       console.error("Sign in error:", e);
       let errorMessage = "Sign in failed. Please try again.";
@@ -177,20 +198,77 @@ export default function SignInPage() {
 
             <CardFooter className="flex flex-col space-y-4">
               {error ? <p className="text-sm text-red-600 w-full">{error}</p> : null}
-              <Button
-                onClick={handleSignIn}
-                disabled={isLoading}
-                className="w-full py-3 bg-[#4A9D5E] text-white font-medium rounded-xl hover:bg-green-600 focus:ring-1 focus:ring-offset-2 transform hover:scale-105 transition-all duration-200 shadow-lg"
-              >
-                {isLoading ? "Signing In..." : "Sign In"}
-              </Button>
-              <Separator className="bg-gray-300/50" />
-              <p className="text-center text-sm text-gray-600">
-                Don't have an account?{" "}
-                <Link href="/signup" className="text-[#4A9D5E] hover:text-green-700 font-medium">
-                  Sign up here
-                </Link>
-              </p>
+              
+              {!showForgotPassword ? (
+                <>
+                  <Button
+                    onClick={handleSignIn}
+                    disabled={isLoading}
+                    className="w-full py-3 bg-[#4A9D5E] text-white font-medium rounded-xl hover:bg-green-600 focus:ring-1 focus:ring-offset-2 transform hover:scale-105 transition-all duration-200 shadow-lg"
+                  >
+                    {isLoading ? "Signing In..." : "Sign In"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="text-sm text-muted-foreground hover:text-foreground -mt-2"
+                    onClick={() => setShowForgotPassword(true)}
+                  >
+                    Forgot password?
+                  </Button>
+                  <Separator className="bg-gray-300/50" />
+                  <p className="text-center text-sm text-gray-600">
+                    Don't have an account?{" "}
+                    <Link href="/signup" className="text-[#4A9D5E] hover:text-green-700 font-medium">
+                      Sign up here
+                    </Link>
+                  </p>
+                </>
+              ) : (
+                <div className="w-full space-y-4">
+                  <div className="text-sm text-muted-foreground">
+                    Enter your email address and we'll send you a link to reset your password.
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      type="email"
+                      placeholder="Enter your email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      className="flex-1"
+                    />
+                    <Button
+                      type="button"
+                      onClick={async () => {
+                        if (!formData.email) {
+                          toast.error("Please enter your email address");
+                          return;
+                        }
+                        try {
+                          setIsResettingPassword(true);
+                          await authService.resetPassword(formData.email);
+                          toast.success("Password reset email sent! Check your inbox.");
+                          setShowForgotPassword(false);
+                        } catch (e: any) {
+                          toast.error(e.message || "Failed to send reset email");
+                        } finally {
+                          setIsResettingPassword(false);
+                        }
+                      }}
+                      disabled={isResettingPassword}
+                    >
+                      {isResettingPassword ? "Sending..." : "Send Reset Link"}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowForgotPassword(false)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              )}
             </CardFooter>
           </Card>
         </div>

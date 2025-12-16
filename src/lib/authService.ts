@@ -2,6 +2,7 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
+  sendPasswordResetEmail,
   User,
   UserCredential,
 } from "firebase/auth";
@@ -165,6 +166,58 @@ class AuthService {
 
   getCurrentUser(): User | null {
     return auth.currentUser;
+  }
+
+  async resetPassword(email: string): Promise<void> {
+    try {
+      if (!auth) {
+        throw new Error("Firebase Auth is not initialized. Please check your Firebase configuration.");
+      }
+      await sendPasswordResetEmail(auth, email);
+    } catch (error: any) {
+      if (error.code === "auth/user-not-found") {
+        throw new Error("No account found with this email address.");
+      } else if (error.code === "auth/invalid-email") {
+        throw new Error("Invalid email address.");
+      } else {
+        throw new Error(error.message || "Failed to send password reset email. Please try again.");
+      }
+    }
+  }
+
+  // Create user account for employee (admin function)
+  async createEmployeeAccount(email: string, password: string, name: string, employeeId?: string): Promise<UserCredential> {
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+
+      // Create user document in Firestore
+      const userData: UserData = {
+        uid: user.uid,
+        email: user.email || email,
+        name: name || "",
+        role: "employee",
+        isAdmin: false,
+        approved: true, // Auto-approve employee accounts created by admin
+        createdAt: new Date(),
+        approvedAt: new Date(),
+        approvedBy: employeeId || "admin",
+      };
+
+      await setDoc(doc(db, "users", user.uid), userData);
+
+      return userCredential;
+    } catch (error: any) {
+      if (error.code === "auth/email-already-in-use") {
+        throw new Error("Email is already registered. Please use a different email.");
+      } else if (error.code === "auth/weak-password") {
+        throw new Error("Password is too weak. Please use a stronger password (at least 6 characters).");
+      } else if (error.code === "auth/invalid-email") {
+        throw new Error("Invalid email address.");
+      } else {
+        throw new Error(error.message || "Failed to create employee account. Please try again.");
+      }
+    }
   }
 }
 

@@ -4,6 +4,7 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { User, onAuthStateChanged } from "firebase/auth";
 import { auth } from "@/lib/firebase/config";
 import { authService, UserData } from "@/lib/authService";
+import { getEmployeeByEmail, addEmployee } from "@/lib/firebase/employees";
 
 interface AuthContextType {
   user: User | null;
@@ -34,6 +35,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (firebaseUser) {
         const data = await authService.getUserData(firebaseUser.uid);
         setUserData(data);
+        
+        // Auto-create employee record if user doesn't have one
+        if (data && data.approved && (data.role === "employee" || !data.role)) {
+          try {
+            const employeeEmail = data.email;
+            if (employeeEmail) {
+              const existingEmployee = await getEmployeeByEmail(employeeEmail);
+              if (!existingEmployee) {
+                // Safely convert createdAt to date string
+                let startDate: string;
+                if (data.createdAt) {
+                  try {
+                    const date = data.createdAt instanceof Date 
+                      ? data.createdAt 
+                      : new Date(data.createdAt);
+                    if (!isNaN(date.getTime())) {
+                      startDate = date.toISOString().split("T")[0];
+                    } else {
+                      startDate = new Date().toISOString().split("T")[0];
+                    }
+                  } catch {
+                    startDate = new Date().toISOString().split("T")[0];
+                  }
+                } else {
+                  startDate = new Date().toISOString().split("T")[0];
+                }
+                
+                // Create employee record from user data
+                await addEmployee({
+                  name: data.name || "Unknown",
+                  role: data.role || "Employee",
+                  email: employeeEmail,
+                  phone: "",
+                  salary: 0,
+                  startDate,
+                  status: "active",
+                  type: "employee",
+                  isSkillCityEmployee: false,
+                });
+                console.log("Auto-created employee record for user:", employeeEmail);
+              }
+            }
+          } catch (error) {
+            // Silently fail - this is not critical
+            console.error("Error auto-creating employee record:", error);
+          }
+        }
       } else {
         setUserData(null);
       }

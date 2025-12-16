@@ -18,7 +18,8 @@ import {
   BarChart3,
   History,
   Archive,
-  MessageSquare
+  MessageSquare,
+  Clock
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -51,6 +52,7 @@ const menuItems = [
   { title: "Work Schedule", url: "/schedule", icon: Calendar },
   { title: "Reminders", url: "/reminders", icon: Bell },
   { title: "Activity Log", url: "/activity-log", icon: History },
+  { title: "Employee Timesheets", url: "/employee-timesheets", icon: Clock },
 ];
 
 const adminItems = [

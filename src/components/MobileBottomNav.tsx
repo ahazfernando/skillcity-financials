@@ -71,12 +71,17 @@ export function MobileBottomNav() {
     return null;
   }
 
+  // Determine if user is on employee portal
+  const isEmployeePortal = pathname.startsWith("/employee");
+  const dashboardPath = isEmployeePortal ? "/employee" : "/";
+  const profilePath = isEmployeePortal ? "/employee/profile" : "/settings";
+
   const navItems = [
     {
       icon: LayoutDashboard,
       label: "Dashboard",
-      path: "/",
-      onClick: () => router.push("/"),
+      path: dashboardPath,
+      onClick: () => router.push(dashboardPath),
     },
     {
       icon: Menu,
@@ -86,9 +91,9 @@ export function MobileBottomNav() {
     },
     {
       icon: FileText,
-      label: "Invoices",
-      path: "/invoices",
-      onClick: () => router.push("/invoices"),
+      label: isEmployeePortal ? "Timesheet" : "Invoices",
+      path: isEmployeePortal ? "/employee/timesheet" : "/invoices",
+      onClick: () => router.push(isEmployeePortal ? "/employee/timesheet" : "/invoices"),
       isLarge: true,
     },
     {
@@ -100,8 +105,8 @@ export function MobileBottomNav() {
     {
       icon: User,
       label: "Profile",
-      path: "/settings",
-      onClick: () => router.push("/settings"),
+      path: profilePath,
+      onClick: () => router.push(profilePath),
     },
   ];
 

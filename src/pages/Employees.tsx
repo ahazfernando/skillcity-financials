@@ -35,10 +35,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Employee, Invoice, EmployeePayRate, SiteEmployeeAllocation } from "@/types/financial";
-import { getAllEmployees, addEmployee, updateEmployee, deleteEmployee } from "@/lib/firebase/employees";
+import { getAllEmployees, addEmployee, updateEmployee, deleteEmployee, getEmployeeByEmail } from "@/lib/firebase/employees";
+import { getAllUsers } from "@/lib/firebase/users";
 import { getAllInvoices } from "@/lib/firebase/invoices";
 import { getEmployeePayRatesByEmployee } from "@/lib/firebase/employeePayRates";
 import { getAllAllocations, getAllocationsByEmployee } from "@/lib/firebase/siteEmployeeAllocations";
+import { updateUserRoleByEmail } from "@/lib/firebase/users";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -90,15 +93,97 @@ const Employees = () => {
     isSkillCityEmployee: false,
   });
 
-  // Load employees from Firebase (excluding clients)
+  const { userData } = useAuth();
+
+  // Load employees from Firebase (excluding clients and admins)
   useEffect(() => {
     const loadEmployees = async () => {
       try {
         setIsLoading(true);
-        const fetchedEmployees = await getAllEmployees();
-        // Filter out clients - only show actual employees
+        const [fetchedEmployees, allUsers] = await Promise.all([
+          getAllEmployees(),
+          getAllUsers(),
+        ]);
+        
+        // Create a set of admin user emails for quick lookup
+        const adminEmails = new Set(
+          allUsers
+            .filter(user => user.role === "admin" || user.isAdmin)
+            .map(user => user.email.toLowerCase())
+        );
+        
+        // Auto-create employee record for current user if they don't have one
+        if (userData && userData.approved && userData.email) {
+          const existingEmployee = await getEmployeeByEmail(userData.email);
+          if (!existingEmployee) {
+            try {
+              // Safely convert createdAt to date string
+              let startDate: string;
+              if (userData.createdAt) {
+                try {
+                  const date = userData.createdAt instanceof Date 
+                    ? userData.createdAt 
+                    : new Date(userData.createdAt);
+                  if (!isNaN(date.getTime())) {
+                    startDate = date.toISOString().split("T")[0];
+                  } else {
+                    startDate = new Date().toISOString().split("T")[0];
+                  }
+                } catch {
+                  startDate = new Date().toISOString().split("T")[0];
+                }
+              } else {
+                startDate = new Date().toISOString().split("T")[0];
+              }
+              
+              await addEmployee({
+                name: userData.name || "Unknown",
+                role: userData.role || "Employee",
+                email: userData.email,
+                phone: "",
+                salary: 0,
+                startDate,
+                status: "active",
+                type: "employee",
+                isSkillCityEmployee: false,
+              });
+              // Reload employees after creating the record
+              const updatedEmployees = await getAllEmployees();
+              const actualEmployees = updatedEmployees.filter(
+                (emp) => {
+                  // Filter out clients
+                  if (emp.type && emp.type !== "employee") return false;
+                  // Filter out admins by role
+                  if (emp.role && emp.role.toLowerCase() === "admin") return false;
+                  // Filter out admins by email match
+                  if (emp.email && adminEmails.has(emp.email.toLowerCase())) return false;
+                  return true;
+                }
+              );
+              const sortedEmployees = actualEmployees.sort((a, b) =>
+                a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+              );
+              setEmployees(sortedEmployees);
+              setIsLoading(false);
+              return;
+            } catch (error) {
+              console.error("Error auto-creating employee record:", error);
+              // Continue with normal load if auto-create fails
+            }
+          }
+        }
+        
+        // Filter out clients and admins - only show actual employees
         const actualEmployees = fetchedEmployees.filter(
-          (emp) => !emp.type || emp.type === "employee"
+          (emp) => {
+            // Filter out clients
+            if (emp.type && emp.type !== "employee") return false;
+            // Filter out admins by role
+            if (emp.role && emp.role.toLowerCase() === "admin") return false;
+            // Filter out admins by email match
+            if (emp.email && adminEmails.has(emp.email.toLowerCase())) return false;
+            return true;
+          }
         );
         // Sort employees alphabetically by name
         const sortedEmployees = actualEmployees.sort((a, b) =>
@@ -114,7 +199,7 @@ const Employees = () => {
     };
 
     loadEmployees();
-  }, []);
+  }, [userData]);
 
   // Load invoices from Firebase
   useEffect(() => {
@@ -196,6 +281,10 @@ const Employees = () => {
       setIsSaving(true);
 
       if (editingEmployeeId) {
+        // Get the existing employee to check if email changed
+        const existingEmployee = employees.find(emp => emp.id === editingEmployeeId);
+        const emailChanged = existingEmployee && existingEmployee.email !== formData.email;
+        
         // Update existing employee - allow partial updates
         await updateEmployee(editingEmployeeId, {
           name: formData.name || "",
@@ -209,6 +298,20 @@ const Employees = () => {
           type: formData.type,
           isSkillCityEmployee: formData.isSkillCityEmployee,
         });
+
+        // Update user role to "employee" if email exists
+        if (formData.email) {
+          try {
+            await updateUserRoleByEmail(
+              formData.email,
+              "employee",
+              userData?.uid || "system"
+            );
+          } catch (error) {
+            // Silently fail - user might not exist yet
+            console.log("User not found for email:", formData.email);
+          }
+        }
 
         // Reload employees to get the latest data from Firebase
         const updatedEmployees = await getAllEmployees();
@@ -242,6 +345,20 @@ const Employees = () => {
         // Add employee to Firebase
         await addEmployee(newEmployee);
         
+        // Update user role to "employee" if user exists with this email
+        if (newEmployee.email) {
+          try {
+            await updateUserRoleByEmail(
+              newEmployee.email,
+              "employee",
+              userData?.uid || "system"
+            );
+          } catch (error) {
+            // Silently fail - user might not exist yet
+            console.log("User not found for email:", newEmployee.email);
+          }
+        }
+        
         // Reload employees to get the latest data from Firebase
         const updatedEmployees = await getAllEmployees();
         // Filter out clients - only show actual employees
@@ -274,10 +391,29 @@ const Employees = () => {
       await deleteEmployee(deletingEmployeeId);
       
       // Reload employees to get the latest data from Firebase
-      const updatedEmployees = await getAllEmployees();
-      // Filter out clients - only show actual employees
+      const [updatedEmployees, allUsers] = await Promise.all([
+        getAllEmployees(),
+        getAllUsers(),
+      ]);
+      
+      // Create a set of admin user emails for quick lookup
+      const adminEmails = new Set(
+        allUsers
+          .filter(user => user.role === "admin" || user.isAdmin)
+          .map(user => user.email.toLowerCase())
+      );
+      
+      // Filter out clients and admins - only show actual employees
       const actualEmployees = updatedEmployees.filter(
-        (emp) => !emp.type || emp.type === "employee"
+        (emp) => {
+          // Filter out clients
+          if (emp.type && emp.type !== "employee") return false;
+          // Filter out admins by role
+          if (emp.role && emp.role.toLowerCase() === "admin") return false;
+          // Filter out admins by email match
+          if (emp.email && adminEmails.has(emp.email.toLowerCase())) return false;
+          return true;
+        }
       );
       setEmployees(actualEmployees);
       

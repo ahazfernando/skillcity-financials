@@ -2,33 +2,15 @@
 
 import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import UserManagement from "@/pages/UserManagement";
+import EmployeeTimesheetsAdmin from "@/pages/EmployeeTimesheetsAdmin";
 
-export default function UserManagementPage() {
+export default function EmployeeTimesheetsPage() {
   return (
     <ProtectedRoute requireApproval={true} requireAdmin={true}>
       <Layout>
-        <UserManagement />
+        <EmployeeTimesheetsAdmin />
       </Layout>
     </ProtectedRoute>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

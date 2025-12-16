@@ -229,3 +229,49 @@ export type ActivityType =
   | "approve"
   | "reject"
   | "payment";
+
+export interface WorkRecord {
+  id: string;
+  employeeId: string; // Firebase Auth UID
+  employeeName: string;
+  siteId?: string;
+  siteName?: string;
+  date: string; // ISO date string (YYYY-MM-DD)
+  clockInTime: string; // ISO timestamp
+  clockOutTime?: string; // ISO timestamp
+  hoursWorked: number; // Calculated hours
+  isWeekend: boolean; // Whether the date falls on a weekend
+  approvalStatus: "pending" | "approved" | "rejected"; // Approval status
+  approvedBy?: string; // User ID who approved
+  approvedAt?: string; // Approval timestamp
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BankDetails {
+  id: string;
+  employeeId: string; // Firebase Auth UID
+  bankName: string;
+  accountHolderName: string;
+  accountNumber: string;
+  branch: string;
+  idNumber?: string; // Optional ID/NIC number
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LeaveRequest {
+  id: string;
+  employeeId: string; // Firebase Auth UID
+  employeeName: string;
+  leaveType: "Annual" | "Sick" | "Casual" | "Unpaid";
+  startDate: string; // ISO date string (YYYY-MM-DD)
+  endDate: string; // ISO date string (YYYY-MM-DD)
+  reason?: string; // Optional reason/notes
+  status: "pending" | "approved" | "rejected";
+  approvedBy?: string; // User ID who approved/rejected
+  approvedAt?: string; // Approval/rejection timestamp
+  createdAt: string;
+  updatedAt: string;
+}

@@ -79,3 +79,9 @@ if (allGood) {
   console.log("   Please check your .env.local file format.");
   process.exit(1);
 }
+
+
+
+
+
+

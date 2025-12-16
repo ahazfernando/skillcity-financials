@@ -71,7 +71,8 @@ export const calculateHoursWorked = (startTime: string, endTime: string): number
 export const getAllWorkHours = async (): Promise<WorkHours[]> => {
   try {
     const workHoursRef = collection(db, WORK_HOURS_COLLECTION);
-    const q = query(workHoursRef, orderBy("date", "desc"));
+    // Query without orderBy to avoid index requirement, sort client-side
+    const q = query(workHoursRef);
     const querySnapshot = await getDocs(q);
     const workHours = querySnapshot.docs.map(docToWorkHours);
     
@@ -109,13 +110,23 @@ export const getWorkHoursById = async (id: string): Promise<WorkHours | null> =>
 export const getWorkHoursByEmployee = async (employeeId: string): Promise<WorkHours[]> => {
   try {
     const workHoursRef = collection(db, WORK_HOURS_COLLECTION);
+    // Query without orderBy to avoid composite index requirement, sort client-side
     const q = query(
       workHoursRef,
-      where("employeeId", "==", employeeId),
-      orderBy("date", "desc")
+      where("employeeId", "==", employeeId)
     );
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(docToWorkHours);
+    const workHours = querySnapshot.docs.map(docToWorkHours);
+    // Sort by date descending client-side
+    workHours.sort((a, b) => {
+      if (a.date !== b.date) {
+        return b.date.localeCompare(a.date);
+      }
+      const aCreated = a.createdAt || "";
+      const bCreated = b.createdAt || "";
+      return bCreated.localeCompare(aCreated);
+    });
+    return workHours;
   } catch (error) {
     console.error("Error fetching work hours by employee:", error);
     throw error;
@@ -126,13 +137,23 @@ export const getWorkHoursByEmployee = async (employeeId: string): Promise<WorkHo
 export const getWorkHoursBySite = async (siteId: string): Promise<WorkHours[]> => {
   try {
     const workHoursRef = collection(db, WORK_HOURS_COLLECTION);
+    // Query without orderBy to avoid composite index requirement, sort client-side
     const q = query(
       workHoursRef,
-      where("siteId", "==", siteId),
-      orderBy("date", "desc")
+      where("siteId", "==", siteId)
     );
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(docToWorkHours);
+    const workHours = querySnapshot.docs.map(docToWorkHours);
+    // Sort by date descending client-side
+    workHours.sort((a, b) => {
+      if (a.date !== b.date) {
+        return b.date.localeCompare(a.date);
+      }
+      const aCreated = a.createdAt || "";
+      const bCreated = b.createdAt || "";
+      return bCreated.localeCompare(aCreated);
+    });
+    return workHours;
   } catch (error) {
     console.error("Error fetching work hours by site:", error);
     throw error;
@@ -174,14 +195,24 @@ export const getWorkHoursByDateRange = async (
 ): Promise<WorkHours[]> => {
   try {
     const workHoursRef = collection(db, WORK_HOURS_COLLECTION);
+    // Query without orderBy to avoid composite index requirement, sort client-side
     const q = query(
       workHoursRef,
       where("date", ">=", startDate),
-      where("date", "<=", endDate),
-      orderBy("date", "desc")
+      where("date", "<=", endDate)
     );
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(docToWorkHours);
+    const workHours = querySnapshot.docs.map(docToWorkHours);
+    // Sort by date descending client-side
+    workHours.sort((a, b) => {
+      if (a.date !== b.date) {
+        return b.date.localeCompare(a.date);
+      }
+      const aCreated = a.createdAt || "";
+      const bCreated = b.createdAt || "";
+      return bCreated.localeCompare(aCreated);
+    });
+    return workHours;
   } catch (error) {
     console.error("Error fetching work hours by date range:", error);
     throw error;
@@ -195,14 +226,17 @@ export const getWorkHoursByEmployeeAndDate = async (
 ): Promise<WorkHours[]> => {
   try {
     const workHoursRef = collection(db, WORK_HOURS_COLLECTION);
+    // Query without orderBy to avoid composite index requirement, sort client-side
     const q = query(
       workHoursRef,
       where("employeeId", "==", employeeId),
-      where("date", "==", date),
-      orderBy("startTime", "asc")
+      where("date", "==", date)
     );
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(docToWorkHours);
+    const workHours = querySnapshot.docs.map(docToWorkHours);
+    // Sort by startTime ascending client-side
+    workHours.sort((a, b) => a.startTime.localeCompare(b.startTime));
+    return workHours;
   } catch (error) {
     console.error("Error fetching work hours by employee and date:", error);
     throw error;

@@ -41,3 +41,9 @@ if (allPresent) {
   console.log("\n❌ Some variables are missing!");
   console.log("   Check your .env.local file format.");
 }
+
+
+
+
+
+

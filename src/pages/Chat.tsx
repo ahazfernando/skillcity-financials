@@ -156,7 +156,33 @@ const Chat = () => {
   };
 
   const handleSendMessage = async () => {
-    if (!user || !userData || !selectedGroup || (!messageContent.trim() && selectedFiles.length === 0)) {
+    // Debug logging
+    console.log("handleSendMessage called", {
+      user: !!user,
+      userData: !!userData,
+      selectedGroup: !!selectedGroup,
+      selectedGroupId: selectedGroup?.id,
+      messageContent: messageContent.trim(),
+      selectedFilesLength: selectedFiles.length,
+    });
+
+    if (!user) {
+      toast.error("Please sign in to send messages");
+      return;
+    }
+
+    if (!userData) {
+      toast.error("User data not loaded. Please refresh the page.");
+      return;
+    }
+
+    if (!selectedGroup) {
+      toast.error("Please select a conversation to send a message");
+      return;
+    }
+
+    if (!messageContent.trim() && selectedFiles.length === 0) {
+      toast.error("Please enter a message or attach a file");
       return;
     }
 
@@ -174,20 +200,30 @@ const Chat = () => {
         setIsUploading(false);
       }
 
+      const messageText = messageContent.trim() || (attachments.length > 0 ? "Shared file(s)" : "");
+      
+      console.log("Sending message:", {
+        groupId: selectedGroup.id,
+        senderId: user.uid,
+        content: messageText,
+        type: attachments.length > 0 && attachments[0].type === "image" ? "image" : attachments.length > 0 ? "file" : "text",
+      });
+
       await sendMessage(
         selectedGroup.id,
         user.uid,
         userData.name || user.email || "Unknown",
         user.email || "",
-        messageContent.trim() || (attachments.length > 0 ? "Shared file(s)" : ""),
+        messageText,
         attachments.length > 0 && attachments[0].type === "image" ? "image" : attachments.length > 0 ? "file" : "text",
         attachments.length > 0 ? attachments : undefined
       );
 
       setMessageContent("");
+      console.log("Message sent successfully");
     } catch (error) {
       console.error("Error sending message:", error);
-      toast.error("Failed to send message");
+      toast.error("Failed to send message: " + (error instanceof Error ? error.message : "Unknown error"));
       setIsUploading(false);
     }
   };
@@ -935,10 +971,15 @@ const Chat = () => {
                   />
                 </div>
                 <Button
-                  onClick={handleSendMessage}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleSendMessage();
+                  }}
                   disabled={(!messageContent.trim() && selectedFiles.length === 0) || isUploading}
                   size="icon"
                   className="h-10 w-10 sm:h-11 sm:w-11 md:h-12 md:w-12 rounded-full flex-shrink-0 shadow-lg hover:shadow-xl transition-all disabled:opacity-50 bg-gradient-to-br from-primary to-primary/90"
+                  type="button"
                 >
                   {isUploading ? (
                     <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 animate-spin" />
