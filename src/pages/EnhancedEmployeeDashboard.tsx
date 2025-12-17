@@ -54,7 +54,6 @@ import { clockIn, clockOut, getWorkRecordsByEmployee, getMonthlySummary } from "
 import { getAllocationsByEmployee } from "@/lib/firebase/siteEmployeeAllocations";
 import { getEmployeePayRatesByEmployee } from "@/lib/firebase/employeePayRates";
 import { getWorkHoursByEmployee } from "@/lib/firebase/workHours";
-import { formatCurrency } from "@/lib/utils";
 import { useLiveClock } from "@/hooks/use-live-clock";
 import { useSessionTimer } from "@/hooks/use-session-timer";
 import { useLeaveRequests } from "@/hooks/use-leave-requests";
@@ -73,6 +72,7 @@ const EnhancedEmployeeDashboard = () => {
   const [assignedSites, setAssignedSites] = useState<any[]>([]);
   const [monthlyHours, setMonthlyHours] = useState(0);
   const [hourlyRate, setHourlyRate] = useState<number | null>(null);
+  const [currency, setCurrency] = useState<string>("AUD");
   const [selectedSiteId, setSelectedSiteId] = useState<string>("");
   const [isLeaveDialogOpen, setIsLeaveDialogOpen] = useState(false);
   const [isClockOutDialogOpen, setIsClockOutDialogOpen] = useState(false);
@@ -164,8 +164,11 @@ const EnhancedEmployeeDashboard = () => {
         // Use average hourly rate if multiple rates exist, otherwise use the first one
         const avgRate = payRates.reduce((sum, pr) => sum + pr.hourlyRate, 0) / payRates.length;
         setHourlyRate(avgRate);
+        // Get currency from the first pay rate (assuming all rates for an employee use the same currency)
+        setCurrency(payRates[0].currency || "AUD");
       } else {
         setHourlyRate(null);
+        setCurrency("AUD");
       }
 
       // Load next scheduled shift (from WorkHours)
@@ -648,7 +651,7 @@ const EnhancedEmployeeDashboard = () => {
             ) : (
               <>
                 <div className="text-3xl font-bold mb-1 text-green-600 dark:text-green-400">
-                  {hourlyRate !== null ? `${formatCurrency(hourlyRate)}/hr` : "Not set"}
+                  {hourlyRate !== null ? `${currency}${hourlyRate.toLocaleString()}/hr` : "Not set"}
                 </div>
                 <div className="text-xs text-muted-foreground">
                   {hourlyRate !== null ? "Per hour" : "Contact admin to set rate"}
