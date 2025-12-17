@@ -35,11 +35,15 @@ import {
 } from "@/components/ui/select";
 import { Reminder } from "@/types/financial";
 import { getAllReminders, addReminder, updateReminder, deleteReminder, markReminderCompleted } from "@/lib/firebase/reminders";
+import { generatePaymentReminders } from "@/lib/paymentReminders";
+import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 
 const Reminders = () => {
+  const { userData } = useAuth();
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isGeneratingReminders, setIsGeneratingReminders] = useState(false);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -52,6 +56,7 @@ const Reminders = () => {
     description: "",
     dueDate: "",
     priority: "medium" as "high" | "medium" | "low",
+    status: "pending" as "pending" | "completed",
     relatedId: "",
   });
 
@@ -73,6 +78,27 @@ const Reminders = () => {
     loadReminders();
   }, []);
 
+  // Generate payment reminders (only for admins)
+  useEffect(() => {
+    const generateReminders = async () => {
+      // Only generate reminders for admins
+      if (userData && (userData.role === "admin" || userData.isAdmin)) {
+        try {
+          await generatePaymentReminders();
+          // Reload reminders after generating
+          const updatedReminders = await getAllReminders();
+          setReminders(updatedReminders);
+        } catch (error) {
+          console.error("Error generating payment reminders:", error);
+          // Don't show error toast as this runs automatically
+        }
+      }
+    };
+
+    // Generate reminders when page loads (only for admins)
+    generateReminders();
+  }, [userData]);
+
   const resetForm = () => {
     setFormData({
       type: "invoice",
@@ -80,6 +106,7 @@ const Reminders = () => {
       description: "",
       dueDate: "",
       priority: "medium",
+      status: "pending",
       relatedId: "",
     });
     setEditingReminderId(null);
@@ -93,6 +120,7 @@ const Reminders = () => {
       description: reminder.description,
       dueDate: reminder.dueDate,
       priority: reminder.priority,
+      status: reminder.status,
       relatedId: reminder.relatedId,
     });
     setIsEditDialogOpen(true);
@@ -132,6 +160,7 @@ const Reminders = () => {
           description: formData.description,
           dueDate: formData.dueDate,
           priority: formData.priority,
+          status: formData.status,
           relatedId: formData.relatedId,
         });
 
@@ -197,6 +226,27 @@ const Reminders = () => {
     setIsAddDialogOpen(true);
   };
 
+  const handleGeneratePaymentReminders = async () => {
+    if (!userData || (userData.role !== "admin" && !userData.isAdmin)) {
+      toast.error("Only admins can generate payment reminders");
+      return;
+    }
+
+    try {
+      setIsGeneratingReminders(true);
+      await generatePaymentReminders();
+      // Reload reminders
+      const updatedReminders = await getAllReminders();
+      setReminders(updatedReminders);
+      toast.success("Payment reminders generated successfully!");
+    } catch (error) {
+      console.error("Error generating payment reminders:", error);
+      toast.error("Failed to generate payment reminders");
+    } finally {
+      setIsGeneratingReminders(false);
+    }
+  };
+
   const pendingReminders = reminders.filter(r => r.status === "pending");
   const completedReminders = reminders.filter(r => r.status === "completed");
 
@@ -212,14 +262,37 @@ const Reminders = () => {
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground">Manage notifications and alerts efficiently</p>
         </div>
-          <Button 
-            onClick={handleAddReminder}
-            className="w-full sm:w-auto shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
-            size="lg"
-          >
-          <Bell className="mr-2 h-4 w-4" />
-          New Reminder
-        </Button>
+          <div className="flex flex-col sm:flex-row gap-2">
+            {userData && (userData.role === "admin" || userData.isAdmin) && (
+              <Button 
+                onClick={handleGeneratePaymentReminders}
+                disabled={isGeneratingReminders}
+                variant="outline"
+                className="w-full sm:w-auto"
+                size="lg"
+              >
+                {isGeneratingReminders ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Bell className="mr-2 h-4 w-4" />
+                    Generate Payment Reminders
+                  </>
+                )}
+              </Button>
+            )}
+            <Button 
+              onClick={handleAddReminder}
+              className="w-full sm:w-auto shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
+              size="lg"
+            >
+              <Bell className="mr-2 h-4 w-4" />
+              New Reminder
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -418,14 +491,29 @@ const Reminders = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="relatedId">Related ID</Label>
-                <Input
-                  id="relatedId"
-                  value={formData.relatedId}
-                  onChange={(e) => setFormData({ ...formData, relatedId: e.target.value })}
-                  placeholder="inv-003"
-                />
+                <Label htmlFor="status">Status *</Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(value) => setFormData({ ...formData, status: value as "pending" | "completed" })}
+                >
+                  <SelectTrigger id="status">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="relatedId">Related ID</Label>
+              <Input
+                id="relatedId"
+                value={formData.relatedId}
+                onChange={(e) => setFormData({ ...formData, relatedId: e.target.value })}
+                placeholder="inv-003"
+              />
             </div>
           </div>
           <DialogFooter>
@@ -533,14 +621,29 @@ const Reminders = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-relatedId">Related ID</Label>
-                <Input
-                  id="edit-relatedId"
-                  value={formData.relatedId}
-                  onChange={(e) => setFormData({ ...formData, relatedId: e.target.value })}
-                  placeholder="inv-003"
-                />
+                <Label htmlFor="edit-status">Status *</Label>
+                <Select
+                  value={formData.status}
+                  onValueChange={(value) => setFormData({ ...formData, status: value as "pending" | "completed" })}
+                >
+                  <SelectTrigger id="edit-status">
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-relatedId">Related ID</Label>
+              <Input
+                id="edit-relatedId"
+                value={formData.relatedId}
+                onChange={(e) => setFormData({ ...formData, relatedId: e.target.value })}
+                placeholder="inv-003"
+              />
             </div>
           </div>
           <DialogFooter>

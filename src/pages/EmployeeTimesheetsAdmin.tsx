@@ -13,8 +13,10 @@ import { getAllWorkRecords } from "@/lib/firebase/workRecords";
 import { getAllEmployees } from "@/lib/firebase/employees";
 import { getEmployeePayRatesByEmployee } from "@/lib/firebase/employeePayRates";
 import { getAllUsers } from "@/lib/firebase/users";
-import { WorkRecord, Employee } from "@/types/financial";
+import { getAllPayrolls } from "@/lib/firebase/payroll";
+import { WorkRecord, Employee, Payroll, PaymentStatus } from "@/types/financial";
 import { formatCurrency } from "@/lib/utils";
+import { calculatePaymentDueDate } from "@/lib/paymentReminders";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Select,
@@ -45,6 +47,7 @@ const EmployeeTimesheetsAdmin = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [employeePayRates, setEmployeePayRates] = useState<Record<string, any[]>>({});
   const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [payrolls, setPayrolls] = useState<Payroll[]>([]);
 
   useEffect(() => {
     if (userData) {
@@ -72,11 +75,13 @@ const EmployeeTimesheetsAdmin = () => {
       
       setAllWorkRecords(filteredRecords);
 
-      // Load all employees and users
-      const [allEmployees, users] = await Promise.all([
+      // Load all employees, users, and payrolls
+      const [allEmployees, users, allPayrolls] = await Promise.all([
         getAllEmployees(),
         getAllUsers(),
+        getAllPayrolls(),
       ]);
+      setPayrolls(allPayrolls);
       
       // Filter out clients and admins
       const actualEmployees = allEmployees.filter(
@@ -164,11 +169,14 @@ const EmployeeTimesheetsAdmin = () => {
     const totalHours = completedRecords.reduce((sum, r) => sum + r.hoursWorked, 0);
     const totalDays = completedRecords.length;
 
-    // Get hourly rate for this employee
+    // Get hourly rate and currency for this employee
     let hourlyRate = 0;
+    let currency = "AUD"; // Default currency
     const rates = employeePayRates[employee.id] || [];
     if (rates.length > 0) {
       hourlyRate = rates.reduce((sum, pr) => sum + pr.hourlyRate, 0) / rates.length;
+      // Get currency from the first pay rate (assuming all rates for an employee use the same currency)
+      currency = rates[0].currency || "AUD";
     }
 
     // Calculate total earnings
@@ -186,6 +194,7 @@ const EmployeeTimesheetsAdmin = () => {
       totalRecords: records.length,
       hourlyRate,
       totalEarnings,
+      currency,
     };
   });
 
@@ -217,6 +226,67 @@ const EmployeeTimesheetsAdmin = () => {
       day: 'numeric',
       year: 'numeric'
     });
+  };
+
+  // Calculate payment due date: 15th of the month following the work month
+  const getPaymentDueDate = (workYear: number, workMonth: number): Date => {
+    // Get the first day of the following month
+    const followingMonth = workMonth === 12 ? 1 : workMonth + 1;
+    const followingYear = workMonth === 12 ? workYear + 1 : workYear;
+    // Set to the 15th of the following month
+    return new Date(followingYear, followingMonth - 1, 15);
+  };
+
+  // Calculate payment status and due date for a work record
+  // Payment is due on the 15th of the month following the work month
+  const getPaymentInfo = (record: WorkRecord, employeeName: string): { status: PaymentStatus | "work_in_progress"; dueDate: Date | null } => {
+    const workDate = new Date(record.date);
+    const workYear = workDate.getFullYear();
+    const workMonth = workDate.getMonth() + 1; // 1-12
+    const workMonthName = workDate.toLocaleDateString('en-US', { month: 'long' });
+    
+    // Calculate payment due date: 15th of the following month
+    const dueDate = getPaymentDueDate(workYear, workMonth);
+    
+    // Look for payroll record matching this employee and month
+    const matchingPayroll = payrolls.find(p => 
+      p.name === employeeName && 
+      p.month === workMonthName &&
+      (p.typeOfCashFlow === "cleaner_payroll" || p.typeOfCashFlow === "internal_payroll")
+    );
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    dueDate.setHours(0, 0, 0, 0);
+    
+    // Get the 1st of the payment month
+    const paymentMonthStart = new Date(dueDate.getFullYear(), dueDate.getMonth(), 1);
+    paymentMonthStart.setHours(0, 0, 0, 0);
+    
+    if (matchingPayroll) {
+      // If payroll exists and is paid/received, return paid status
+      if (matchingPayroll.status === "paid" || matchingPayroll.status === "received") {
+        return { status: "paid", dueDate };
+      }
+      
+      // Check status based on dates
+      if (today < paymentMonthStart) {
+        return { status: "work_in_progress", dueDate };
+      } else if (dueDate < today) {
+        return { status: "overdue", dueDate };
+      } else {
+        return { status: "pending", dueDate };
+      }
+    }
+    
+    // No matching payroll - check status based on dates
+    if (today < paymentMonthStart) {
+      return { status: "work_in_progress", dueDate };
+    } else if (dueDate < today) {
+      return { status: "overdue", dueDate };
+    }
+    
+    return { status: "pending", dueDate };
   };
 
   return (
@@ -398,7 +468,7 @@ const EmployeeTimesheetsAdmin = () => {
               <p>No timesheet records found for the selected month</p>
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-6 pt-4">
               {filteredStats.map((stat) => {
                 const completedRecords = stat.records.filter(r => r.clockOutTime);
                 const totalAmount = completedRecords.reduce((sum, r) => {
@@ -408,19 +478,97 @@ const EmployeeTimesheetsAdmin = () => {
                   return sum + (r.hoursWorked * avgRate);
                 }, 0);
 
+                // Calculate overall payment status for this employee's month
+                const workMonth = new Date(selectedMonth + "-01").toLocaleDateString('en-US', { month: 'long' });
+                const workYear = new Date(selectedMonth + "-01").getFullYear();
+                const workMonthNum = new Date(selectedMonth + "-01").getMonth() + 1;
+                const paymentDueDate = getPaymentDueDate(workYear, workMonthNum);
+                
+                // Find matching payroll for payment status
+                const matchingPayroll = payrolls.find(p => 
+                  p.name === stat.employeeName && 
+                  p.month === workMonth &&
+                  (p.typeOfCashFlow === "cleaner_payroll" || p.typeOfCashFlow === "internal_payroll")
+                );
+                
+                let paymentStatus: PaymentStatus | "work_in_progress" = "pending";
+                if (matchingPayroll) {
+                  if (matchingPayroll.status === "paid" || matchingPayroll.status === "received") {
+                    paymentStatus = "paid";
+                  } else {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    paymentDueDate.setHours(0, 0, 0, 0);
+                    
+                    // Get the 1st of the payment month
+                    const paymentMonthStart = new Date(paymentDueDate.getFullYear(), paymentDueDate.getMonth(), 1);
+                    paymentMonthStart.setHours(0, 0, 0, 0);
+                    
+                    if (today < paymentMonthStart) {
+                      paymentStatus = "work_in_progress";
+                    } else if (paymentDueDate < today) {
+                      paymentStatus = "overdue";
+                    } else {
+                      paymentStatus = "pending";
+                    }
+                  }
+                } else {
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  paymentDueDate.setHours(0, 0, 0, 0);
+                  
+                  // Get the 1st of the payment month
+                  const paymentMonthStart = new Date(paymentDueDate.getFullYear(), paymentDueDate.getMonth(), 1);
+                  paymentMonthStart.setHours(0, 0, 0, 0);
+                  
+                  if (today < paymentMonthStart) {
+                    paymentStatus = "work_in_progress";
+                  } else if (paymentDueDate < today) {
+                    paymentStatus = "overdue";
+                  } else {
+                    paymentStatus = "pending";
+                  }
+                }
+                
                 return (
-                  <Card key={stat.employeeId} className="border-2">
-                    <CardHeader>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <CardTitle className="text-xl">{stat.employeeName}</CardTitle>
-                          {stat.employee?.email && (
-                            <CardDescription>{stat.employee.email}</CardDescription>
-                          )}
+                  <Card key={stat.employeeId} className="border-2 mt-6">
+                    <CardHeader className="pt-6">
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-center justify-between flex-wrap gap-3">
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <CardTitle className="text-xl">{stat.employeeName}</CardTitle>
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {/* Payment Status Badge */}
+                              <Badge
+                                variant={
+                                  paymentStatus === "paid" || paymentStatus === "received"
+                                    ? "default"
+                                    : paymentStatus === "overdue"
+                                    ? "destructive"
+                                    : paymentStatus === "work_in_progress"
+                                    ? "outline"
+                                    : "secondary"
+                                }
+                                className="px-3 py-1.5 text-sm font-medium"
+                              >
+                                {paymentStatus === "paid" || paymentStatus === "received" ? "✓ Paid" : 
+                                 paymentStatus === "overdue" ? "⚠ Overdue" : 
+                                 paymentStatus === "work_in_progress" ? "Work in Progress" :
+                                 "⏳ Pending Payment"}
+                              </Badge>
+                              {/* Payment Due Date */}
+                              <Badge variant="outline" className="px-3 py-1.5 text-sm font-medium">
+                                Due: {paymentDueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                              </Badge>
+                            </div>
+                          </div>
+                          <Badge variant="outline" className="text-lg px-4 py-2">
+                            {stat.totalRecords} {stat.totalRecords === 1 ? 'record' : 'records'}
+                          </Badge>
                         </div>
-                        <Badge variant="outline" className="text-lg px-4 py-2">
-                          {stat.totalRecords} {stat.totalRecords === 1 ? 'record' : 'records'}
-                        </Badge>
+                        {stat.employee?.email && (
+                          <CardDescription>{stat.employee.email}</CardDescription>
+                        )}
                       </div>
                     </CardHeader>
                     <CardContent>
@@ -437,13 +585,13 @@ const EmployeeTimesheetsAdmin = () => {
                           <div className="text-sm text-muted-foreground mb-1">Hourly Rate</div>
                           <div className="text-2xl font-bold">
                             {stat.hourlyRate > 0 
-                              ? `${formatCurrency(stat.hourlyRate)}/hr`
+                              ? `${stat.currency || "AUD"}${stat.hourlyRate.toLocaleString()}/hr`
                               : "Not set"}
                           </div>
                         </div>
                         <div className="p-4 border rounded-lg">
                           <div className="text-sm text-muted-foreground mb-1">Total Earnings</div>
-                          <div className="text-2xl font-bold">{formatCurrency(stat.totalEarnings)}</div>
+                          <div className="text-2xl font-bold">{stat.currency || "AUD"}{stat.totalEarnings.toLocaleString()}</div>
                         </div>
                       </div>
 
@@ -456,7 +604,6 @@ const EmployeeTimesheetsAdmin = () => {
                               <TableHead>Clock-Out</TableHead>
                               <TableHead>Hours</TableHead>
                               <TableHead>Site</TableHead>
-                              <TableHead>Status</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -474,19 +621,6 @@ const EmployeeTimesheetsAdmin = () => {
                                   </TableCell>
                                   <TableCell>
                                     {record.siteName || "-"}
-                                  </TableCell>
-                                  <TableCell>
-                                    <Badge
-                                      variant={
-                                        record.approvalStatus === "approved"
-                                          ? "default"
-                                          : record.approvalStatus === "rejected"
-                                          ? "destructive"
-                                          : "secondary"
-                                      }
-                                    >
-                                      {record.approvalStatus}
-                                    </Badge>
                                   </TableCell>
                                 </TableRow>
                               ))}

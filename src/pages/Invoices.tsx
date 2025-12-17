@@ -625,6 +625,18 @@ const Invoices = () => {
             variant="outline"
             onClick={async () => {
               try {
+                // Check if there's only one unique client
+                const uniqueClients = new Set(filteredPayrolls.map(p => p.name).filter(Boolean));
+                if (uniqueClients.size > 1) {
+                  toast.error("Select only one client");
+                  return;
+                }
+                
+                if (uniqueClients.size === 0) {
+                  toast.error("No client data available");
+                  return;
+                }
+                
                 const monthLabel = dateRange?.from && dateRange?.to
                   ? `${format(dateRange.from, "MMM dd, yyyy")} - ${format(dateRange.to, "MMM dd, yyyy")}`
                   : dateRange?.from
@@ -632,17 +644,17 @@ const Invoices = () => {
                   : new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric" });
                 
                 await generateMonthlyReport(filteredPayrolls, monthLabel, "/logo/skillcityyy.png");
-                toast.success("Monthly report downloaded successfully!");
+                toast.success("Invoice downloaded successfully!");
               } catch (error: any) {
-                console.error("Error generating report:", error);
-                toast.error(error.message || "Failed to generate report. Please try again.");
+                console.error("Error generating invoice:", error);
+                toast.error(error.message || "Failed to generate invoice. Please try again.");
               }
             }}
             disabled={isLoading || filteredPayrolls.length === 0}
               className="shadow-md hover:shadow-lg transition-all duration-300 border-2"
           >
             <Download className="mr-2 h-4 w-4" />
-            Download Monthly Report
+            Download Invoice
           </Button>
           </div>
         </div>

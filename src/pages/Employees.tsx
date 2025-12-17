@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Search, UserPlus, Loader2, Trash2, FileText, Building2, MapPin, Clock } from "lucide-react";
+import { Search, UserPlus, Loader2, Trash2, FileText, Building2, MapPin, Clock, Plus, Check, DollarSign } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -38,7 +38,7 @@ import { Employee, Invoice, EmployeePayRate, SiteEmployeeAllocation } from "@/ty
 import { getAllEmployees, addEmployee, updateEmployee, deleteEmployee, getEmployeeByEmail } from "@/lib/firebase/employees";
 import { getAllUsers } from "@/lib/firebase/users";
 import { getAllInvoices } from "@/lib/firebase/invoices";
-import { getEmployeePayRatesByEmployee } from "@/lib/firebase/employeePayRates";
+import { getEmployeePayRatesByEmployee, addEmployeePayRate } from "@/lib/firebase/employeePayRates";
 import { getAllAllocations, getAllocationsByEmployee } from "@/lib/firebase/siteEmployeeAllocations";
 import { updateUserRoleByEmail } from "@/lib/firebase/users";
 import { useAuth } from "@/contexts/AuthContext";
@@ -47,6 +47,8 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon } from "lucide-react";
 import { format } from "date-fns";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 import { DateRange } from "react-day-picker";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
@@ -80,6 +82,17 @@ const Employees = () => {
   const [employeePayRates, setEmployeePayRates] = useState<EmployeePayRate[]>([]);
   const [employeeSiteAllocations, setEmployeeSiteAllocations] = useState<SiteEmployeeAllocation[]>([]);
   const [isLoadingEmployeeDetails, setIsLoadingEmployeeDetails] = useState(false);
+  const [availableRoles, setAvailableRoles] = useState<string[]>([]);
+  const [roleSearchValue, setRoleSearchValue] = useState("");
+  const [rolePopoverOpen, setRolePopoverOpen] = useState(false);
+  const [isAddingRole, setIsAddingRole] = useState(false);
+  const [payRateFormData, setPayRateFormData] = useState({
+    hourlyRate: "",
+    currency: "AUD" as "LKR" | "AUD",
+    travelAllowance: "",
+    notes: "",
+  });
+  const [isAddingPayRate, setIsAddingPayRate] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     role: "",
@@ -153,18 +166,41 @@ const Employees = () => {
                 (emp) => {
                   // Filter out clients
                   if (emp.type && emp.type !== "employee") return false;
-                  // Filter out admins by role
-                  if (emp.role && emp.role.toLowerCase() === "admin") return false;
+                  // Filter out admins by role (case-insensitive, handle variations)
+                  if (emp.role) {
+                    const roleLower = emp.role.toLowerCase().trim();
+                    if (roleLower === "admin" || roleLower === "administrator") return false;
+                  }
                   // Filter out admins by email match
                   if (emp.email && adminEmails.has(emp.email.toLowerCase())) return false;
                   return true;
                 }
               );
-              const sortedEmployees = actualEmployees.sort((a, b) =>
-                a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
-              );
-              setEmployees(sortedEmployees);
-              setIsLoading(false);
+        const sortedEmployees = actualEmployees.sort((a, b) =>
+          a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+        );
+        setEmployees(sortedEmployees);
+        
+        // Extract unique roles from employees and load from localStorage
+        const rolesFromEmployees = new Set<string>();
+        sortedEmployees.forEach(emp => {
+          if (emp.role && emp.role.trim()) {
+            rolesFromEmployees.add(emp.role);
+          }
+        });
+        
+        // Load saved roles from localStorage
+        const savedRoles = localStorage.getItem('employeeRoles');
+        const defaultRoles = ['Professional Cleaner', 'Employee'];
+        const allRoles = savedRoles ? JSON.parse(savedRoles) : defaultRoles;
+        
+        // Combine and deduplicate
+        const combinedRoles = new Set([...allRoles, ...Array.from(rolesFromEmployees)]);
+        const sortedRoles = Array.from(combinedRoles).sort();
+        setAvailableRoles(sortedRoles);
+        localStorage.setItem('employeeRoles', JSON.stringify(sortedRoles));
+        
+        setIsLoading(false);
               return;
             } catch (error) {
               console.error("Error auto-creating employee record:", error);
@@ -178,8 +214,11 @@ const Employees = () => {
           (emp) => {
             // Filter out clients
             if (emp.type && emp.type !== "employee") return false;
-            // Filter out admins by role
-            if (emp.role && emp.role.toLowerCase() === "admin") return false;
+            // Filter out admins by role (case-insensitive, handle variations)
+            if (emp.role) {
+              const roleLower = emp.role.toLowerCase().trim();
+              if (roleLower === "admin" || roleLower === "administrator") return false;
+            }
             // Filter out admins by email match
             if (emp.email && adminEmails.has(emp.email.toLowerCase())) return false;
             return true;
@@ -235,6 +274,87 @@ const Employees = () => {
     setEditingEmployeeId(null);
     setEmployeePayRates([]);
     setEmployeeSiteAllocations([]);
+    setRoleSearchValue("");
+    setPayRateFormData({
+      hourlyRate: "",
+      currency: "AUD",
+      travelAllowance: "",
+      notes: "",
+    });
+  };
+
+  const handleAddNewRole = async (newRole: string) => {
+    if (!newRole.trim()) return;
+    
+    try {
+      setIsAddingRole(true);
+      const trimmedRole = newRole.trim();
+      
+      // Add to available roles
+      const updatedRoles = [...availableRoles, trimmedRole].sort();
+      setAvailableRoles(updatedRoles);
+      localStorage.setItem('employeeRoles', JSON.stringify(updatedRoles));
+      
+      // Set the role in form data
+      setFormData({ ...formData, role: trimmedRole });
+      setRolePopoverOpen(false);
+      setRoleSearchValue("");
+      
+      toast.success(`Role "${trimmedRole}" added successfully`);
+    } catch (error) {
+      console.error("Error adding role:", error);
+      toast.error("Failed to add role");
+    } finally {
+      setIsAddingRole(false);
+    }
+  };
+
+  const handleAddPayRate = async () => {
+    if (!editingEmployeeId || !payRateFormData.hourlyRate) {
+      toast.error("Please enter an hourly rate");
+      return;
+    }
+
+    try {
+      setIsAddingPayRate(true);
+      const employee = employees.find(emp => emp.id === editingEmployeeId);
+      if (!employee) {
+        toast.error("Employee not found");
+        return;
+      }
+
+      // For now, we'll create a pay rate without a site (general rate)
+      // In a real scenario, you might want to select a site
+      await addEmployeePayRate({
+        siteId: "", // General rate without specific site
+        siteName: "General",
+        employeeId: editingEmployeeId,
+        employeeName: employee.name,
+        hourlyRate: parseFloat(payRateFormData.hourlyRate),
+        currency: payRateFormData.currency,
+        travelAllowance: payRateFormData.travelAllowance ? parseFloat(payRateFormData.travelAllowance) : undefined,
+        notes: payRateFormData.notes || undefined,
+      });
+
+      toast.success("Pay rate added successfully");
+      
+      // Reload pay rates
+      const updatedPayRates = await getEmployeePayRatesByEmployee(editingEmployeeId);
+      setEmployeePayRates(updatedPayRates);
+      
+      // Reset pay rate form
+      setPayRateFormData({
+        hourlyRate: "",
+        currency: "AUD",
+        travelAllowance: "",
+        notes: "",
+      });
+    } catch (error: any) {
+      console.error("Error adding pay rate:", error);
+      toast.error(error.message || "Failed to add pay rate");
+    } finally {
+      setIsAddingPayRate(false);
+    }
   };
 
   const handleEditEmployee = async (employee: Employee) => {
@@ -408,8 +528,11 @@ const Employees = () => {
         (emp) => {
           // Filter out clients
           if (emp.type && emp.type !== "employee") return false;
-          // Filter out admins by role
-          if (emp.role && emp.role.toLowerCase() === "admin") return false;
+          // Filter out admins by role (case-insensitive, handle variations)
+          if (emp.role) {
+            const roleLower = emp.role.toLowerCase().trim();
+            if (roleLower === "admin" || roleLower === "administrator") return false;
+          }
           // Filter out admins by email match
           if (emp.email && adminEmails.has(emp.email.toLowerCase())) return false;
           return true;
@@ -432,8 +555,15 @@ const Employees = () => {
   };
 
   const filteredEmployees = employees.filter(employee => {
+    // Exclude admins (double-check to ensure they're filtered out)
+    if (employee.role) {
+      const roleLower = employee.role.toLowerCase().trim();
+      if (roleLower === "admin" || roleLower === "administrator") return false;
+    }
+    
+    // Apply search filter
     return employee.name.toLowerCase().includes(searchValue.toLowerCase()) ||
-      employee.role.toLowerCase().includes(searchValue.toLowerCase());
+      (employee.role && employee.role.toLowerCase().includes(searchValue.toLowerCase()));
   });
 
   // Pagination logic
@@ -964,17 +1094,78 @@ const Employees = () => {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="role">Role</Label>
-                      <Select
-                        value={formData.role}
-                        onValueChange={(value) => setFormData({ ...formData, role: value })}
-                      >
-                        <SelectTrigger id="role">
-                          <SelectValue placeholder="Select role" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Professional Cleaner">Professional Cleaner</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Popover open={rolePopoverOpen} onOpenChange={setRolePopoverOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            className="w-full justify-between"
+                            id="role"
+                          >
+                            {formData.role || "Select role..."}
+                            <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-full p-0" align="start">
+                          <Command>
+                            <CommandInput 
+                              placeholder="Search roles..." 
+                              value={roleSearchValue}
+                              onValueChange={setRoleSearchValue}
+                            />
+                            <CommandList>
+                              <CommandEmpty>No role found.</CommandEmpty>
+                              <CommandGroup>
+                                {availableRoles.map((role) => (
+                                  <CommandItem
+                                    key={role}
+                                    value={role}
+                                    onSelect={() => {
+                                      setFormData({ ...formData, role });
+                                      setRolePopoverOpen(false);
+                                      setRoleSearchValue("");
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        formData.role === role ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    {role}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                              {roleSearchValue && 
+                               !availableRoles.some(role => 
+                                 role.toLowerCase() === roleSearchValue.trim().toLowerCase()
+                               ) && 
+                               roleSearchValue.trim().length > 0 && (
+                                <CommandGroup>
+                                  <CommandItem
+                                    value={`add-${roleSearchValue}`}
+                                    onSelect={() => handleAddNewRole(roleSearchValue)}
+                                    disabled={isAddingRole}
+                                    className="text-primary"
+                                  >
+                                    {isAddingRole ? (
+                                      <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Adding...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Plus className="mr-2 h-4 w-4" />
+                                        Add "{roleSearchValue}"
+                                      </>
+                                    )}
+                                  </CommandItem>
+                                </CommandGroup>
+                              )}
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </div>
 
@@ -1373,17 +1564,78 @@ const Employees = () => {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="edit-role">Role</Label>
-                      <Select
-                        value={formData.role}
-                        onValueChange={(value) => setFormData({ ...formData, role: value })}
-                      >
-                        <SelectTrigger id="edit-role">
-                          <SelectValue placeholder="Select role" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Professional Cleaner">Professional Cleaner</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Popover open={rolePopoverOpen} onOpenChange={setRolePopoverOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            className="w-full justify-between"
+                            id="edit-role"
+                          >
+                            {formData.role || "Select role..."}
+                            <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-full p-0" align="start">
+                          <Command>
+                            <CommandInput 
+                              placeholder="Search roles..." 
+                              value={roleSearchValue}
+                              onValueChange={setRoleSearchValue}
+                            />
+                            <CommandList>
+                              <CommandEmpty>No role found.</CommandEmpty>
+                              <CommandGroup>
+                                {availableRoles.map((role) => (
+                                  <CommandItem
+                                    key={role}
+                                    value={role}
+                                    onSelect={() => {
+                                      setFormData({ ...formData, role });
+                                      setRolePopoverOpen(false);
+                                      setRoleSearchValue("");
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        formData.role === role ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    {role}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                              {roleSearchValue && 
+                               !availableRoles.some(role => 
+                                 role.toLowerCase() === roleSearchValue.trim().toLowerCase()
+                               ) && 
+                               roleSearchValue.trim().length > 0 && (
+                                <CommandGroup>
+                                  <CommandItem
+                                    value={`add-${roleSearchValue}`}
+                                    onSelect={() => handleAddNewRole(roleSearchValue)}
+                                    disabled={isAddingRole}
+                                    className="text-primary"
+                                  >
+                                    {isAddingRole ? (
+                                      <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Adding...
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Plus className="mr-2 h-4 w-4" />
+                                        Add "{roleSearchValue}"
+                                      </>
+                                    )}
+                                  </CommandItem>
+                                </CommandGroup>
+                              )}
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </div>
 
@@ -1560,11 +1812,15 @@ const Employees = () => {
                                       <p className="font-medium">{payRate.siteName}</p>
                                       <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
                                         <span>
-                                          Rate: <span className="font-semibold text-foreground">${payRate.hourlyRate.toLocaleString()}/hr</span>
+                                          Rate: <span className="font-semibold text-foreground">
+                                            {payRate.currency || "AUD"}{payRate.hourlyRate.toLocaleString()}/hr
+                                          </span>
                                         </span>
                                         {payRate.travelAllowance && (
                                           <span>
-                                            Travel: <span className="font-semibold text-foreground">${payRate.travelAllowance.toLocaleString()}</span>
+                                            Travel: <span className="font-semibold text-foreground">
+                                              {payRate.currency || "AUD"}{payRate.travelAllowance.toLocaleString()}
+                                            </span>
                                           </span>
                                         )}
                                       </div>
@@ -1578,6 +1834,87 @@ const Employees = () => {
                             </CardContent>
                           </Card>
                         )}
+
+                        {/* Add New Pay Rate Section */}
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="text-base flex items-center gap-2">
+                              <DollarSign className="h-4 w-4" />
+                              Add Employee Pay Rate
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor="payRate-hourlyRate">Hourly Rate</Label>
+                                  <Input
+                                    id="payRate-hourlyRate"
+                                    type="number"
+                                    step="0.01"
+                                    value={payRateFormData.hourlyRate}
+                                    onChange={(e) => setPayRateFormData({ ...payRateFormData, hourlyRate: e.target.value })}
+                                    placeholder="25.00"
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="payRate-currency">Currency</Label>
+                                  <Select
+                                    value={payRateFormData.currency}
+                                    onValueChange={(value: "LKR" | "AUD") => setPayRateFormData({ ...payRateFormData, currency: value })}
+                                  >
+                                    <SelectTrigger id="payRate-currency">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="AUD">AUD (Australian Dollar)</SelectItem>
+                                      <SelectItem value="LKR">LKR (Sri Lankan Rupee)</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor="payRate-travelAllowance">Travel Allowance (Optional)</Label>
+                                  <Input
+                                    id="payRate-travelAllowance"
+                                    type="number"
+                                    step="0.01"
+                                    value={payRateFormData.travelAllowance}
+                                    onChange={(e) => setPayRateFormData({ ...payRateFormData, travelAllowance: e.target.value })}
+                                    placeholder="10.00"
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor="payRate-notes">Notes (Optional)</Label>
+                                  <Input
+                                    id="payRate-notes"
+                                    value={payRateFormData.notes}
+                                    onChange={(e) => setPayRateFormData({ ...payRateFormData, notes: e.target.value })}
+                                    placeholder="Additional notes"
+                                  />
+                                </div>
+                              </div>
+                              <Button
+                                onClick={handleAddPayRate}
+                                disabled={isAddingPayRate || !payRateFormData.hourlyRate}
+                                className="w-full"
+                              >
+                                {isAddingPayRate ? (
+                                  <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Adding...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    Add Pay Rate
+                                  </>
+                                )}
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
 
                         {/* Sites Employee Works On */}
                         {employeeSiteAllocations.length > 0 && (

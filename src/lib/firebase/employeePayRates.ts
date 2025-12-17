@@ -26,6 +26,7 @@ const docToEmployeePayRate = (doc: any): EmployeePayRate => {
     employeeId: data.employeeId || "",
     employeeName: data.employeeName || "",
     hourlyRate: data.hourlyRate || 0,
+    currency: data.currency || undefined,
     travelAllowance: data.travelAllowance || undefined,
     notes: data.notes || undefined,
     createdAt: data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate().toISOString() : data.createdAt) : undefined,
@@ -46,6 +47,9 @@ const employeePayRateToDoc = (payRate: Omit<EmployeePayRate, "id">): any => {
   };
   
   // Only include optional fields if they have values (not undefined)
+  if (payRate.currency !== undefined) {
+    doc.currency = payRate.currency || null;
+  }
   if (payRate.travelAllowance !== undefined) {
     doc.travelAllowance = payRate.travelAllowance || null;
   }

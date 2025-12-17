@@ -259,8 +259,20 @@ const InvoiceHistory = () => {
                   ? format(dateRange.from, "MMMM yyyy")
                   : "All History";
                 
+                // Check if there's only one unique client
+                const uniqueClients = new Set(fetchedPayrolls.map(p => p.name).filter(Boolean));
+                if (uniqueClients.size > 1) {
+                  toast.error("Select only one client");
+                  return;
+                }
+                
+                if (uniqueClients.size === 0) {
+                  toast.error("No client data available");
+                  return;
+                }
+                
                 await generateMonthlyReport(fetchedPayrolls, monthLabel, "/logo/skillcityyy.png");
-                toast.success("Monthly report downloaded successfully!");
+                toast.success("Invoice downloaded successfully!");
               } catch (error: any) {
                 console.error("Error generating report:", error);
                 toast.error(error.message || "Failed to generate report. Please try again.");

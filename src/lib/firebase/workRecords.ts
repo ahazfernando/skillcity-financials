@@ -46,6 +46,8 @@ const docToWorkRecord = (doc: any): WorkRecord => {
     clockOutTime: data.clockOutTime || undefined,
     hoursWorked: data.hoursWorked || 0,
     isWeekend: data.isWeekend || false,
+    isLeave: data.isLeave || false,
+    leaveType: data.leaveType || undefined,
     approvalStatus: (data.approvalStatus as "pending" | "approved" | "rejected") || "pending",
     approvedBy: data.approvedBy || undefined,
     approvedAt: data.approvedAt ? (data.approvedAt.toDate ? data.approvedAt.toDate().toISOString() : data.approvedAt) : undefined,
@@ -75,6 +77,8 @@ const workRecordToDoc = (record: Omit<WorkRecord, "id">): any => {
   if (record.approvedBy) doc.approvedBy = record.approvedBy;
   if (record.approvedAt) doc.approvedAt = Timestamp.fromDate(new Date(record.approvedAt));
   if (record.notes) doc.notes = record.notes;
+  if (record.isLeave !== undefined) doc.isLeave = record.isLeave;
+  if (record.leaveType) doc.leaveType = record.leaveType;
 
   return doc;
 };
@@ -275,7 +279,7 @@ export const clockOut = async (recordId: string): Promise<void> => {
 // Update work record (for editing clock times)
 export const updateWorkRecord = async (
   id: string,
-  updates: Partial<Pick<WorkRecord, "clockInTime" | "clockOutTime" | "notes" | "siteId" | "siteName">>
+  updates: Partial<Pick<WorkRecord, "clockInTime" | "clockOutTime" | "notes" | "siteId" | "siteName" | "isLeave" | "leaveType">>
 ): Promise<void> => {
   try {
     const record = await getWorkRecordById(id);
@@ -307,9 +311,16 @@ export const updateWorkRecord = async (
     if (updates.siteName !== undefined) {
       updateData.siteName = updates.siteName || null;
     }
+    if (updates.isLeave !== undefined) {
+      updateData.isLeave = updates.isLeave;
+    }
+    if (updates.leaveType !== undefined) {
+      updateData.leaveType = updates.leaveType || null;
+    }
 
-    // Recalculate hours if clock times changed
-    if (updates.clockInTime || updates.clockOutTime) {
+    // Recalculate hours if clock times changed (only if not leave)
+    const isLeave = updates.isLeave !== undefined ? updates.isLeave : record.isLeave;
+    if (!isLeave && (updates.clockInTime || updates.clockOutTime)) {
       const clockIn = updates.clockInTime || record.clockInTime;
       const clockOut = updates.clockOutTime || record.clockOutTime;
       if (clockOut) {
@@ -317,6 +328,8 @@ export const updateWorkRecord = async (
       } else {
         updateData.hoursWorked = 0;
       }
+    } else if (isLeave) {
+      updateData.hoursWorked = 0;
     }
 
     await updateDoc(doc(db, WORK_RECORDS_COLLECTION, id), updateData);
@@ -338,7 +351,9 @@ export const createWorkRecord = async (
   clockOutTime?: string,
   siteId?: string,
   siteName?: string,
-  notes?: string
+  notes?: string,
+  isLeave?: boolean,
+  leaveType?: "Annual" | "Sick" | "Casual" | "Unpaid"
 ): Promise<string> => {
   try {
     // Check if record already exists for this date
@@ -348,12 +363,22 @@ export const createWorkRecord = async (
     }
 
     const dateObj = new Date(date);
-    const clockIn = new Date(clockInTime);
     let hoursWorked = 0;
+    let clockInISO = "";
+    let clockOutISO: string | undefined = undefined;
 
-    if (clockOutTime) {
-      const clockOut = new Date(clockOutTime);
-      hoursWorked = calculateHours(clockIn.toISOString(), clockOut.toISOString());
+    if (isLeave) {
+      // For leave records, use the date as clock-in time (required field)
+      clockInISO = new Date(date + "T00:00:00").toISOString();
+    } else {
+      const clockIn = new Date(clockInTime);
+      clockInISO = clockIn.toISOString();
+
+      if (clockOutTime) {
+        const clockOut = new Date(clockOutTime);
+        clockOutISO = clockOut.toISOString();
+        hoursWorked = calculateHours(clockInISO, clockOutISO);
+      }
     }
 
     const newRecord: Omit<WorkRecord, "id"> = {
@@ -362,10 +387,12 @@ export const createWorkRecord = async (
       siteId,
       siteName,
       date,
-      clockInTime: clockIn.toISOString(),
-      clockOutTime: clockOutTime ? new Date(clockOutTime).toISOString() : undefined,
+      clockInTime: clockInISO,
+      clockOutTime: clockOutISO,
       hoursWorked,
       isWeekend: isWeekend(dateObj),
+      isLeave: isLeave || false,
+      leaveType: isLeave ? (leaveType || "Annual") : undefined,
       approvalStatus: "pending",
       notes: notes || undefined,
       createdAt: new Date().toISOString(),
@@ -430,6 +457,7 @@ export const getMonthlySummary = async (
     return { totalHours: 0, totalRecords: 0 };
   }
 };
+
 
 
 

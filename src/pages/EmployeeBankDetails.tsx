@@ -26,6 +26,7 @@ const EmployeeBankDetails = () => {
     accountNumber: "",
     branch: "",
     idNumber: "",
+    swiftCode: "",
   });
 
   useEffect(() => {
@@ -43,11 +44,22 @@ const EmployeeBankDetails = () => {
       if (details) {
         setBankDetails(details);
         setFormData({
-          bankName: details.bankName || "",
-          accountHolderName: details.accountHolderName || "",
-          accountNumber: details.accountNumber || "",
-          branch: details.branch || "",
-          idNumber: details.idNumber || "",
+          bankName: details.bankName ?? "",
+          accountHolderName: details.accountHolderName ?? "",
+          accountNumber: details.accountNumber ?? "",
+          branch: details.branch ?? "",
+          idNumber: details.idNumber ?? "",
+          swiftCode: details.swiftCode ?? "",
+        });
+      } else {
+        // Reset form data if no details exist
+        setFormData({
+          bankName: "",
+          accountHolderName: "",
+          accountNumber: "",
+          branch: "",
+          idNumber: "",
+          swiftCode: "",
         });
       }
     } catch (error) {
@@ -82,6 +94,7 @@ const EmployeeBankDetails = () => {
         accountNumber: formData.accountNumber,
         branch: formData.branch,
         idNumber: formData.idNumber || undefined,
+        swiftCode: formData.swiftCode || undefined,
       });
 
       toast.success("Bank details saved successfully!");
@@ -110,7 +123,7 @@ const EmployeeBankDetails = () => {
       </div>
 
       {/* Bank Details Form */}
-      <Card>
+      <Card className="rounded-3xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Building2 className="h-5 w-5" />
@@ -196,16 +209,31 @@ const EmployeeBankDetails = () => {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="idNumber">ID/NIC Number (Optional)</Label>
-                <Input
-                  id="idNumber"
-                  value={formData.idNumber}
-                  onChange={(e) =>
-                    setFormData({ ...formData, idNumber: e.target.value })
-                  }
-                  placeholder="Enter ID/NIC number"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="idNumber">ID/NIC Number (Optional)</Label>
+                  <Input
+                    id="idNumber"
+                    value={formData.idNumber}
+                    onChange={(e) =>
+                      setFormData({ ...formData, idNumber: e.target.value })
+                    }
+                    placeholder="Enter ID/NIC number"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="swiftCode">SWIFT Code (Optional)</Label>
+                  <Input
+                    id="swiftCode"
+                    value={formData.swiftCode}
+                    onChange={(e) =>
+                      setFormData({ ...formData, swiftCode: e.target.value.toUpperCase() })
+                    }
+                    placeholder="Enter SWIFT/BIC code"
+                    maxLength={11}
+                  />
+                </div>
               </div>
 
               <div className="flex justify-end pt-4">
@@ -232,5 +260,7 @@ const EmployeeBankDetails = () => {
 };
 
 export default EmployeeBankDetails;
+
+
 
 

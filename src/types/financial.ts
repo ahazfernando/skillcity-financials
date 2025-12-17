@@ -152,6 +152,7 @@ export interface EmployeePayRate {
   employeeId: string;
   employeeName: string;
   hourlyRate: number;
+  currency?: "LKR" | "AUD"; // Currency for the pay rate
   travelAllowance?: number; // Optional travel allowance
   notes?: string; // For additional notes like "+ 10$ Travel Allowance"
   createdAt?: string;
@@ -241,6 +242,8 @@ export interface WorkRecord {
   clockOutTime?: string; // ISO timestamp
   hoursWorked: number; // Calculated hours
   isWeekend: boolean; // Whether the date falls on a weekend
+  isLeave?: boolean; // Whether this is a leave day
+  leaveType?: "Annual" | "Sick" | "Casual" | "Unpaid"; // Type of leave if isLeave is true
   approvalStatus: "pending" | "approved" | "rejected"; // Approval status
   approvedBy?: string; // User ID who approved
   approvedAt?: string; // Approval timestamp
@@ -257,6 +260,7 @@ export interface BankDetails {
   accountNumber: string;
   branch: string;
   idNumber?: string; // Optional ID/NIC number
+  swiftCode?: string; // Optional SWIFT/BIC code
   createdAt: string;
   updatedAt: string;
 }

@@ -102,12 +102,18 @@ export const generateMonthlyReport = async (
   doc.setFont("helvetica", "normal");
   doc.text("Financial Management System", margin, headerTop + (logoHeight || 20) + 8);
 
-  // "INVOICE" or "REPORT" title on the right in orange
-  const orangeColor: [number, number, number] = [255, 152, 0]; // Orange color
+  // "INVOICE" title on the right in green (matching invoice template)
+  const greenColor: [number, number, number] = [5, 135, 23]; // Green color matching the theme
   doc.setFontSize(32);
-  doc.setTextColor(...orangeColor);
+  doc.setTextColor(...greenColor);
   doc.setFont("helvetica", "bold");
-  doc.text("MONTHLY REPORT", pageWidth - margin, headerTop + 15, { align: "right" });
+  doc.text("INVOICE", pageWidth - margin, headerTop + 15, { align: "right" });
+  
+  // Website below INVOICE
+  doc.setFontSize(9);
+  doc.setTextColor(100, 100, 100);
+  doc.setFont("helvetica", "normal");
+  doc.text("www.skillcityfs.com.au", pageWidth - margin, headerTop + 25, { align: "right" });
 
   // Invoice details section
   const detailsTop = headerTop + (logoHeight || 20) + 20;
@@ -142,7 +148,8 @@ export const generateMonthlyReport = async (
   doc.text(reportDate, margin, detailsTop + 32);
 
   // Right column - Total Due section (like in the screenshot)
-  const rightColumnX = pageWidth - margin - 100;
+  // Add more spacing from right edge
+  const rightColumnX = pageWidth - margin - 80;
   const totalDueTop = detailsTop + 5;
   
   // Calculate total due
@@ -166,7 +173,7 @@ export const generateMonthlyReport = async (
   // Draw another horizontal line
   doc.line(margin, detailsTop + 40, pageWidth - margin, detailsTop + 40);
 
-  // Prepare table data
+  // Prepare table data (removed Payment Method and Payment Date columns)
   const tableData = payrolls.map((payroll) => [
     payroll.invoiceNumber || "-",
     payroll.name || "-",
@@ -177,8 +184,6 @@ export const generateMonthlyReport = async (
     formatDate(payroll.date),
     "-", // Due Date (not applicable for payroll)
     formatStatus(payroll.status),
-    formatPaymentMethod(payroll.paymentMethod),
-    formatDate(payroll.paymentDate),
   ]);
 
   // Calculate totals
@@ -197,11 +202,9 @@ export const generateMonthlyReport = async (
     "",
     "",
     "",
-    "",
-    "",
   ]);
 
-  // Table columns
+  // Table columns (removed Payment Method and Payment Date to fit better)
   const columns = [
     "Invoice #",
     "Name",
@@ -212,16 +215,18 @@ export const generateMonthlyReport = async (
     "Issue Date",
     "Due Date",
     "Status",
-    "Payment Method",
-    "Payment Date",
   ];
 
-  // Generate table
+  // Generate table with proper width constraints
+  // Calculate available width for table (with margins)
+  const tableMargin = 15; // Reduced margin for better spacing
+  const availableWidth = pageWidth - 2 * tableMargin;
+  
   autoTable(doc, {
     head: [columns],
     body: tableData,
     startY: detailsTop + 50,
-    margin: { left: margin, right: margin },
+    margin: { left: tableMargin, right: tableMargin },
     styles: {
       fontSize: 8,
       cellPadding: 2,
@@ -234,17 +239,15 @@ export const generateMonthlyReport = async (
       fontSize: 9,
     },
     columnStyles: {
-      0: { cellWidth: 25 }, // Invoice #
-      1: { cellWidth: 30 }, // Name
-      2: { cellWidth: 30 }, // Site of Work
-      3: { cellWidth: 20 }, // Amount
-      4: { cellWidth: 18 }, // GST
-      5: { cellWidth: 20 }, // Total
-      6: { cellWidth: 25 }, // Issue Date
-      7: { cellWidth: 20 }, // Due Date
-      8: { cellWidth: 20 }, // Status
-      9: { cellWidth: 25 }, // Payment Method
-      10: { cellWidth: 25 }, // Payment Date
+      0: { cellWidth: availableWidth * 0.12 }, // Invoice #
+      1: { cellWidth: availableWidth * 0.15 }, // Name
+      2: { cellWidth: availableWidth * 0.18 }, // Site of Work
+      3: { cellWidth: availableWidth * 0.10 }, // Amount
+      4: { cellWidth: availableWidth * 0.08 }, // GST
+      5: { cellWidth: availableWidth * 0.10 }, // Total
+      6: { cellWidth: availableWidth * 0.10 }, // Issue Date
+      7: { cellWidth: availableWidth * 0.08 }, // Due Date
+      8: { cellWidth: availableWidth * 0.09 }, // Status
     },
     didParseCell: (data) => {
       // Style the total row
@@ -257,7 +260,7 @@ export const generateMonthlyReport = async (
   });
 
   // Save the PDF
-  const fileName = `Monthly_Report_${month.replace(/\//g, "_")}.pdf`;
+  const fileName = `Invoice_${month.replace(/\//g, "_")}.pdf`;
   doc.save(fileName);
 };
 

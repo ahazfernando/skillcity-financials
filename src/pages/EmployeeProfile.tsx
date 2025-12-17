@@ -268,7 +268,7 @@ const EmployeeProfile = () => {
   return (
     <div className="space-y-6 sm:space-y-8">
       {/* Detail Employee Section */}
-      <Card className="border-2 shadow-xl">
+      <Card className="border-2 shadow-xl rounded-3xl">
         <CardHeader className="border-b pb-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -325,18 +325,27 @@ const EmployeeProfile = () => {
                 </Avatar>
                 <div className="flex-1 space-y-2">
                   <h3 className="text-3xl font-bold">{employeeName}</h3>
-                  <div className="space-y-1 text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <Briefcase className="h-4 w-4" />
-                      <span><strong>Role:</strong> {employeeRole}</span>
+                  <div className="flex flex-wrap items-start gap-8 md:gap-12">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Briefcase className="h-4 w-4" />
+                        <span>Role</span>
+                      </div>
+                      <span className="text-foreground font-medium">{employeeRole}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Phone className="h-4 w-4" />
-                      <span><strong>Phone Number:</strong> {employeePhone}</span>
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Phone className="h-4 w-4" />
+                        <span>Phone Number</span>
+                      </div>
+                      <span className="text-foreground font-medium">{employeePhone}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Mail className="h-4 w-4" />
-                      <span><strong>Email Address:</strong> {employeeEmail}</span>
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Mail className="h-4 w-4" />
+                        <span>Email Address</span>
+                      </div>
+                      <span className="text-foreground font-medium">{employeeEmail}</span>
                     </div>
                   </div>
                 </div>
@@ -344,7 +353,7 @@ const EmployeeProfile = () => {
 
               {/* Metric Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20 border-2 border-blue-200 dark:border-blue-900/50">
+                <Card className="bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20 border-2 border-blue-200 dark:border-blue-900/50 rounded-3xl">
                   <CardContent className="pt-6">
                     <div className="flex items-center justify-between">
                       <div>
@@ -358,7 +367,7 @@ const EmployeeProfile = () => {
                   </CardContent>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950/30 dark:to-green-900/20 border-2 border-green-200 dark:border-green-900/50">
+                <Card className="bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950/30 dark:to-green-900/20 border-2 border-green-200 dark:border-green-900/50 rounded-3xl">
                   <CardContent className="pt-6">
                     <div className="flex items-center justify-between">
                       <div>
@@ -372,7 +381,7 @@ const EmployeeProfile = () => {
                   </CardContent>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-950/30 dark:to-purple-900/20 border-2 border-purple-200 dark:border-purple-900/50">
+                <Card className="bg-gradient-to-br from-purple-50 to-purple-100/50 dark:from-purple-950/30 dark:to-purple-900/20 border-2 border-purple-200 dark:border-purple-900/50 rounded-3xl">
                   <CardContent className="pt-6">
                     <div className="flex items-center justify-between">
                       <div>
@@ -386,7 +395,7 @@ const EmployeeProfile = () => {
                   </CardContent>
                 </Card>
 
-                <Card className="bg-gradient-to-br from-orange-50 to-orange-100/50 dark:from-orange-950/30 dark:to-orange-900/20 border-2 border-orange-200 dark:border-orange-900/50">
+                <Card className="bg-gradient-to-br from-orange-50 to-orange-100/50 dark:from-orange-950/30 dark:to-orange-900/20 border-2 border-orange-200 dark:border-orange-900/50 rounded-3xl">
                   <CardContent className="pt-6">
                     <div className="flex items-center justify-between">
                       <div>
@@ -406,7 +415,7 @@ const EmployeeProfile = () => {
       </Card>
 
       {/* Attendance History Section */}
-      <Card className="border-2 shadow-xl">
+      <Card className="border-2 shadow-xl rounded-3xl">
         <CardHeader className="border-b pb-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -501,7 +510,7 @@ const EmployeeProfile = () => {
                     const config = statusConfig[status];
 
                     return (
-                      <Card key={record.id} className="border-2 hover:shadow-lg transition-shadow">
+                      <Card key={record.id} className="border-2 hover:shadow-lg transition-shadow rounded-3xl">
                         <CardContent className="pt-6">
                           <div className="space-y-4">
                             <div className="flex items-center justify-between">
@@ -544,7 +553,7 @@ const EmployeeProfile = () => {
                     const config = statusConfig[status];
 
                     return (
-                      <Card key={record.id} className="border">
+                      <Card key={record.id} className="border rounded-3xl">
                         <CardContent className="pt-4">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4 flex-1">

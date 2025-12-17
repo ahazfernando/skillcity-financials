@@ -26,6 +26,7 @@ const docToBankDetails = (doc: any): BankDetails => {
     accountNumber: data.accountNumber || "",
     branch: data.branch || "",
     idNumber: data.idNumber || undefined,
+    swiftCode: data.swiftCode || undefined,
     createdAt: data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate().toISOString() : data.createdAt) : "",
     updatedAt: data.updatedAt ? (data.updatedAt.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt) : "",
   };
@@ -40,6 +41,7 @@ const bankDetailsToDoc = (details: Omit<BankDetails, "id">): any => {
     accountNumber: details.accountNumber,
     branch: details.branch,
     idNumber: details.idNumber || null,
+    swiftCode: details.swiftCode || null,
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
   };
@@ -94,6 +96,7 @@ export const upsertBankDetails = async (
         accountNumber: details.accountNumber,
         branch: details.branch,
         idNumber: details.idNumber || null,
+        swiftCode: details.swiftCode || null,
         updatedAt: Timestamp.now(),
       };
       
@@ -126,5 +129,7 @@ export const deleteBankDetails = async (id: string): Promise<void> => {
     throw error;
   }
 };
+
+
 
 
