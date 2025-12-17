@@ -85,7 +85,7 @@ export const subscribeToLeaveRequests = (
   return onSnapshot(
     q,
     (querySnapshot) => {
-      let requests = querySnapshot.docs.map(docToLeaveRequest);
+      const requests = querySnapshot.docs.map(docToLeaveRequest);
       // Client-side sort by createdAt descending
       requests.sort((a, b) => {
         const dateA = new Date(a.createdAt).getTime();

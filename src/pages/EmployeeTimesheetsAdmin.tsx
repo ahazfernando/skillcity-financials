@@ -494,7 +494,7 @@ const EmployeeTimesheetsAdmin = () => {
                 let paymentStatus: PaymentStatus | "work_in_progress" = "pending";
                 if (matchingPayroll) {
                   if (matchingPayroll.status === "paid" || matchingPayroll.status === "received") {
-                    paymentStatus = "paid";
+                    paymentStatus = matchingPayroll.status;
                   } else {
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);

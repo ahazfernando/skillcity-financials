@@ -212,11 +212,12 @@ const EmployeeProfile = () => {
           return b.date.localeCompare(a.date);
         case "date-asc":
           return a.date.localeCompare(b.date);
-        case "status":
+        case "status": {
           const statusA = getAttendanceStatus(a);
           const statusB = getAttendanceStatus(b);
           const statusOrder = { "on-time": 0, "late": 1, "absent": 2 };
           return statusOrder[statusA] - statusOrder[statusB];
+        }
         default:
           return 0;
       }
@@ -262,7 +263,7 @@ const EmployeeProfile = () => {
 
   const employeeName = userData?.name || employeeData?.name || user?.email || "Employee";
   const employeeRole = employeeData?.role || userData?.role || "Employee";
-  const employeePhone = employeeData?.phone || userData?.phone || "N/A";
+  const employeePhone = employeeData?.phone || "N/A";
   const employeeEmail = user?.email || employeeData?.email || "N/A";
 
   return (
@@ -318,7 +319,7 @@ const EmployeeProfile = () => {
               {/* Employee Info */}
               <div className="flex items-start gap-6 mb-8">
                 <Avatar className="h-24 w-24 border-4 border-green-500">
-                  <AvatarImage src={employeeData?.photoUrl || userData?.photoURL} />
+                  <AvatarImage src={employeeData?.photoUrl} />
                   <AvatarFallback className="text-2xl font-bold bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
                     {getInitials(employeeName)}
                   </AvatarFallback>
