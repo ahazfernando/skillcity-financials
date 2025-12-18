@@ -63,6 +63,8 @@ const docToEmployee = (doc: any): Employee => {
     invoiceCollectionFrequency: data.invoiceCollectionFrequency || undefined,
     type: (data.type as "employee" | "client") || "employee", // Default to "employee" for backward compatibility
     isSkillCityEmployee: data.isSkillCityEmployee !== undefined ? data.isSkillCityEmployee : false, // Default to false for backward compatibility
+    abnRegistered: data.abnRegistered !== undefined ? data.abnRegistered : false,
+    gstRegistered: data.gstRegistered !== undefined ? data.gstRegistered : false,
   };
 };
 
@@ -94,6 +96,8 @@ const employeeToDoc = (employee: Omit<Employee, "id">): any => {
     invoiceCollectionFrequency: employee.invoiceCollectionFrequency || null,
     type: employee.type || "employee", // Default to "employee" for backward compatibility
     isSkillCityEmployee: employee.isSkillCityEmployee !== undefined ? employee.isSkillCityEmployee : false, // Default to false for backward compatibility
+    abnRegistered: employee.abnRegistered !== undefined ? employee.abnRegistered : false,
+    gstRegistered: employee.gstRegistered !== undefined ? employee.gstRegistered : false,
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
   };

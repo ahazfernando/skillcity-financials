@@ -62,9 +62,10 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import { PaymentStatus, Employee, CashFlowMode, CashFlowType, PaymentMethod, PayrollFrequency, type Payroll } from "@/types/financial";
+import { PaymentStatus, Employee, CashFlowMode, CashFlowType, PaymentMethod, PayrollFrequency, type Payroll, type Invoice } from "@/types/financial";
 import { getAllEmployees, addEmployee } from "@/lib/firebase/employees";
 import { getAllPayrolls, addPayroll, updatePayroll, deletePayroll } from "@/lib/firebase/payroll";
+import { getAllInvoices } from "@/lib/firebase/invoices";
 import { getAllSites } from "@/lib/firebase/sites";
 import { toast } from "sonner";
 import { calculatePaymentDate } from "@/lib/paymentCycle";
@@ -82,8 +83,10 @@ const Payroll = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [payrolls, setPayrolls] = useState<Payroll[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [sites, setSites] = useState<any[]>([]);
+  const [isProcessingInvoices, setIsProcessingInvoices] = useState(false);
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
   const [employeePopoverOpen, setEmployeePopoverOpen] = useState(false);
   const [employeeSearchValue, setEmployeeSearchValue] = useState("");
@@ -148,6 +151,7 @@ const Payroll = () => {
         
         // Process all invoices to update statuses and create payroll records
         // This ensures any existing invoices are processed
+        let payrollsCreated = 0;
         try {
           const processResponse = await fetch("/api/process-invoices", {
             method: "GET",
@@ -156,6 +160,7 @@ const Payroll = () => {
             const result = await processResponse.json();
             if (result.payrollsCreated > 0 || result.statusesUpdated > 0) {
               console.log(`Processed invoices: ${result.statusesUpdated} statuses updated, ${result.payrollsCreated} payrolls created`);
+              payrollsCreated = result.payrollsCreated || 0;
             }
           }
         } catch (error) {
@@ -163,12 +168,20 @@ const Payroll = () => {
           // Don't block the UI if this fails
         }
         
-        const [fetchedPayrolls, fetchedEmployees, fetchedSites] = await Promise.all([
+        // Fetch data - reload payrolls if new ones were created
+        const [fetchedPayrolls, fetchedInvoices, fetchedEmployees, fetchedSites] = await Promise.all([
           getAllPayrolls(),
+          getAllInvoices(),
           getAllEmployees(),
           getAllSites(),
         ]);
+        
+        // If new payrolls were created, show a toast notification
+        if (payrollsCreated > 0) {
+          toast.success(`${payrollsCreated} new payroll record${payrollsCreated > 1 ? 's' : ''} created from invoices`);
+        }
         setPayrolls(fetchedPayrolls);
+        setInvoices(fetchedInvoices);
         // Filter out clients and inactive employees, then deduplicate
         const filteredEmployees = fetchedEmployees.filter(emp => emp.status === "active" && (!emp.type || emp.type === "employee"));
         setEmployees(deduplicateEmployees(filteredEmployees));
@@ -659,9 +672,47 @@ const Payroll = () => {
     }
   };
 
-  // Get unique months for filters
-  const uniqueMonths = Array.from(new Set(payrolls.map(p => p.month))).sort();
-  
+  // Handle manual processing of invoices
+  const handleProcessInvoices = async () => {
+    try {
+      setIsProcessingInvoices(true);
+      const response = await fetch("/api/process-invoices", {
+        method: "GET",
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        
+        // Reload data after processing
+        const [updatedPayrolls, updatedInvoices] = await Promise.all([
+          getAllPayrolls(),
+          getAllInvoices(),
+        ]);
+        
+        setPayrolls(updatedPayrolls);
+        setInvoices(updatedInvoices);
+        
+        if (result.payrollsCreated > 0) {
+          toast.success(
+            `Processed ${result.invoicesProcessed} invoices. Created ${result.payrollsCreated} new payroll record${result.payrollsCreated > 1 ? 's' : ''}.`
+          );
+        } else if (result.statusesUpdated > 0) {
+          toast.success(`Updated ${result.statusesUpdated} invoice status${result.statusesUpdated > 1 ? 'es' : ''}.`);
+        } else {
+          toast.info("All invoices are up to date. No changes needed.");
+        }
+      } else {
+        const error = await response.json();
+        toast.error(error.error || "Failed to process invoices");
+      }
+    } catch (error: any) {
+      console.error("Error processing invoices:", error);
+      toast.error("Failed to process invoices. Please try again.");
+    } finally {
+      setIsProcessingInvoices(false);
+    }
+  };
+
   // All months for the form dropdown
   const allMonths = [
     "January", "February", "March", "April", "May", "June",
@@ -683,7 +734,47 @@ const Payroll = () => {
     return null;
   };
 
-  const filteredPayrolls = payrolls.filter(payroll => {
+  // Convert invoices to payroll-like format for display
+  const invoicesAsPayrolls: Payroll[] = invoices
+    .filter(inv => inv.status === "pending" || inv.status === "overdue")
+    .map(inv => {
+      const issueDate = parseDate(inv.issueDate) || new Date(inv.issueDate);
+      return {
+        id: `invoice-${inv.id}`,
+        month: issueDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+        date: formatDate(inv.issueDate),
+        modeOfCashFlow: "outflow" as CashFlowMode,
+        typeOfCashFlow: "internal_payroll" as CashFlowType,
+        name: inv.name || inv.clientName,
+        siteOfWork: inv.siteOfWork,
+        abnRegistered: false,
+        gstRegistered: inv.gst > 0,
+        invoiceNumber: inv.invoiceNumber,
+        amountExclGst: inv.amount,
+        gstAmount: inv.gst,
+        totalAmount: inv.totalAmount,
+        currency: "AUD",
+        paymentMethod: inv.paymentMethod || "bank_transfer",
+        paymentDate: inv.paymentDate,
+        paymentReceiptNumber: inv.paymentReceiptNumber,
+        status: inv.status,
+        notes: inv.notes || `From invoice ${inv.invoiceNumber}`,
+      } as Payroll;
+    });
+
+  // Merge payrolls and invoices, removing duplicates (prefer payroll if invoice number matches)
+  const allPayrollRecords = [...payrolls];
+  invoicesAsPayrolls.forEach(invPayroll => {
+    const existing = allPayrollRecords.find(p => p.invoiceNumber === invPayroll.invoiceNumber);
+    if (!existing) {
+      allPayrollRecords.push(invPayroll);
+    }
+  });
+
+  // Get unique months for filters
+  const uniqueMonths = Array.from(new Set(allPayrollRecords.map(p => p.month))).sort();
+
+  const filteredPayrolls = allPayrollRecords.filter(payroll => {
     const matchesSearch = payroll.name.toLowerCase().includes(searchValue.toLowerCase()) ||
       payroll.siteOfWork?.toLowerCase().includes(searchValue.toLowerCase()) ||
       payroll.invoiceNumber?.toLowerCase().includes(searchValue.toLowerCase());
@@ -716,7 +807,7 @@ const Payroll = () => {
 
   // Calculate chart data
   // Area Chart: Monthly inflow and outflow totals
-  const monthlyData = payrolls.reduce((acc, payroll) => {
+  const monthlyData = allPayrollRecords.reduce((acc, payroll) => {
     const month = payroll.month;
     if (!acc[month]) {
       acc[month] = { month, inflow: 0, outflow: 0 };
@@ -741,10 +832,10 @@ const Payroll = () => {
     }));
 
   // Pie Chart: Total inflow vs outflow
-  const totalInflow = payrolls
+  const totalInflow = allPayrollRecords
     .filter(p => p.modeOfCashFlow === "inflow")
     .reduce((sum, p) => sum + p.totalAmount, 0);
-  const totalOutflow = payrolls
+  const totalOutflow = allPayrollRecords
     .filter(p => p.modeOfCashFlow === "outflow")
     .reduce((sum, p) => sum + p.totalAmount, 0);
 
@@ -828,7 +919,7 @@ const Payroll = () => {
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground">Manage employee payroll with comprehensive cash flow tracking (includes 10% GST)</p>
         </div>
-        <div className="flex gap-2 w-full sm:w-auto">
+        <div className="flex gap-2 w-full sm:w-auto flex-wrap">
             <Button 
               onClick={() => setIsAddDialogOpen(true)} 
               className="w-full sm:w-auto shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
@@ -836,6 +927,25 @@ const Payroll = () => {
             >
             <Plus className="mr-2 h-4 w-4" />
             Add Payroll
+          </Button>
+          <Button 
+              onClick={handleProcessInvoices}
+              disabled={isProcessingInvoices}
+              variant="outline"
+              className="w-full sm:w-auto"
+              size="lg"
+            >
+            {isProcessingInvoices ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <FileText className="mr-2 h-4 w-4" />
+                Process Invoices
+              </>
+            )}
           </Button>
           </div>
         </div>

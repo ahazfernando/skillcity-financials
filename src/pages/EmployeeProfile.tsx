@@ -20,11 +20,27 @@ import {
   ChevronRight,
   Mail,
   Phone,
-  Briefcase
+  Briefcase,
+  Edit2,
+  Save,
+  X,
+  Building2,
+  FileText
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { getEmployeeByEmail } from "@/lib/firebase/employees";
+import { getEmployeeByEmail, updateEmployee } from "@/lib/firebase/employees";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { getWorkRecordsByEmployee } from "@/lib/firebase/workRecords";
 import { WorkRecord } from "@/types/financial";
 import {
@@ -56,6 +72,12 @@ const EmployeeProfile = () => {
   const [filterOption, setFilterOption] = useState<FilterOption>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editFormData, setEditFormData] = useState({
+    abnRegistered: false,
+    gstRegistered: false,
+  });
 
   // Generate years list (current year and past 5 years)
   const years = Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i);
@@ -76,6 +98,10 @@ const EmployeeProfile = () => {
           const employee = await getEmployeeByEmail(userData.email);
           if (employee) {
             setEmployeeData(employee);
+            setEditFormData({
+              abnRegistered: employee.abnRegistered || false,
+              gstRegistered: employee.gstRegistered || false,
+            });
           }
         } catch (error) {
           console.error("Error loading employee data:", error);
@@ -265,6 +291,49 @@ const EmployeeProfile = () => {
   const employeeRole = employeeData?.role || userData?.role || "Employee";
   const employeePhone = employeeData?.phone || "N/A";
   const employeeEmail = user?.email || employeeData?.email || "N/A";
+  const employeeABNRegistered = employeeData?.abnRegistered || false;
+  const employeeGSTRegistered = employeeData?.gstRegistered || false;
+
+  const handleEditClick = () => {
+    if (employeeData) {
+      setEditFormData({
+        abnRegistered: employeeData.abnRegistered || false,
+        gstRegistered: employeeData.gstRegistered || false,
+      });
+      setIsEditDialogOpen(true);
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!employeeData?.id) {
+      toast.error("Employee data not available");
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      await updateEmployee(employeeData.id, {
+        abnRegistered: editFormData.abnRegistered,
+        gstRegistered: editFormData.gstRegistered,
+      });
+
+      // Reload employee data
+      if (userData?.email) {
+        const updatedEmployee = await getEmployeeByEmail(userData.email);
+        if (updatedEmployee) {
+          setEmployeeData(updatedEmployee);
+        }
+      }
+
+      toast.success("GST and ABN information updated successfully");
+      setIsEditDialogOpen(false);
+    } catch (error: any) {
+      console.error("Error updating employee:", error);
+      toast.error(error.message || "Failed to update information");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="space-y-6 sm:space-y-8">
@@ -348,6 +417,37 @@ const EmployeeProfile = () => {
                       </div>
                       <span className="text-foreground font-medium">{employeeEmail}</span>
                     </div>
+                  </div>
+                  <div className="flex flex-wrap items-start gap-8 md:gap-12 mt-4 pt-4 border-t">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Building2 className="h-4 w-4" />
+                        <span>ABN Registered</span>
+                      </div>
+                      <span className="text-foreground font-medium">
+                        {employeeABNRegistered ? "Yes" : "No"}
+                      </span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <FileText className="h-4 w-4" />
+                        <span>GST Registered</span>
+                      </div>
+                      <span className="text-foreground font-medium">
+                        {employeeGSTRegistered ? "Yes" : "No"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <Button
+                      onClick={handleEditClick}
+                      variant="outline"
+                      size="sm"
+                      className="gap-2"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                      Edit GST & ABN
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -660,6 +760,73 @@ const EmployeeProfile = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Edit GST & ABN Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit GST & ABN Information</DialogTitle>
+            <DialogDescription>
+              Update your ABN and GST registration status.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="abnRegistered"
+                checked={editFormData.abnRegistered}
+                onCheckedChange={(checked) =>
+                  setEditFormData({ ...editFormData, abnRegistered: checked === true })
+                }
+              />
+              <Label
+                htmlFor="abnRegistered"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+              >
+                ABN Registered
+              </Label>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="gstRegistered"
+                checked={editFormData.gstRegistered}
+                onCheckedChange={(checked) =>
+                  setEditFormData({ ...editFormData, gstRegistered: checked === true })
+                }
+              />
+              <Label
+                htmlFor="gstRegistered"
+                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+              >
+                GST Registered
+              </Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsEditDialogOpen(false)}
+              disabled={isSaving}
+            >
+              <X className="h-4 w-4 mr-2" />
+              Cancel
+            </Button>
+            <Button onClick={handleSaveEdit} disabled={isSaving}>
+              {isSaving ? (
+                <>
+                  <Clock className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Changes
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

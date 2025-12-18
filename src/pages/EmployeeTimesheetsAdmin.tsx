@@ -6,14 +6,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar, Clock, DollarSign, Search, Download, User } from "lucide-react";
+import { Calendar, Clock, DollarSign, Search, Download, User, CheckCircle2, Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { getAllWorkRecords } from "@/lib/firebase/workRecords";
 import { getAllEmployees } from "@/lib/firebase/employees";
 import { getEmployeePayRatesByEmployee } from "@/lib/firebase/employeePayRates";
 import { getAllUsers } from "@/lib/firebase/users";
-import { getAllPayrolls } from "@/lib/firebase/payroll";
+import { getAllPayrolls, updatePayroll } from "@/lib/firebase/payroll";
+import { getAllInvoices, updateInvoice } from "@/lib/firebase/invoices";
 import { WorkRecord, Employee, Payroll, PaymentStatus } from "@/types/financial";
 import { formatCurrency } from "@/lib/utils";
 import { calculatePaymentDueDate } from "@/lib/paymentReminders";
@@ -48,6 +49,7 @@ const EmployeeTimesheetsAdmin = () => {
   const [employeePayRates, setEmployeePayRates] = useState<Record<string, any[]>>({});
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [payrolls, setPayrolls] = useState<Payroll[]>([]);
+  const [updatingPayrollId, setUpdatingPayrollId] = useState<string | null>(null);
 
   useEffect(() => {
     if (userData) {
@@ -198,8 +200,12 @@ const EmployeeTimesheetsAdmin = () => {
     };
   });
 
-  // Filter by search query
+  // Filter by search query and only show employees with at least one record
   const filteredStats = employeeStats.filter(stat => {
+    // Only show employees who have at least one timesheet record
+    if (stat.totalRecords === 0) return false;
+    
+    // Apply search filter if query exists
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
     return (
@@ -287,6 +293,70 @@ const EmployeeTimesheetsAdmin = () => {
     }
     
     return { status: "pending", dueDate };
+  };
+
+  // Handle marking employee as paid
+  const handleMarkAsPaid = async (stat: any, matchingPayroll: Payroll | undefined, workMonth: string, workYear: number) => {
+    try {
+      if (matchingPayroll) {
+        // Update existing payroll record
+        setUpdatingPayrollId(matchingPayroll.id);
+        await updatePayroll(matchingPayroll.id, { 
+          status: "paid",
+          paymentDate: new Date().toISOString().split('T')[0], // Set payment date to today
+        });
+        
+        // If there's an invoice number, also update the related invoice
+        if (matchingPayroll.invoiceNumber) {
+          try {
+            const invoices = await getAllInvoices();
+            const relatedInvoice = invoices.find(inv => inv.invoiceNumber === matchingPayroll.invoiceNumber);
+            if (relatedInvoice && relatedInvoice.status !== "paid" && relatedInvoice.status !== "received") {
+              await updateInvoice(relatedInvoice.id, { 
+                status: "paid",
+                paymentDate: new Date().toISOString().split('T')[0],
+              });
+            }
+          } catch (invoiceError) {
+            console.error("Error updating related invoice:", invoiceError);
+            // Don't fail the whole operation if invoice update fails
+          }
+        }
+      } else {
+        // No payroll record exists - try to find or create one
+        // First, try to find an invoice for this employee and month
+        const invoices = await getAllInvoices();
+        const workMonthName = new Date(selectedMonth + "-01").toLocaleDateString('en-US', { month: 'long' });
+        const relatedInvoice = invoices.find(inv => 
+          (inv.name === stat.employeeName || inv.clientName === stat.employeeName) &&
+          new Date(inv.issueDate).toLocaleDateString('en-US', { month: 'long' }) === workMonthName
+        );
+        
+        if (relatedInvoice) {
+          // Update the invoice status
+          setUpdatingPayrollId(`invoice-${relatedInvoice.id}`);
+          await updateInvoice(relatedInvoice.id, { 
+            status: "paid",
+            paymentDate: new Date().toISOString().split('T')[0],
+          });
+          toast.info("Invoice marked as paid. Payroll record will be created automatically.");
+        } else {
+          toast.error("No payroll or invoice record found. Please create a payroll record first.");
+          setUpdatingPayrollId(null);
+          return;
+        }
+      }
+      
+      // Reload data to reflect the change
+      await loadData();
+      
+      toast.success(`${stat.employeeName} has been marked as paid`);
+    } catch (error: any) {
+      console.error("Error updating payment status:", error);
+      toast.error(error.message || "Failed to update payment status");
+    } finally {
+      setUpdatingPayrollId(null);
+    }
   };
 
   return (
@@ -560,6 +630,29 @@ const EmployeeTimesheetsAdmin = () => {
                               <Badge variant="outline" className="px-3 py-1.5 text-sm font-medium">
                                 Due: {paymentDueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                               </Badge>
+                              {/* Mark as Paid Button - Only show when not already paid */}
+                              {paymentStatus !== "paid" && 
+                               paymentStatus !== "received" && (
+                                <Button
+                                  size="sm"
+                                  variant="default"
+                                  onClick={() => handleMarkAsPaid(stat, matchingPayroll, workMonthName, workYear)}
+                                  disabled={updatingPayrollId === (matchingPayroll?.id || `invoice-${stat.employeeId}`)}
+                                  className="gap-2 bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 text-sm font-medium rounded-full"
+                                >
+                                  {updatingPayrollId === (matchingPayroll?.id || `invoice-${stat.employeeId}`) ? (
+                                    <>
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                      Updating...
+                                    </>
+                                  ) : (
+                                    <>
+                                      <CheckCircle2 className="h-4 w-4" />
+                                      Mark as Paid
+                                    </>
+                                  )}
+                                </Button>
+                              )}
                             </div>
                           </div>
                           <Badge variant="outline" className="text-lg px-4 py-2">

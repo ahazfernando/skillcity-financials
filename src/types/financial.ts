@@ -75,6 +75,8 @@ export interface Employee {
   invoiceCollectionFrequency?: "Monthly" | "Fortnightly" | "Weekly";
   type?: EmployeeType; // "employee" or "client" - defaults to "employee" for backward compatibility
   isSkillCityEmployee?: boolean; // true if employee works for Skill City organization, false for external employees
+  abnRegistered?: boolean; // ABN registration status
+  gstRegistered?: boolean; // GST registration status
 }
 
 export interface Site {
