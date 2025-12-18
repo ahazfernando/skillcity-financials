@@ -120,20 +120,58 @@ const Payroll = () => {
   });
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
 
+  // Helper function to deduplicate employees
+  // Removes duplicates based on normalized name (case-insensitive, trimmed)
+  // Keeps the first occurrence of each unique name
+  const deduplicateEmployees = (employees: Employee[]): Employee[] => {
+    const seenByName = new Map<string, Employee>();
+    
+    for (const employee of employees) {
+      // Normalize name: lowercase, trim, remove extra spaces
+      const normalizedName = employee.name.toLowerCase().trim().replace(/\s+/g, ' ');
+      
+      // Only keep the first occurrence of each normalized name
+      if (!seenByName.has(normalizedName)) {
+        seenByName.set(normalizedName, employee);
+      }
+    }
+    
+    return Array.from(seenByName.values());
+  };
+
   // Load data from Firebase
   useEffect(() => {
     const loadData = async () => {
       try {
         setIsLoading(true);
         setIsLoadingEmployees(true);
+        
+        // Process all invoices to update statuses and create payroll records
+        // This ensures any existing invoices are processed
+        try {
+          const processResponse = await fetch("/api/process-invoices", {
+            method: "GET",
+          });
+          if (processResponse.ok) {
+            const result = await processResponse.json();
+            if (result.payrollsCreated > 0 || result.statusesUpdated > 0) {
+              console.log(`Processed invoices: ${result.statusesUpdated} statuses updated, ${result.payrollsCreated} payrolls created`);
+            }
+          }
+        } catch (error) {
+          console.error("Error processing invoices:", error);
+          // Don't block the UI if this fails
+        }
+        
         const [fetchedPayrolls, fetchedEmployees, fetchedSites] = await Promise.all([
           getAllPayrolls(),
           getAllEmployees(),
           getAllSites(),
         ]);
         setPayrolls(fetchedPayrolls);
-        // Filter out clients and inactive employees
-        setEmployees(fetchedEmployees.filter(emp => emp.status === "active" && (!emp.type || emp.type === "employee")));
+        // Filter out clients and inactive employees, then deduplicate
+        const filteredEmployees = fetchedEmployees.filter(emp => emp.status === "active" && (!emp.type || emp.type === "employee"));
+        setEmployees(deduplicateEmployees(filteredEmployees));
         setSites(fetchedSites.filter(s => s.status === "active"));
       } catch (error) {
         console.error("Error loading data:", error);
@@ -254,7 +292,8 @@ const Payroll = () => {
 
       // Reload employees list
       const updatedEmployees = await getAllEmployees();
-      setEmployees(updatedEmployees.filter(emp => emp.status === "active" && (!emp.type || emp.type === "employee")));
+      const filteredEmployees = updatedEmployees.filter(emp => emp.status === "active" && (!emp.type || emp.type === "employee"));
+      setEmployees(deduplicateEmployees(filteredEmployees));
 
       // Select the newly added employee
       setFormData((prev) => ({
@@ -1772,6 +1811,12 @@ const Payroll = () => {
                                       .filter(employee => 
                                         !employeeSearchValue || 
                                         employee.name.toLowerCase().includes(employeeSearchValue.toLowerCase())
+                                      )
+                                      .filter((employee, index, self) => 
+                                        // Additional deduplication: keep only first occurrence of each name
+                                        index === self.findIndex(emp => 
+                                          emp.name.toLowerCase().trim() === employee.name.toLowerCase().trim()
+                                        )
                                       )
                                       .map((employee) => (
                                   <CommandItem

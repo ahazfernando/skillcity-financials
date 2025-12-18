@@ -205,9 +205,44 @@ try {
   }
 }
 
-// Initialize services only if app is valid
-export const db: Firestore = app ? getFirestore(app) : null as any;
-export const storage: FirebaseStorage = app ? getStorage(app) : null as any;
-export const auth: Auth = app ? getAuth(app) : null as any;
+// Initialize services - using actual instances (not Proxies) so they work with Firestore functions
+// like collection(db, ...). getFirestore(), getStorage(), and getAuth() are idempotent and
+// return the same instance if called multiple times, so it's safe to initialize them here.
+// 
+// Important: We only initialize if app exists and has a valid config to avoid SSR issues.
+// During SSR page rendering, these will be placeholders that throw on use (which is fine
+// since Firestore shouldn't be used in SSR page components anyway - only in API routes and client components).
+
+let _db: Firestore | null = null;
+let _storage: FirebaseStorage | null = null;
+let _auth: Auth | null = null;
+
+// Initialize services only if we have a valid app (not a fallback/dummy config)
+// This prevents initialization during SSR with invalid configs
+if (app && hasValidConfig) {
+  _db = getFirestore(app);
+  _storage = getStorage(app);
+  _auth = getAuth(app);
+}
+
+// Export services - use actual instances when available, otherwise throw on access
+// This ensures collection(db, ...) works because db is the real Firestore instance
+export const db: Firestore = _db || new Proxy({} as Firestore, {
+  get() {
+    throw new Error("Firestore is not initialized. This may happen during SSR. Ensure Firebase is configured and only use Firestore in client components or API routes.");
+  }
+}) as Firestore;
+
+export const storage: FirebaseStorage = _storage || new Proxy({} as FirebaseStorage, {
+  get() {
+    throw new Error("Firebase Storage is not initialized. This may happen during SSR. Ensure Firebase is configured and only use Storage in client components or API routes.");
+  }
+}) as FirebaseStorage;
+
+export const auth: Auth = _auth || new Proxy({} as Auth, {
+  get() {
+    throw new Error("Firebase Auth is not initialized. This may happen during SSR. Ensure Firebase is configured and only use Auth in client components or API routes.");
+  }
+}) as Auth;
 
 export default app;

@@ -113,6 +113,23 @@ export const addInvoice = async (
   try {
     const invoiceData = invoiceToDoc(invoice);
     const docRef = await addDoc(collection(db, INVOICES_COLLECTION), invoiceData);
+    
+    // Trigger automation to process the new invoice (async, don't wait)
+    // This will check status and create payroll if needed
+    if (typeof window === "undefined") {
+      // Server-side: import and process
+      import("@/lib/invoice-payroll-automation")
+        .then(({ processSingleInvoice }) => processSingleInvoice(docRef.id))
+        .catch((err) => console.error("Error processing new invoice:", err));
+    } else {
+      // Client-side: call API route
+      fetch("/api/process-invoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceId: docRef.id }),
+      }).catch((err) => console.error("Error processing new invoice:", err));
+    }
+    
     return docRef.id;
   } catch (error) {
     console.error("Error adding invoice:", error);
@@ -155,6 +172,22 @@ export const updateInvoice = async (
     });
 
     await updateDoc(invoiceRef, updateData);
+    
+    // Trigger automation to process the updated invoice (async, don't wait)
+    // This will check status and create payroll if needed
+    if (typeof window === "undefined") {
+      // Server-side: import and process
+      import("@/lib/invoice-payroll-automation")
+        .then(({ processSingleInvoice }) => processSingleInvoice(id))
+        .catch((err) => console.error("Error processing updated invoice:", err));
+    } else {
+      // Client-side: call API route
+      fetch("/api/process-invoices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceId: id }),
+      }).catch((err) => console.error("Error processing updated invoice:", err));
+    }
   } catch (error) {
     console.error("Error updating invoice:", error);
     throw error;

@@ -34,13 +34,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Employee, Invoice, EmployeePayRate, SiteEmployeeAllocation } from "@/types/financial";
+import { Employee, Invoice, EmployeePayRate, SiteEmployeeAllocation, WorkRecord } from "@/types/financial";
 import { getAllEmployees, addEmployee, updateEmployee, deleteEmployee, getEmployeeByEmail } from "@/lib/firebase/employees";
 import { getAllUsers } from "@/lib/firebase/users";
 import { getAllInvoices } from "@/lib/firebase/invoices";
 import { getEmployeePayRatesByEmployee, addEmployeePayRate } from "@/lib/firebase/employeePayRates";
 import { getAllAllocations, getAllocationsByEmployee } from "@/lib/firebase/siteEmployeeAllocations";
 import { updateUserRoleByEmail } from "@/lib/firebase/users";
+import { getAllWorkRecords } from "@/lib/firebase/workRecords";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { Calendar } from "@/components/ui/calendar";
@@ -77,10 +78,12 @@ const Employees = () => {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [modalMonthRange, setModalMonthRange] = useState<DateRange | undefined>(undefined);
   const [modalInvoiceFrequencyFilter, setModalInvoiceFrequencyFilter] = useState<string>("all");
+  const [showAllInvoices, setShowAllInvoices] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 8;
   const [employeePayRates, setEmployeePayRates] = useState<EmployeePayRate[]>([]);
   const [employeeSiteAllocations, setEmployeeSiteAllocations] = useState<SiteEmployeeAllocation[]>([]);
+  const [employeeWorkRecords, setEmployeeWorkRecords] = useState<WorkRecord[]>([]);
   const [isLoadingEmployeeDetails, setIsLoadingEmployeeDetails] = useState(false);
   const [availableRoles, setAvailableRoles] = useState<string[]>([]);
   const [roleSearchValue, setRoleSearchValue] = useState("");
@@ -274,6 +277,7 @@ const Employees = () => {
     setEditingEmployeeId(null);
     setEmployeePayRates([]);
     setEmployeeSiteAllocations([]);
+    setEmployeeWorkRecords([]);
     setRoleSearchValue("");
     setPayRateFormData({
       hourlyRate: "",
@@ -372,18 +376,57 @@ const Employees = () => {
       isSkillCityEmployee: employee.isSkillCityEmployee || false,
     });
     
-    // Fetch employee pay rates and site allocations
+    // Reset invoice view state
+    setShowAllInvoices(false);
+    setModalInvoiceFrequencyFilter("all");
+    setModalMonthRange(undefined);
+    
+    // Fetch employee pay rates, site allocations, and work records
     setIsLoadingEmployeeDetails(true);
     try {
+      // Get user by email to find Firebase Auth UID for work records
+      let firebaseAuthUid: string | null = null;
+      if (employee.email) {
+        try {
+          const { getUserByEmail } = await import("@/lib/firebase/users");
+          const user = await getUserByEmail(employee.email);
+          if (user) {
+            firebaseAuthUid = user.uid;
+          }
+        } catch (error) {
+          console.error("Error fetching user by email:", error);
+        }
+      }
+      
       const [payRates, employeeAllocations] = await Promise.all([
         getEmployeePayRatesByEmployee(employee.id),
         getAllocationsByEmployee(employee.id),
       ]);
       setEmployeePayRates(payRates);
       setEmployeeSiteAllocations(employeeAllocations);
+      
+      // Fetch work records for this employee using Firebase Auth UID
+      if (firebaseAuthUid) {
+        try {
+          const { getWorkRecordsByEmployee } = await import("@/lib/firebase/workRecords");
+          // Get work records for the last 12 months
+          const oneYearAgo = new Date();
+          oneYearAgo.setMonth(oneYearAgo.getMonth() - 12);
+          const startDate = oneYearAgo.toISOString().split("T")[0];
+          const endDate = new Date().toISOString().split("T")[0];
+          
+          const workRecords = await getWorkRecordsByEmployee(firebaseAuthUid, startDate, endDate);
+          setEmployeeWorkRecords(workRecords);
+        } catch (error) {
+          console.error("Error fetching work records:", error);
+          setEmployeeWorkRecords([]);
+        }
+      } else {
+        setEmployeeWorkRecords([]);
+      }
     } catch (error) {
       console.error("Error loading employee details:", error);
-      toast.error("Failed to load employee pay rates and site information.");
+      toast.error("Failed to load employee details.");
     } finally {
       setIsLoadingEmployeeDetails(false);
     }
@@ -625,36 +668,64 @@ const Employees = () => {
 
   const filteredEmployeeInvoices = getFilteredEmployeeInvoices();
 
-  // Filter invoices for modal based on month range and frequency
-  const getModalFilteredInvoices = (frequencyFilter: string, monthRange: DateRange | undefined) => {
-    let filtered = invoices;
+  // Group work records by month and calculate summaries
+  const getMonthlyTimesheetSummaries = (showAll: boolean = false) => {
+    if (!employeeWorkRecords.length) return [];
 
-    // Filter by invoice collection frequency
-    if (frequencyFilter !== "all") {
-      // For now, show all invoices - in production, you'd match invoices to employees
-      // based on work schedules or other relationships
-      // TODO: Implement frequency-based filtering
+    // Group records by month
+    const monthlyGroups: Record<string, WorkRecord[]> = {};
+    employeeWorkRecords.forEach(record => {
+      const date = new Date(record.date);
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      if (!monthlyGroups[monthKey]) {
+        monthlyGroups[monthKey] = [];
+      }
+      monthlyGroups[monthKey].push(record);
+    });
+
+    // Calculate summaries for each month
+    const summaries = Object.entries(monthlyGroups).map(([monthKey, records]) => {
+      const completedRecords = records.filter(r => r.clockOutTime && !r.isLeave);
+      const totalHours = completedRecords.reduce((sum, r) => sum + r.hoursWorked, 0);
+      const totalDays = completedRecords.length;
+      const leaveDays = records.filter(r => r.isLeave).length;
+      
+      // Determine overall status (pending if any pending, approved if all approved, etc.)
+      const hasPending = records.some(r => r.approvalStatus === "pending");
+      const hasRejected = records.some(r => r.approvalStatus === "rejected");
+      const allApproved = records.length > 0 && records.every(r => r.approvalStatus === "approved");
+      
+      let status: "pending" | "approved" | "rejected" = "pending";
+      if (hasRejected) {
+        status = "rejected";
+      } else if (allApproved) {
+        status = "approved";
+      }
+
+      const date = new Date(monthKey + "-01");
+      const monthName = format(date, "MMMM yyyy");
+
+      return {
+        monthKey,
+        monthName,
+        records,
+        totalHours: Math.round(totalHours * 100) / 100,
+        totalDays,
+        leaveDays,
+        status,
+        date,
+      };
+    });
+
+    // Sort by date (newest first)
+    summaries.sort((a, b) => b.date.getTime() - a.date.getTime());
+
+    // If not showing all, limit to latest 2
+    if (!showAll) {
+      return summaries.slice(0, 2);
     }
 
-    // Filter by month range
-    if (monthRange?.from || monthRange?.to) {
-      filtered = filtered.filter(inv => {
-        const issueDate = new Date(inv.issueDate);
-        const fromDate = monthRange.from ? new Date(monthRange.from.getFullYear(), monthRange.from.getMonth(), 1) : null;
-        const toDate = monthRange.to ? new Date(monthRange.to.getFullYear(), monthRange.to.getMonth() + 1, 0) : null;
-
-        if (fromDate && toDate) {
-          return issueDate >= fromDate && issueDate <= toDate;
-        } else if (fromDate) {
-          return issueDate >= fromDate;
-        } else if (toDate) {
-          return issueDate <= toDate;
-        }
-        return true;
-      });
-    }
-
-    return filtered;
+    return summaries;
   };
 
   return (
@@ -1288,132 +1359,6 @@ const Employees = () => {
                   </div>
                 </div>
 
-                {/* Employee Invoice Records Section */}
-                <div className="mt-6 pt-6 border-t">
-                  <div className="mb-4">
-                    <h3 className="text-lg font-semibold mb-4">Previous Employee Invoice Records</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      {/* Invoice Collection Frequency Filter */}
-                      <div className="space-y-2">
-                        <Label htmlFor="modal-frequency-filter">Invoice Collection Frequency</Label>
-                        <Select
-                          value={modalInvoiceFrequencyFilter}
-                          onValueChange={setModalInvoiceFrequencyFilter}
-                        >
-                          <SelectTrigger id="modal-frequency-filter">
-                            <SelectValue placeholder="All frequencies" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All Frequencies</SelectItem>
-                            <SelectItem value="Weekly">Weekly</SelectItem>
-                            <SelectItem value="Fortnightly">Fortnightly</SelectItem>
-                            <SelectItem value="Monthly">Monthly</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {/* Month Range Picker */}
-                      <div className="space-y-2">
-                        <Label>Month Range</Label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className="w-full justify-start text-left font-normal"
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {modalMonthRange?.from ? (
-                                modalMonthRange.to ? (
-                                  <>
-                                    {format(modalMonthRange.from, "LLL dd, y")} -{" "}
-                                    {format(modalMonthRange.to, "LLL dd, y")}
-                                  </>
-                                ) : (
-                                  format(modalMonthRange.from, "LLL dd, y")
-                                )
-                              ) : (
-                                <span>Pick a date range</span>
-                              )}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              initialFocus
-                              mode="range"
-                              defaultMonth={modalMonthRange?.from}
-                              selected={modalMonthRange}
-                              onSelect={setModalMonthRange}
-                              numberOfMonths={2}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                    </div>
-
-                    {/* Clear Filters Button */}
-                    {(modalInvoiceFrequencyFilter !== "all" || modalMonthRange?.from || modalMonthRange?.to) && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setModalInvoiceFrequencyFilter("all");
-                          setModalMonthRange(undefined);
-                        }}
-                        className="mb-4"
-                      >
-                        Clear Filters
-                      </Button>
-                    )}
-                  </div>
-
-                  <div className="max-h-[300px] overflow-y-auto">
-                    {getModalFilteredInvoices(modalInvoiceFrequencyFilter, modalMonthRange).length === 0 ? (
-                      <div className="text-center py-12 text-muted-foreground">
-                        <FileText className="h-12 w-12 mx-auto mb-4 opacity-20" />
-                        <p>No invoices found matching the filters</p>
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 gap-3">
-                        {getModalFilteredInvoices(modalInvoiceFrequencyFilter, modalMonthRange).map((invoice) => (
-                          <Card key={invoice.id} className="hover:shadow-md transition-shadow cursor-pointer">
-                            <CardContent className="p-4">
-                              <div className="flex items-start justify-between gap-4">
-                                <div className="flex-1 space-y-2">
-                                  <div className="flex items-center gap-3">
-                                    <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                      <FileText className="h-5 w-5 text-primary" />
-                                    </div>
-                                    <div>
-                                      <h4 className="font-semibold text-sm">{invoice.invoiceNumber}</h4>
-                                      <p className="text-xs text-muted-foreground">{invoice.clientName}</p>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-4 text-sm">
-                                    <div>
-                                      <span className="text-muted-foreground">Amount: </span>
-                                      <span className="font-medium">${invoice.amount.toLocaleString()}</span>
-                                    </div>
-                                    <div>
-                                      <span className="text-muted-foreground">Total: </span>
-                                      <span className="font-semibold text-primary">${invoice.totalAmount.toLocaleString()}</span>
-                                    </div>
-                                    <div>
-                                      <span className="text-muted-foreground">Issue Date: </span>
-                                      <span>{new Date(invoice.issueDate).toLocaleDateString()}</span>
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="flex flex-col items-end gap-2">
-                                  <StatusBadge status={invoice.status} />
-                                </div>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
 
                 <DialogFooter>
                   <Button 
@@ -1970,123 +1915,82 @@ const Employees = () => {
                   </div>
                 </div>
 
-                {/* Employee Invoice Records Section */}
+                {/* Employee Timesheet Records Section (Monthly Invoices) */}
                 <div className="mt-6 pt-6 border-t">
                   <div className="mb-4">
-                    <h3 className="text-lg font-semibold mb-4">Previous Employee Invoice Records</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      {/* Invoice Collection Frequency Filter */}
-                      <div className="space-y-2">
-                        <Label htmlFor="edit-modal-frequency-filter">Invoice Collection Frequency</Label>
-                        <Select
-                          value={modalInvoiceFrequencyFilter}
-                          onValueChange={setModalInvoiceFrequencyFilter}
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold">Monthly Timesheet Records</h3>
+                      {!showAllInvoices && getMonthlyTimesheetSummaries(true).length > 2 && (
+                        <Button
+                          variant="link"
+                          size="sm"
+                          onClick={() => setShowAllInvoices(true)}
+                          className="text-primary"
                         >
-                          <SelectTrigger id="edit-modal-frequency-filter">
-                            <SelectValue placeholder="All frequencies" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">All Frequencies</SelectItem>
-                            <SelectItem value="Weekly">Weekly</SelectItem>
-                            <SelectItem value="Fortnightly">Fortnightly</SelectItem>
-                            <SelectItem value="Monthly">Monthly</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {/* Month Range Picker */}
-                      <div className="space-y-2">
-                        <Label>Month Range</Label>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="outline"
-                              className="w-full justify-start text-left font-normal"
-                            >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {modalMonthRange?.from ? (
-                                modalMonthRange.to ? (
-                                  <>
-                                    {format(modalMonthRange.from, "LLL dd, y")} -{" "}
-                                    {format(modalMonthRange.to, "LLL dd, y")}
-                                  </>
-                                ) : (
-                                  format(modalMonthRange.from, "LLL dd, y")
-                                )
-                              ) : (
-                                <span>Pick a date range</span>
-                              )}
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-auto p-0" align="start">
-                            <Calendar
-                              initialFocus
-                              mode="range"
-                              defaultMonth={modalMonthRange?.from}
-                              selected={modalMonthRange}
-                              onSelect={setModalMonthRange}
-                              numberOfMonths={2}
-                            />
-                          </PopoverContent>
-                        </Popover>
-                      </div>
+                          View All ({getMonthlyTimesheetSummaries(true).length})
+                        </Button>
+                      )}
+                      {showAllInvoices && (
+                        <Button
+                          variant="link"
+                          size="sm"
+                          onClick={() => setShowAllInvoices(false)}
+                          className="text-primary"
+                        >
+                          Show Less
+                        </Button>
+                      )}
                     </div>
-
-                    {/* Clear Filters Button */}
-                    {(modalInvoiceFrequencyFilter !== "all" || modalMonthRange?.from || modalMonthRange?.to) && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setModalInvoiceFrequencyFilter("all");
-                          setModalMonthRange(undefined);
-                        }}
-                        className="mb-4"
-                      >
-                        Clear Filters
-                      </Button>
-                    )}
                   </div>
 
-                  <div className="max-h-[300px] overflow-y-auto">
-                    {getModalFilteredInvoices(modalInvoiceFrequencyFilter, modalMonthRange).length === 0 ? (
+                  <div className={showAllInvoices ? "max-h-[300px] overflow-y-auto" : ""}>
+                    {isLoadingEmployeeDetails ? (
                       <div className="text-center py-12 text-muted-foreground">
-                        <FileText className="h-12 w-12 mx-auto mb-4 opacity-20" />
-                        <p>No invoices found matching the filters</p>
+                        <Loader2 className="h-8 w-8 mx-auto mb-4 animate-spin" />
+                        <p>Loading timesheet records...</p>
+                      </div>
+                    ) : getMonthlyTimesheetSummaries(showAllInvoices).length === 0 ? (
+                      <div className="text-center py-12 text-muted-foreground">
+                        <Clock className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                        <p>No timesheet records found for this employee</p>
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 gap-3">
-                        {getModalFilteredInvoices(modalInvoiceFrequencyFilter, modalMonthRange).map((invoice) => (
-                          <Card key={invoice.id} className="hover:shadow-md transition-shadow cursor-pointer">
+                        {getMonthlyTimesheetSummaries(showAllInvoices).map((summary) => (
+                          <Card key={summary.monthKey} className="hover:shadow-md transition-shadow">
                             <CardContent className="p-4">
                               <div className="flex items-start justify-between gap-4">
                                 <div className="flex-1 space-y-2">
                                   <div className="flex items-center gap-3">
                                     <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                                      <FileText className="h-5 w-5 text-primary" />
+                                      <Clock className="h-5 w-5 text-primary" />
                                     </div>
                                     <div>
-                                      <h4 className="font-semibold text-sm">{invoice.invoiceNumber}</h4>
-                                      <p className="text-xs text-muted-foreground">{invoice.clientName}</p>
+                                      <h4 className="font-semibold text-sm">{summary.monthName}</h4>
+                                      <p className="text-xs text-muted-foreground">{summary.records.length} record{summary.records.length !== 1 ? 's' : ''}</p>
                                     </div>
                                   </div>
-                                  <div className="flex items-center gap-4 text-sm">
+                                  <div className="flex items-center gap-4 text-sm flex-wrap">
                                     <div>
-                                      <span className="text-muted-foreground">Amount: </span>
-                                      <span className="font-medium">${invoice.amount.toLocaleString()}</span>
+                                      <span className="text-muted-foreground">Total Hours: </span>
+                                      <span className="font-medium">{summary.totalHours.toFixed(2)}h</span>
                                     </div>
                                     <div>
-                                      <span className="text-muted-foreground">Total: </span>
-                                      <span className="font-semibold text-primary">${invoice.totalAmount.toLocaleString()}</span>
+                                      <span className="text-muted-foreground">Days Worked: </span>
+                                      <span className="font-medium">{summary.totalDays}</span>
                                     </div>
-                                    <div>
-                                      <span className="text-muted-foreground">Issue Date: </span>
-                                      <span>{new Date(invoice.issueDate).toLocaleDateString()}</span>
-                                    </div>
+                                    {summary.leaveDays > 0 && (
+                                      <div>
+                                        <span className="text-muted-foreground">Leave Days: </span>
+                                        <span className="font-medium">{summary.leaveDays}</span>
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                                 <div className="flex flex-col items-end gap-2">
-                                  <StatusBadge status={invoice.status} />
+                                  <StatusBadge 
+                                    status={summary.status === "approved" ? "paid" : summary.status === "rejected" ? "overdue" : "pending"} 
+                                  />
                                 </div>
                               </div>
                             </CardContent>
@@ -2105,6 +2009,7 @@ const Employees = () => {
                       resetForm();
                       setModalMonthRange(undefined);
                       setModalInvoiceFrequencyFilter("all");
+                      setShowAllInvoices(false);
                     }}
                     disabled={isSaving}
                   >

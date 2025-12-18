@@ -262,7 +262,7 @@ const Invoices = () => {
     }
   }, []);
 
-  // Load payroll data from Firebase
+  // Load payroll data and invoices from Firebase
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -282,12 +282,31 @@ const Invoices = () => {
           }
         }
         
-        const [fetchedPayrolls, fetchedEmployees, fetchedSites] = await Promise.all([
+        // Process all invoices to update statuses and create payroll records
+        // This ensures any existing invoices are processed
+        try {
+          const processResponse = await fetch("/api/process-invoices", {
+            method: "GET",
+          });
+          if (processResponse.ok) {
+            const result = await processResponse.json();
+            if (result.payrollsCreated > 0 || result.statusesUpdated > 0) {
+              console.log(`Processed invoices: ${result.statusesUpdated} statuses updated, ${result.payrollsCreated} payrolls created`);
+            }
+          }
+        } catch (error) {
+          console.error("Error processing invoices:", error);
+          // Don't block the UI if this fails
+        }
+        
+        const [fetchedPayrolls, fetchedInvoices, fetchedEmployees, fetchedSites] = await Promise.all([
           getPayrollsByHistoryStatus(false),
+          getAllInvoices(),
           getAllEmployees(),
           getAllSites(),
         ]);
         setPayrolls(fetchedPayrolls);
+        setInvoices(fetchedInvoices);
         // Filter out clients and inactive employees
         setEmployees(fetchedEmployees.filter(emp => emp.status === "active" && (!emp.type || emp.type === "employee")));
         setSites(fetchedSites.filter(s => s.status === "active"));
@@ -581,7 +600,39 @@ const Invoices = () => {
     }
   };
 
-  const filteredPayrolls = payrolls.filter(payroll => {
+  // Convert invoices to payroll-like format for display
+  const invoicesAsPayrolls: Payroll[] = invoices.map(inv => ({
+    id: inv.id,
+    month: new Date(inv.issueDate).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
+    date: formatDate(inv.issueDate),
+    modeOfCashFlow: "outflow" as CashFlowMode,
+    typeOfCashFlow: "internal_payroll" as CashFlowType,
+    name: inv.name || inv.clientName,
+    siteOfWork: inv.siteOfWork,
+    abnRegistered: false,
+    gstRegistered: inv.gst > 0,
+    invoiceNumber: inv.invoiceNumber,
+    amountExclGst: inv.amount,
+    gstAmount: inv.gst,
+    totalAmount: inv.totalAmount,
+    currency: "AUD",
+    paymentMethod: inv.paymentMethod || "bank_transfer",
+    paymentDate: inv.paymentDate,
+    paymentReceiptNumber: inv.paymentReceiptNumber,
+    status: inv.status,
+    notes: inv.notes,
+  }));
+
+  // Combine payrolls and invoices, removing duplicates (prefer payroll if invoice number matches)
+  const allRecords = [...payrolls];
+  invoicesAsPayrolls.forEach(invPayroll => {
+    const existing = allRecords.find(p => p.invoiceNumber === invPayroll.invoiceNumber);
+    if (!existing) {
+      allRecords.push(invPayroll);
+    }
+  });
+
+  const filteredPayrolls = allRecords.filter(payroll => {
     const matchesSearch = payroll.invoiceNumber?.toLowerCase().includes(searchValue.toLowerCase()) ||
       payroll.name.toLowerCase().includes(searchValue.toLowerCase()) ||
       (payroll.siteOfWork && payroll.siteOfWork.toLowerCase().includes(searchValue.toLowerCase()));
@@ -621,6 +672,39 @@ const Invoices = () => {
             <p className="text-sm sm:text-base text-muted-foreground">Manage client invoices and payments efficiently</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <Button
+            variant="outline"
+            onClick={async () => {
+              try {
+                setIsLoading(true);
+                const response = await fetch("/api/process-invoices", {
+                  method: "GET",
+                });
+                const result = await response.json();
+                if (result.success) {
+                  toast.success(
+                    `Processed ${result.invoicesProcessed} invoices. ` +
+                    `Updated ${result.statusesUpdated} statuses, ` +
+                    `created ${result.payrollsCreated} payroll records.`
+                  );
+                  // Reload data
+                  window.location.reload();
+                } else {
+                  toast.error(result.error || "Failed to process invoices");
+                }
+              } catch (error: any) {
+                console.error("Error processing invoices:", error);
+                toast.error("Failed to process invoices. Please try again.");
+              } finally {
+                setIsLoading(false);
+              }
+            }}
+            disabled={isLoading}
+            className="shadow-md hover:shadow-lg transition-all duration-300 border-2"
+          >
+            <FileText className="mr-2 h-4 w-4" />
+            Process Invoices
+          </Button>
           <Button
             variant="outline"
             onClick={async () => {

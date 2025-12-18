@@ -1,0 +1,216 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function to get user data
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return isAuthenticated() && 
+             (getUserData().isAdmin == true || getUserData().role == 'admin');
+    }
+    
+    // Helper function to check if user is approved
+    function isApproved() {
+      return isAuthenticated() && getUserData().approved == true;
+    }
+    
+    // Helper function to check if user is the owner of a document
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // Users collection
+    match /users/{userId} {
+      // Users can read their own data
+      allow read: if isOwner(userId);
+      // Admins can read all users
+      allow read: if isAdmin();
+      // Users can create their own document during registration
+      allow create: if isOwner(userId) && request.resource.data.uid == userId;
+      // Only admins can update user documents (for role changes, approvals, etc.)
+      allow update: if isAdmin();
+      // Only admins can delete users
+      allow delete: if isAdmin();
+    }
+    
+    // Employees collection
+    match /employees/{employeeId} {
+      // Authenticated users can read employees
+      allow read: if isAuthenticated() && isApproved();
+      // Only admins can write
+      allow write: if isAdmin();
+    }
+    
+    // Work Records collection
+    match /workRecords/{recordId} {
+      // Users can read their own work records
+      allow read: if isAuthenticated() && isApproved() && 
+                     (resource.data.employeeId == request.auth.uid || isAdmin());
+      // Users can create their own work records
+      allow create: if isAuthenticated() && isApproved() && 
+                       request.resource.data.employeeId == request.auth.uid;
+      // Users can update their own work records, admins can update any
+      allow update: if isAuthenticated() && isApproved() && 
+                       (resource.data.employeeId == request.auth.uid || isAdmin());
+      // Users can delete their own work records, admins can delete any
+      allow delete: if isAuthenticated() && isApproved() && 
+                       (resource.data.employeeId == request.auth.uid || isAdmin());
+    }
+    
+    // Work Hours collection
+    match /workHours/{hoursId} {
+      // Users can read their own work hours
+      allow read: if isAuthenticated() && isApproved() && 
+                     (resource.data.employeeId == request.auth.uid || isAdmin());
+      // Users can create their own work hours
+      allow create: if isAuthenticated() && isApproved() && 
+                       request.resource.data.employeeId == request.auth.uid;
+      // Users can update their own work hours, admins can update any
+      allow update: if isAuthenticated() && isApproved() && 
+                       (resource.data.employeeId == request.auth.uid || isAdmin());
+      // Users can delete their own work hours, admins can delete any
+      allow delete: if isAuthenticated() && isApproved() && 
+                       (resource.data.employeeId == request.auth.uid || isAdmin());
+    }
+    
+    // Employee Timesheets collection (if exists)
+    match /employeeTimesheets/{timesheetId} {
+      allow read: if isAuthenticated() && isApproved() && 
+                     (resource.data.employeeId == request.auth.uid || isAdmin());
+      allow write: if isAuthenticated() && isApproved() && 
+                      (resource.data.employeeId == request.auth.uid || isAdmin());
+    }
+    
+    // Employee Pay Rates collection
+    match /employeePayRates/{rateId} {
+      // Users can read their own pay rates
+      allow read: if isAuthenticated() && isApproved() && 
+                     (resource.data.employeeId == request.auth.uid || isAdmin());
+      // Only admins can write pay rates
+      allow write: if isAdmin();
+    }
+    
+    // Bank Details collection
+    match /bankDetails/{detailId} {
+      // Users can read their own bank details
+      allow read: if isAuthenticated() && isApproved() && 
+                     (resource.data.employeeId == request.auth.uid || isAdmin());
+      // Users can create/update their own bank details
+      allow create: if isAuthenticated() && isApproved() && 
+                       request.resource.data.employeeId == request.auth.uid;
+      allow update: if isAuthenticated() && isApproved() && 
+                       (resource.data.employeeId == request.auth.uid || isAdmin());
+      allow delete: if isAuthenticated() && isApproved() && 
+                       (resource.data.employeeId == request.auth.uid || isAdmin());
+    }
+    
+    // Leave Requests collection
+    match /leaveRequests/{requestId} {
+      // Users can read their own leave requests
+      allow read: if isAuthenticated() && isApproved() && 
+                     (resource.data.employeeId == request.auth.uid || isAdmin());
+      // Users can create their own leave requests
+      allow create: if isAuthenticated() && isApproved() && 
+                       request.resource.data.employeeId == request.auth.uid;
+      // Users can update their own leave requests, admins can update any
+      allow update: if isAuthenticated() && isApproved() && 
+                       (resource.data.employeeId == request.auth.uid || isAdmin());
+      // Users can delete their own leave requests, admins can delete any
+      allow delete: if isAuthenticated() && isApproved() && 
+                       (resource.data.employeeId == request.auth.uid || isAdmin());
+    }
+    
+    // Invoices collection - employees can create, admins can manage all
+    match /invoices/{invoiceId} {
+      // Authenticated and approved users can read invoices
+      allow read: if isAuthenticated() && isApproved();
+      // Employees can create invoices (for their own invoices)
+      allow create: if isAuthenticated() && isApproved();
+      // Only admins can update/delete invoices
+      allow update, delete: if isAdmin();
+    }
+    
+    // Payroll collection - admins only
+    match /payroll/{payrollId} {
+      // Users can read their own payroll records
+      allow read: if isAuthenticated() && isApproved() && 
+                     (resource.data.employeeId == request.auth.uid || isAdmin());
+      // Only admins can write payroll
+      allow write: if isAdmin();
+    }
+    
+    // Expenses collection
+    match /expenses/{expenseId} {
+      allow read: if isAuthenticated() && isApproved();
+      // Users can create expenses, admins can update/delete any
+      allow create: if isAuthenticated() && isApproved();
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+    
+    // Sites collection
+    match /sites/{siteId} {
+      allow read: if isAuthenticated() && isApproved();
+      allow write: if isAdmin();
+    }
+    
+    // Clients collection
+    match /clients/{clientId} {
+      allow read: if isAuthenticated() && isApproved();
+      allow write: if isAdmin();
+    }
+    
+    // Site Employee Allocations collection
+    match /siteEmployeeAllocations/{allocationId} {
+      allow read: if isAuthenticated() && isApproved();
+      allow write: if isAdmin();
+    }
+    
+    // Reminders collection
+    match /reminders/{reminderId} {
+      // Users can read reminders assigned to them or all if admin
+      allow read: if isAuthenticated() && isApproved() && 
+                     (resource.data.assignedTo == request.auth.uid || 
+                      resource.data.assignedTo == null || 
+                      isAdmin());
+      // Users can create reminders, admins can update/delete any
+      allow create: if isAuthenticated() && isApproved();
+      allow update: if isAuthenticated() && isApproved() && 
+                       (resource.data.assignedTo == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+    
+    // Chat - Groups collection
+    match /groups/{groupId} {
+      allow read: if isAuthenticated() && isApproved();
+      allow write: if isAuthenticated() && isApproved();
+    }
+    
+    // Chat - Messages collection
+    match /messages/{messageId} {
+      allow read: if isAuthenticated() && isApproved();
+      allow write: if isAuthenticated() && isApproved();
+    }
+    
+    // Activity Logs collection - admins only
+    match /activityLogs/{logId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+    }
+    
+    // Default deny rule for any other collections
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+

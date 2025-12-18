@@ -1,0 +1,30 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Users collection - allow users to read their own data, admins can read all
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || 
+                 exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                 (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+                  get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'));
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update, delete: if isAuthenticated() && 
+                 exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                 (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true ||
+                  get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
+    
+    // For all other collections, require authentication
+    // This is a temporary permissive rule - you should refine this based on your needs
+    match /{document=**} {
+      allow read, write: if isAuthenticated();
+    }
+  }
+}
+
