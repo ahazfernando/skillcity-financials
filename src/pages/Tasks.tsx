@@ -56,6 +56,8 @@ import {
   MoreVertical,
   X,
   User,
+  Eye,
+  MessageSquare,
 } from "lucide-react";
 import { Task, Site, Employee, Subtask } from "@/types/financial";
 import {
@@ -125,14 +127,25 @@ function TaskCard({ task, onEdit, onDelete, onViewMembers }: TaskCardProps) {
   const getPriorityColor = (priority: string) => {
     switch (priority) {
       case "high":
-        return "bg-red-500";
+        return "bg-red-500 text-white";
       case "mid":
-        return "bg-green-500";
+        return "bg-green-500 text-white";
       case "low":
-        return "bg-blue-500";
+        return "bg-blue-500 text-white";
       default:
-        return "bg-gray-500";
+        return "bg-gray-500 text-white";
     }
+  };
+
+  const getCategoryColor = (category?: string) => {
+    const colors: Record<string, string> = {
+      "Design": "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+      "Dev": "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+      "Research": "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
+      "Content": "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400",
+      "Planning": "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400",
+    };
+    return colors[category || ""] || "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300";
   };
 
   const formatDate = (dateString?: string) => {
@@ -155,119 +168,151 @@ function TaskCard({ task, onEdit, onDelete, onViewMembers }: TaskCardProps) {
       style={style}
       {...attributes}
       {...listeners}
-      className="mb-3 cursor-move hover:shadow-md transition-shadow"
+      className="mb-3 cursor-move bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:shadow-lg transition-all duration-200 hover:border-primary/20"
     >
       <CardContent className="p-4">
-        <div className="flex items-start justify-between mb-2">
-          <div className="flex-1">
-            <div className="flex items-center gap-2 mb-1">
-              <Badge
-                variant="outline"
-                className="text-xs"
-              >
-                {task.category || "Task"}
-              </Badge>
-              <Badge
-                className={cn("text-xs text-white", getPriorityColor(task.priority))}
-              >
-                {task.priority}
-              </Badge>
-            </div>
-            <h3 className="font-semibold text-sm mb-1">{task.title}</h3>
-            {task.description && (
-              <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
-                {task.description}
-              </p>
-            )}
-          </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-6 w-6">
-                <MoreVertical className="h-4 w-4" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => onEdit(task)}>
-                <Edit className="mr-2 h-4 w-4" />
-                Edit
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => onViewMembers(task)}>
-                <Users className="mr-2 h-4 w-4" />
-                View Members
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => onDelete(task)}
-                className="text-red-600"
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+        {/* Category and Priority Badges */}
+        <div className="flex items-center gap-2 mb-3">
+          <Badge
+            variant="outline"
+            className={cn("text-xs font-medium border-0", getCategoryColor(task.category))}
+          >
+            {task.category || "Task"}
+          </Badge>
+          <Badge
+            className={cn("text-xs font-medium px-2 py-0.5", getPriorityColor(task.priority))}
+          >
+            {task.priority === "high" ? "High" : task.priority === "mid" ? "Mid" : "Low"}
+          </Badge>
         </div>
 
-        <div className="space-y-2">
-          <div className="flex items-center gap-4 text-xs text-muted-foreground">
-            <div className="flex items-center gap-1">
-              <Progress value={(task.progress / 10) * 100} className="h-1.5 w-16" />
-              <span>{task.progress}/10</span>
-            </div>
-          </div>
+        {/* Title */}
+        <h3 className="font-semibold text-sm mb-2 text-gray-900 dark:text-gray-100 leading-tight">
+          {task.title}
+        </h3>
 
+        {/* Description */}
+        {task.description && (
+          <p className="text-xs text-gray-600 dark:text-gray-400 mb-3 line-clamp-2 leading-relaxed">
+            {task.description}
+          </p>
+        )}
+
+        {/* Progress Bar */}
+        <div className="mb-3">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+              {task.progress}/10
+            </span>
+          </div>
+          <Progress 
+            value={(task.progress / 10) * 100} 
+            className="h-2 bg-gray-100 dark:bg-gray-800"
+          />
+        </div>
+
+        {/* Icons Row - Views, Comments, Deadline */}
+        <div className="flex items-center gap-4 mb-3 text-xs text-gray-500 dark:text-gray-400">
+          <div className="flex items-center gap-1">
+            <Eye className="h-3.5 w-3.5" />
+            <span>0</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <MessageSquare className="h-3.5 w-3.5" />
+            <span>0</span>
+          </div>
           {task.deadline && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Calendar className="h-3 w-3" />
+            <div className="flex items-center gap-1">
+              <Calendar className="h-3.5 w-3.5" />
               <span>{formatDate(task.deadline)}</span>
             </div>
           )}
+        </div>
 
-          {task.siteName && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <MapPin className="h-3 w-3" />
-              <span className="truncate">{task.siteName}</span>
+        {/* Assigned Members */}
+        {task.assignedToNames && task.assignedToNames.length > 0 && (
+          <div className="flex items-center justify-between">
+            <div className="flex -space-x-2">
+              {task.assignedToNames.slice(0, 3).map((name, idx) => (
+                <Avatar key={idx} className="h-7 w-7 border-2 border-white dark:border-gray-900 shadow-sm">
+                  <AvatarFallback className="text-xs bg-gradient-to-br from-blue-500 to-blue-600 text-white font-medium">
+                    {name
+                      .split(" ")
+                      .map((n) => n[0])
+                      .join("")
+                      .toUpperCase()
+                      .slice(0, 2)}
+                  </AvatarFallback>
+                </Avatar>
+              ))}
+              {task.assignedToNames.length > 3 && (
+                <div className="h-7 w-7 rounded-full border-2 border-white dark:border-gray-900 bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-xs font-medium text-gray-600 dark:text-gray-400 shadow-sm">
+                  +{task.assignedToNames.length - 3}
+                </div>
+              )}
             </div>
-          )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7 hover:bg-gray-100 dark:hover:bg-gray-800">
+                  <MoreVertical className="h-4 w-4 text-gray-500" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => onEdit(task)}>
+                  <Edit className="mr-2 h-4 w-4" />
+                  Edit
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onViewMembers(task)}>
+                  <Users className="mr-2 h-4 w-4" />
+                  View Members
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => onDelete(task)}
+                  className="text-red-600"
+                >
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        )}
 
-          {task.payRate && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <DollarSign className="h-3 w-3" />
-              <span>${task.payRate}/hr</span>
+        {/* Additional Info (Site, Pay Rate, etc.) - Collapsed by default */}
+        {(task.siteName || task.payRate || task.totalHours) && (
+          <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+            <div className="flex flex-wrap gap-2 text-xs text-gray-500 dark:text-gray-400">
+              {task.siteName && (
+                <div className="flex items-center gap-1">
+                  <MapPin className="h-3 w-3" />
+                  <span className="truncate max-w-[120px]">{task.siteName}</span>
+                </div>
+              )}
+              {task.payRate && (
+                <div className="flex items-center gap-1">
+                  <DollarSign className="h-3 w-3" />
+                  <span>${task.payRate}/hr</span>
+                </div>
+              )}
+              {task.totalHours && (
+                <div className="flex items-center gap-1">
+                  <Clock className="h-3 w-3" />
+                  <span>{task.totalHours} hrs</span>
+                </div>
+              )}
             </div>
-          )}
+          </div>
+        )}
 
-          {task.totalHours && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Clock className="h-3 w-3" />
-              <span>{task.totalHours} hrs</span>
-            </div>
-          )}
-
-          {task.assignedToNames && task.assignedToNames.length > 0 && (
-            <div className="flex items-center gap-1">
-              <div className="flex -space-x-2">
-                {task.assignedToNames.slice(0, 3).map((name, idx) => (
-                  <Avatar key={idx} className="h-6 w-6 border-2 border-background">
-                    <AvatarFallback className="text-xs">
-                      {name.charAt(0).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                ))}
-                {task.assignedToNames.length > 3 && (
-                  <div className="h-6 w-6 rounded-full border-2 border-background bg-muted flex items-center justify-center text-xs">
-                    +{task.assignedToNames.length - 3}
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {task.status === "completed" && task.completedImages && task.completedImages.length > 0 && (
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <ImageIcon className="h-3 w-3" />
+        {/* Completed Images Indicator */}
+        {task.status === "completed" && task.completedImages && task.completedImages.length > 0 && (
+          <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+            <div className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+              <ImageIcon className="h-3.5 w-3.5" />
               <span>{task.completedImages.length} image(s)</span>
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -280,24 +325,39 @@ interface ColumnProps {
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
   onViewMembers: (task: Task) => void;
+  onAddTask?: () => void;
+  isAdmin?: boolean;
 }
 
-function Column({ id, title, tasks, onEdit, onDelete, onViewMembers }: ColumnProps) {
+function Column({ id, title, tasks, onEdit, onDelete, onViewMembers, onAddTask, isAdmin }: ColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id,
   });
 
+
   return (
-    <div className="flex-1 min-w-[300px]">
-      <div className="mb-4">
-        <h2 className="text-lg font-semibold mb-1">{title}</h2>
-        <Badge variant="secondary">{tasks.length}</Badge>
+    <div className="flex-1 min-w-[320px] max-w-[380px]">
+      {/* Column Header */}
+      <div className="mb-4 pb-3 border-b border-gray-200 dark:border-gray-800">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-bold text-gray-900 dark:text-gray-100 tracking-wide">
+            {title}
+          </h2>
+          <Badge 
+            variant="secondary" 
+            className="bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 font-semibold px-2.5 py-0.5"
+          >
+            {tasks.length}
+          </Badge>
+        </div>
       </div>
+
+      {/* Tasks Container */}
       <div
         ref={setNodeRef}
         className={cn(
-          "space-y-3 min-h-[400px] p-2 rounded-lg transition-colors",
-          isOver && "bg-primary/10 border-2 border-primary border-dashed"
+          "space-y-3 min-h-[500px] p-2 rounded-lg transition-colors bg-gray-50/50 dark:bg-gray-950/50",
+          isOver && "bg-primary/5 border-2 border-primary border-dashed"
         )}
       >
         <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
@@ -311,6 +371,18 @@ function Column({ id, title, tasks, onEdit, onDelete, onViewMembers }: ColumnPro
             />
           ))}
         </SortableContext>
+
+        {/* Add Card Button */}
+        {isAdmin && onAddTask && (
+          <Button
+            variant="ghost"
+            className="w-full mt-2 border-2 border-dashed border-gray-300 dark:border-gray-700 hover:border-primary hover:bg-primary/5 text-gray-600 dark:text-gray-400 hover:text-primary h-10"
+            onClick={onAddTask}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Card
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -713,9 +785,9 @@ const Tasks = () => {
   };
 
   const columns = [
-    { id: "new", title: "New", tasks: getTasksByStatus("new") },
-    { id: "in_progress", title: "In Progress", tasks: getTasksByStatus("in_progress") },
-    { id: "completed", title: "Completed", tasks: getTasksByStatus("completed") },
+    { id: "new", title: "TODO", tasks: getTasksByStatus("new") },
+    { id: "in_progress", title: "IN PROGRESS", tasks: getTasksByStatus("in_progress") },
+    { id: "completed", title: "COMPLETED", tasks: getTasksByStatus("completed") },
   ];
 
   if (isLoading) {
@@ -728,26 +800,28 @@ const Tasks = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Header Section */}
+      <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-800">
         <div>
-          <h1 className="text-3xl font-bold">Task Dashboard</h1>
-          <p className="text-muted-foreground">Manage and track your tasks</p>
+          <p className="text-sm text-muted-foreground mb-1">Task Management</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Task Dashboard</h1>
         </div>
         {userData?.isAdmin && (
-          <Button onClick={handleAddTask}>
+          <Button onClick={handleAddTask} className="shadow-sm">
             <Plus className="mr-2 h-4 w-4" />
             Add Task
           </Button>
         )}
       </div>
 
+      {/* Kanban Board */}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <div className="flex gap-6 overflow-x-auto pb-6">
           {columns.map((column) => (
             <Column
               key={column.id}
@@ -763,6 +837,8 @@ const Tasks = () => {
                 setViewingTask(task);
                 setIsMembersDialogOpen(true);
               }}
+              onAddTask={userData?.isAdmin ? handleAddTask : undefined}
+              isAdmin={userData?.isAdmin || false}
             />
           ))}
         </div>
