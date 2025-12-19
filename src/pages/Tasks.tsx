@@ -58,6 +58,7 @@ import {
   User,
   Eye,
   MessageSquare,
+  Loader2,
 } from "lucide-react";
 import { Task, Site, Employee, Subtask } from "@/types/financial";
 import {
@@ -112,9 +113,10 @@ interface TaskCardProps {
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
   onViewMembers: (task: Task) => void;
+  onViewDetails: (task: Task) => void;
 }
 
-function TaskCard({ task, onEdit, onDelete, onViewMembers }: TaskCardProps) {
+function TaskCard({ task, onEdit, onDelete, onViewMembers, onViewDetails }: TaskCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id });
 
@@ -122,6 +124,15 @@ function TaskCard({ task, onEdit, onDelete, onViewMembers }: TaskCardProps) {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
+  };
+
+  const handleCardClick = (e: React.MouseEvent) => {
+    // Don't open details if clicking on the dropdown menu or its trigger
+    if ((e.target as HTMLElement).closest('[role="menu"]') || 
+        (e.target as HTMLElement).closest('[data-radix-popper-content-wrapper]')) {
+      return;
+    }
+    onViewDetails(task);
   };
 
   const getPriorityColor = (priority: string) => {
@@ -168,7 +179,8 @@ function TaskCard({ task, onEdit, onDelete, onViewMembers }: TaskCardProps) {
       style={style}
       {...attributes}
       {...listeners}
-      className="mb-3 cursor-move bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:shadow-lg transition-all duration-200 hover:border-primary/20"
+      onClick={handleCardClick}
+      className="mb-3 cursor-pointer bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 hover:shadow-lg transition-all duration-200 hover:border-primary/20"
     >
       <CardContent className="p-4">
         {/* Category and Priority Badges */}
@@ -325,11 +337,12 @@ interface ColumnProps {
   onEdit: (task: Task) => void;
   onDelete: (task: Task) => void;
   onViewMembers: (task: Task) => void;
+  onViewDetails: (task: Task) => void;
   onAddTask?: () => void;
   isAdmin?: boolean;
 }
 
-function Column({ id, title, tasks, onEdit, onDelete, onViewMembers, onAddTask, isAdmin }: ColumnProps) {
+function Column({ id, title, tasks, onEdit, onDelete, onViewMembers, onViewDetails, onAddTask, isAdmin }: ColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id,
   });
@@ -368,6 +381,7 @@ function Column({ id, title, tasks, onEdit, onDelete, onViewMembers, onAddTask, 
               onEdit={onEdit}
               onDelete={onDelete}
               onViewMembers={onViewMembers}
+              onViewDetails={onViewDetails}
             />
           ))}
         </SortableContext>
@@ -395,9 +409,11 @@ const Tasks = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isMembersDialogOpen, setIsMembersDialogOpen] = useState(false);
+  const [isDetailsDialogOpen, setIsDetailsDialogOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [deletingTask, setDeletingTask] = useState<Task | null>(null);
   const [viewingTask, setViewingTask] = useState<Task | null>(null);
+  const [detailsTask, setDetailsTask] = useState<Task | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [sites, setSites] = useState<Site[]>([]);
@@ -837,6 +853,10 @@ const Tasks = () => {
                 setViewingTask(task);
                 setIsMembersDialogOpen(true);
               }}
+              onViewDetails={(task) => {
+                setDetailsTask(task);
+                setIsDetailsDialogOpen(true);
+              }}
               onAddTask={userData?.isAdmin ? handleAddTask : undefined}
               isAdmin={userData?.isAdmin || false}
             />
@@ -857,15 +877,43 @@ const Tasks = () => {
 
       {/* Add/Edit Task Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingTask ? "Edit Task" : "Create New Task"}</DialogTitle>
-            <DialogDescription>
-              {editingTask ? "Update task details" : "Add a new task to the dashboard"}
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-6xl w-full p-0 gap-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] sm:rounded-lg">
+          <div className="grid md:grid-cols-2 h-[90vh] max-h-[90vh]">
+            {/* Left side - Image with Logo and Heading */}
+            <div className="relative hidden md:block overflow-hidden md:rounded-l-lg">
+              <img
+                src="/modalimages/finflow.jpg"
+                alt={editingTask ? "Edit Task" : "Create New Task"}
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 flex flex-col items-center justify-end pb-12 px-8">
+                <div className="flex flex-col items-center space-y-2 text-center">
+                  <img
+                    src="/logo/SkillCityQ 1.png"
+                    alt="Skill City Logo"
+                    className="w-32 h-20 object-contain"
+                  />
+                  <h2 className="text-2xl font-semibold text-white">
+                    {editingTask ? "Edit Task" : "Create New Task"}
+                  </h2>
+                  <p className="text-sm text-white">
+                    {editingTask ? "Update task details" : "Add a new task to the dashboard"}
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            {/* Right side - Form */}
+            <div className="flex flex-col overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] md:rounded-r-lg bg-background">
+              <div className="p-6">
+                <DialogHeader className="md:hidden mb-4">
+                  <DialogTitle>{editingTask ? "Edit Task" : "Create New Task"}</DialogTitle>
+                  <DialogDescription>
+                    {editingTask ? "Update task details" : "Add a new task to the dashboard"}
+                  </DialogDescription>
+                </DialogHeader>
 
-          <div className="space-y-4">
+                <div className="space-y-4">
             <div>
               <Label htmlFor="title">Title *</Label>
               <Input
@@ -1253,16 +1301,27 @@ const Tasks = () => {
                 )}
               </div>
             )}
+                </div>
+                <DialogFooter className="flex justify-between mt-6">
+                  <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isSaving}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSaveTask} disabled={isSaving}>
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : editingTask ? (
+                      "Update"
+                    ) : (
+                      "Create"
+                    )}
+                  </Button>
+                </DialogFooter>
+              </div>
+            </div>
           </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveTask} disabled={isSaving}>
-              {isSaving ? "Saving..." : editingTask ? "Update" : "Create"}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 
@@ -1307,6 +1366,286 @@ const Tasks = () => {
               <p className="text-muted-foreground">No members assigned</p>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Task Details Dialog */}
+      <Dialog open={isDetailsDialogOpen} onOpenChange={setIsDetailsDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold">Task Details</DialogTitle>
+            <DialogDescription>
+              Complete information about the task
+            </DialogDescription>
+          </DialogHeader>
+
+          {detailsTask && (
+            <div className="space-y-6 mt-4">
+              {/* Title and Status */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xl font-semibold">{detailsTask.title}</h3>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "text-sm",
+                      detailsTask.status === "completed"
+                        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                        : detailsTask.status === "in_progress"
+                        ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                        : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                    )}
+                  >
+                    {detailsTask.status === "completed"
+                      ? "Completed"
+                      : detailsTask.status === "in_progress"
+                      ? "In Progress"
+                      : "New"}
+                  </Badge>
+                </div>
+                {detailsTask.description && (
+                  <p className="text-muted-foreground">{detailsTask.description}</p>
+                )}
+              </div>
+
+              {/* Category and Priority */}
+              <div className="flex items-center gap-3">
+                {detailsTask.category && (
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "text-sm",
+                      detailsTask.category === "Design"
+                        ? "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400"
+                        : detailsTask.category === "Dev"
+                        ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                        : detailsTask.category === "Research"
+                        ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+                        : detailsTask.category === "Content"
+                        ? "bg-pink-100 text-pink-700 dark:bg-pink-900/30 dark:text-pink-400"
+                        : detailsTask.category === "Planning"
+                        ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400"
+                        : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                    )}
+                  >
+                    {detailsTask.category}
+                  </Badge>
+                )}
+                <Badge
+                  className={cn(
+                    "text-sm",
+                    detailsTask.priority === "high"
+                      ? "bg-red-500 text-white"
+                      : detailsTask.priority === "mid"
+                      ? "bg-green-500 text-white"
+                      : "bg-blue-500 text-white"
+                  )}
+                >
+                  {detailsTask.priority === "high" ? "High" : detailsTask.priority === "mid" ? "Mid" : "Low"} Priority
+                </Badge>
+              </div>
+
+              {/* Progress */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium">Progress</Label>
+                  <span className="text-sm text-muted-foreground">{detailsTask.progress}/10</span>
+                </div>
+                <Progress value={(detailsTask.progress / 10) * 100} className="h-3" />
+              </div>
+
+              {/* Grid Layout for Details */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Site Information */}
+                {detailsTask.siteName && (
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      <MapPin className="h-4 w-4" />
+                      Site
+                    </Label>
+                    <p className="text-sm">{detailsTask.siteName}</p>
+                  </div>
+                )}
+
+                {/* Deadline */}
+                {detailsTask.deadline && (
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      Deadline
+                    </Label>
+                    <p className="text-sm">
+                      {new Date(detailsTask.deadline).toLocaleDateString("en-US", {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })}
+                    </p>
+                  </div>
+                )}
+
+                {/* Pay Rate */}
+                {detailsTask.payRate && (
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      <DollarSign className="h-4 w-4" />
+                      Pay Rate
+                    </Label>
+                    <p className="text-sm">${detailsTask.payRate}/hr</p>
+                  </div>
+                )}
+
+                {/* Total Hours */}
+                {detailsTask.totalHours && (
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      Total Hours
+                    </Label>
+                    <p className="text-sm">{detailsTask.totalHours} hours</p>
+                  </div>
+                )}
+
+                {/* Created By */}
+                {detailsTask.createdByName && (
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      <User className="h-4 w-4" />
+                      Created By
+                    </Label>
+                    <p className="text-sm">{detailsTask.createdByName}</p>
+                  </div>
+                )}
+
+                {/* Created Date */}
+                {detailsTask.createdAt && (
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      Created On
+                    </Label>
+                    <p className="text-sm">
+                      {new Date(detailsTask.createdAt).toLocaleDateString("en-US", {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Assigned Members */}
+              {detailsTask.assignedToNames && detailsTask.assignedToNames.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium flex items-center gap-2">
+                    <Users className="h-4 w-4" />
+                    Assigned Members ({detailsTask.assignedToNames.length})
+                  </Label>
+                  <div className="flex flex-wrap gap-2">
+                    {detailsTask.assignedToNames.map((name, idx) => (
+                      <div key={idx} className="flex items-center gap-2 p-2 border rounded-lg bg-muted/50">
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className="text-xs bg-gradient-to-br from-blue-500 to-blue-600 text-white">
+                            {name
+                              .split(" ")
+                              .map((n) => n[0])
+                              .join("")
+                              .toUpperCase()
+                              .slice(0, 2)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm font-medium">{name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Subtasks */}
+              {detailsTask.subtasks && detailsTask.subtasks.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Subtasks ({detailsTask.subtasks.length})</Label>
+                  <div className="space-y-2">
+                    {detailsTask.subtasks.map((subtask) => (
+                      <div
+                        key={subtask.id}
+                        className={cn(
+                          "flex items-center gap-2 p-2 border rounded-lg",
+                          subtask.completed && "bg-green-50 dark:bg-green-900/10"
+                        )}
+                      >
+                        {subtask.completed ? (
+                          <CheckCircle2 className="h-5 w-5 text-green-600" />
+                        ) : (
+                          <Circle className="h-5 w-5 text-gray-400" />
+                        )}
+                        <span
+                          className={cn(
+                            "flex-1 text-sm",
+                            subtask.completed && "line-through text-muted-foreground"
+                          )}
+                        >
+                          {subtask.title}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Completed Images */}
+              {detailsTask.status === "completed" &&
+                detailsTask.completedImages &&
+                detailsTask.completedImages.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      <ImageIcon className="h-4 w-4" />
+                      Completed Images ({detailsTask.completedImages.length})
+                    </Label>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      {detailsTask.completedImages.map((url, idx) => (
+                        <div key={idx} className="relative group">
+                          <img
+                            src={url}
+                            alt={`Completed ${idx + 1}`}
+                            className="w-full h-32 object-cover rounded-lg border"
+                          />
+                          <a
+                            href={url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="absolute inset-0 flex items-center justify-center bg-black/0 group-hover:bg-black/50 transition-colors rounded-lg"
+                          >
+                            <span className="text-white opacity-0 group-hover:opacity-100 text-xs">
+                              View Full Size
+                            </span>
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDetailsDialogOpen(false)}>
+              Close
+            </Button>
+            {detailsTask && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsDetailsDialogOpen(false);
+                  handleEditTask(detailsTask);
+                }}
+              >
+                <Edit className="mr-2 h-4 w-4" />
+                Edit Task
+              </Button>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
