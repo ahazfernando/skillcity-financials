@@ -267,6 +267,29 @@ export const clockOut = async (recordId: string): Promise<void> => {
       hoursWorked,
       updatedAt: Timestamp.now(),
     });
+
+    // Trigger timesheet-to-invoice automation if status is pending (async, don't wait)
+    if (record.approvalStatus === "pending") {
+      if (typeof window === "undefined") {
+        // Server-side: import and process
+        import("@/lib/timesheet-invoice-automation")
+          .then(({ processTimesheetOnStatusChange }) => 
+            processTimesheetOnStatusChange(record.employeeId, record.employeeName, record.date)
+          )
+          .catch((err) => console.error("Error processing timesheet automation:", err));
+      } else {
+        // Client-side: call API route
+        fetch("/api/process-timesheets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            employeeId: record.employeeId, 
+            employeeName: record.employeeName, 
+            recordDate: record.date 
+          }),
+        }).catch((err) => console.error("Error processing timesheet automation:", err));
+      }
+    }
   } catch (error: any) {
     console.error("Error clocking out:", error);
     if (error.message) {
@@ -333,6 +356,30 @@ export const updateWorkRecord = async (
     }
 
     await updateDoc(doc(db, WORK_RECORDS_COLLECTION, id), updateData);
+    
+    // Trigger timesheet-to-invoice automation if status becomes pending (async, don't wait)
+    // Only trigger if the record now has clockOutTime and approvalStatus is pending
+    if (record.approvalStatus === "pending" && (updates.clockOutTime || record.clockOutTime)) {
+      if (typeof window === "undefined") {
+        // Server-side: import and process
+        import("@/lib/timesheet-invoice-automation")
+          .then(({ processTimesheetOnStatusChange }) => 
+            processTimesheetOnStatusChange(record.employeeId, record.employeeName, record.date)
+          )
+          .catch((err) => console.error("Error processing timesheet automation:", err));
+      } else {
+        // Client-side: call API route
+        fetch("/api/process-timesheets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            employeeId: record.employeeId, 
+            employeeName: record.employeeName, 
+            recordDate: record.date 
+          }),
+        }).catch((err) => console.error("Error processing timesheet automation:", err));
+      }
+    }
   } catch (error: any) {
     console.error("Error updating work record:", error);
     if (error.message) {
@@ -400,6 +447,30 @@ export const createWorkRecord = async (
     };
 
     const docRef = await addDoc(collection(db, WORK_RECORDS_COLLECTION), workRecordToDoc(newRecord));
+    
+    // Trigger timesheet-to-invoice automation if status is pending (async, don't wait)
+    if (newRecord.approvalStatus === "pending" && newRecord.clockOutTime) {
+      if (typeof window === "undefined") {
+        // Server-side: import and process
+        import("@/lib/timesheet-invoice-automation")
+          .then(({ processTimesheetOnStatusChange }) => 
+            processTimesheetOnStatusChange(employeeId, employeeName, date)
+          )
+          .catch((err) => console.error("Error processing timesheet automation:", err));
+      } else {
+        // Client-side: call API route
+        fetch("/api/process-timesheets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ 
+            employeeId, 
+            employeeName, 
+            recordDate: date 
+          }),
+        }).catch((err) => console.error("Error processing timesheet automation:", err));
+      }
+    }
+    
     return docRef.id;
   } catch (error: any) {
     console.error("Error creating work record:", error);

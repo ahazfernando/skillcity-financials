@@ -281,3 +281,34 @@ export interface LeaveRequest {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  status: "new" | "in_progress" | "completed";
+  priority: "low" | "mid" | "high";
+  siteId?: string;
+  siteName?: string;
+  assignedTo: string[]; // Array of employee/user IDs
+  assignedToNames?: string[]; // Array of employee/user names for display
+  deadline?: string; // ISO date string (YYYY-MM-DD)
+  subtasks?: Subtask[];
+  location?: string;
+  payRate?: number; // Fetched from site when siteId is selected
+  totalHours?: number; // Fetched from site when siteId is selected
+  completedImages?: string[]; // Array of image URLs
+  progress: number; // 0-10 or 0-100
+  category?: string; // e.g., "Design", "Dev", "Research", "Content", "Planning"
+  createdBy: string; // User ID who created the task
+  createdByName?: string; // Name of user who created the task
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Subtask {
+  id: string;
+  title: string;
+  completed: boolean;
+  createdAt: string;
+}

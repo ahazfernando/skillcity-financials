@@ -19,7 +19,8 @@ import {
   History,
   Archive,
   MessageSquare,
-  Clock
+  Clock,
+  CheckSquare
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -45,11 +46,11 @@ const menuItems = [
   { title: "Reports & Analytics", url: "/reports", icon: BarChart3 },
   { title: "Employees", url: "/employees", icon: Users },
   { title: "Employee Pay Rates", url: "/employee-pay-rates", icon: DollarSign },
-  { title: "Salary Calculator", url: "/salary-calculator", icon: Calculator },
   { title: "Sites", url: "/sites", icon: Building2 },
   { title: "Site Employee Allocations", url: "/site-employee-allocations", icon: Network },
   { title: "Clients", url: "/clients", icon: UserCircle },
   { title: "Work Schedule", url: "/schedule", icon: Calendar },
+  { title: "Tasks", url: "/tasks", icon: CheckSquare },
   { title: "Reminders", url: "/reminders", icon: Bell },
   { title: "Activity Log", url: "/activity-log", icon: History },
   { title: "Employee Timesheets", url: "/employee-timesheets", icon: Clock },

@@ -207,6 +207,19 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     
+    // Tasks collection
+    match /tasks/{taskId} {
+      // Authenticated and approved users can read tasks
+      allow read: if isAuthenticated() && isApproved();
+      // Admins can create tasks
+      allow create: if isAdmin();
+      // Users assigned to the task can update it (for status changes, images, progress), admins can update any
+      allow update: if isAuthenticated() && isApproved() && 
+                       (request.auth.uid in resource.data.assignedTo || isAdmin());
+      // Only admins can delete tasks
+      allow delete: if isAdmin();
+    }
+    
     // Default deny rule for any other collections
     match /{document=**} {
       allow read, write: if false;

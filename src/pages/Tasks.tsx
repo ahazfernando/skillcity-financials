@@ -1,0 +1,1241 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Progress } from "@/components/ui/progress";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  DndContext,
+  DragEndEvent,
+  DragOverlay,
+  DragStartEvent,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCorners,
+  useDroppable,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import {
+  Plus,
+  Edit,
+  Trash2,
+  Calendar,
+  MapPin,
+  Users,
+  Image as ImageIcon,
+  Clock,
+  DollarSign,
+  CheckCircle2,
+  Circle,
+  MoreVertical,
+  X,
+  User,
+} from "lucide-react";
+import { Task, Site, Employee, Subtask } from "@/types/financial";
+import {
+  getAllTasks,
+  createTask,
+  updateTask,
+  deleteTask,
+  updateTaskStatus,
+} from "@/lib/firebase/tasks";
+import { getAllSites, getSiteById } from "@/lib/firebase/sites";
+import { getAllEmployees } from "@/lib/firebase/employees";
+import { getAllUsers } from "@/lib/firebase/users";
+import { getAllocationsBySite } from "@/lib/firebase/siteEmployeeAllocations";
+import { SiteEmployeeAllocation } from "@/types/financial";
+import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import { cn } from "@/lib/utils";
+import { uploadToCloudinary } from "@/lib/cloudinary/upload-client";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+interface TaskCardProps {
+  task: Task;
+  onEdit: (task: Task) => void;
+  onDelete: (task: Task) => void;
+  onViewMembers: (task: Task) => void;
+}
+
+function TaskCard({ task, onEdit, onDelete, onViewMembers }: TaskCardProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: task.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const getPriorityColor = (priority: string) => {
+    switch (priority) {
+      case "high":
+        return "bg-red-500";
+      case "mid":
+        return "bg-green-500";
+      case "low":
+        return "bg-blue-500";
+      default:
+        return "bg-gray-500";
+    }
+  };
+
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = date.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) return "Overdue";
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Tomorrow";
+    if (diffDays <= 7) return `${diffDays} days`;
+    return date.toLocaleDateString("en-US", { month: "short" });
+  };
+
+  return (
+    <Card
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+      className="mb-3 cursor-move hover:shadow-md transition-shadow"
+    >
+      <CardContent className="p-4">
+        <div className="flex items-start justify-between mb-2">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <Badge
+                variant="outline"
+                className="text-xs"
+              >
+                {task.category || "Task"}
+              </Badge>
+              <Badge
+                className={cn("text-xs text-white", getPriorityColor(task.priority))}
+              >
+                {task.priority}
+              </Badge>
+            </div>
+            <h3 className="font-semibold text-sm mb-1">{task.title}</h3>
+            {task.description && (
+              <p className="text-xs text-muted-foreground mb-2 line-clamp-2">
+                {task.description}
+              </p>
+            )}
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-6 w-6">
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onEdit(task)}>
+                <Edit className="mr-2 h-4 w-4" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onViewMembers(task)}>
+                <Users className="mr-2 h-4 w-4" />
+                View Members
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => onDelete(task)}
+                className="text-red-600"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1">
+              <Progress value={(task.progress / 10) * 100} className="h-1.5 w-16" />
+              <span>{task.progress}/10</span>
+            </div>
+          </div>
+
+          {task.deadline && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Calendar className="h-3 w-3" />
+              <span>{formatDate(task.deadline)}</span>
+            </div>
+          )}
+
+          {task.siteName && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <MapPin className="h-3 w-3" />
+              <span className="truncate">{task.siteName}</span>
+            </div>
+          )}
+
+          {task.payRate && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <DollarSign className="h-3 w-3" />
+              <span>${task.payRate}/hr</span>
+            </div>
+          )}
+
+          {task.totalHours && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <Clock className="h-3 w-3" />
+              <span>{task.totalHours} hrs</span>
+            </div>
+          )}
+
+          {task.assignedToNames && task.assignedToNames.length > 0 && (
+            <div className="flex items-center gap-1">
+              <div className="flex -space-x-2">
+                {task.assignedToNames.slice(0, 3).map((name, idx) => (
+                  <Avatar key={idx} className="h-6 w-6 border-2 border-background">
+                    <AvatarFallback className="text-xs">
+                      {name.charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                ))}
+                {task.assignedToNames.length > 3 && (
+                  <div className="h-6 w-6 rounded-full border-2 border-background bg-muted flex items-center justify-center text-xs">
+                    +{task.assignedToNames.length - 3}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {task.status === "completed" && task.completedImages && task.completedImages.length > 0 && (
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              <ImageIcon className="h-3 w-3" />
+              <span>{task.completedImages.length} image(s)</span>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+interface ColumnProps {
+  id: string;
+  title: string;
+  tasks: Task[];
+  onEdit: (task: Task) => void;
+  onDelete: (task: Task) => void;
+  onViewMembers: (task: Task) => void;
+}
+
+function Column({ id, title, tasks, onEdit, onDelete, onViewMembers }: ColumnProps) {
+  const { setNodeRef, isOver } = useDroppable({
+    id,
+  });
+
+  return (
+    <div className="flex-1 min-w-[300px]">
+      <div className="mb-4">
+        <h2 className="text-lg font-semibold mb-1">{title}</h2>
+        <Badge variant="secondary">{tasks.length}</Badge>
+      </div>
+      <div
+        ref={setNodeRef}
+        className={cn(
+          "space-y-3 min-h-[400px] p-2 rounded-lg transition-colors",
+          isOver && "bg-primary/10 border-2 border-primary border-dashed"
+        )}
+      >
+        <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+          {tasks.map((task) => (
+            <TaskCard
+              key={task.id}
+              task={task}
+              onEdit={onEdit}
+              onDelete={onDelete}
+              onViewMembers={onViewMembers}
+            />
+          ))}
+        </SortableContext>
+      </div>
+    </div>
+  );
+}
+
+const Tasks = () => {
+  const { user, userData } = useAuth();
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isMembersDialogOpen, setIsMembersDialogOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [deletingTask, setDeletingTask] = useState<Task | null>(null);
+  const [viewingTask, setViewingTask] = useState<Task | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [sites, setSites] = useState<Site[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
+  const [selectedSiteId, setSelectedSiteId] = useState<string>("");
+  const [uploadingImages, setUploadingImages] = useState(false);
+  const [siteEmployees, setSiteEmployees] = useState<SiteEmployeeAllocation[]>([]);
+  const [isLoadingSiteEmployees, setIsLoadingSiteEmployees] = useState(false);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
+
+  const [formData, setFormData] = useState({
+    title: "",
+    description: "",
+    priority: "low" as "low" | "mid" | "high",
+    siteId: "",
+    assignedTo: [] as string[],
+    deadline: "",
+    location: "",
+    category: "",
+    progress: 0,
+    subtasks: [] as Subtask[],
+    completedImages: [] as string[],
+    payRate: undefined as number | undefined,
+    totalHours: undefined as number | undefined,
+  });
+
+  const [newSubtask, setNewSubtask] = useState("");
+  const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
+  const [employeePopoverOpen, setEmployeePopoverOpen] = useState(false);
+
+  // Deduplicate employees by name (case-insensitive, normalized)
+  const deduplicateEmployees = (employees: Employee[]): Employee[] => {
+    const seenByName = new Map<string, Employee>();
+    
+    for (const employee of employees) {
+      // Normalize name: lowercase, trim, remove extra spaces
+      const normalizedName = employee.name.toLowerCase().trim().replace(/\s+/g, ' ');
+      
+      // Only keep the first occurrence of each normalized name
+      if (!seenByName.has(normalizedName)) {
+        seenByName.set(normalizedName, employee);
+      }
+    }
+    
+    return Array.from(seenByName.values());
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      setIsLoading(true);
+      const [fetchedTasks, fetchedSites, fetchedEmployees, fetchedUsers] = await Promise.all([
+        getAllTasks(),
+        getAllSites(),
+        getAllEmployees(),
+        getAllUsers(),
+      ]);
+      setTasks(fetchedTasks);
+      setSites(fetchedSites);
+      setEmployees(fetchedEmployees);
+      setUsers(fetchedUsers);
+    } catch (error) {
+      console.error("Error loading data:", error);
+      toast.error("Failed to load tasks");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedSiteId && sites.length > 0) {
+      const site = sites.find((s) => s.id === selectedSiteId);
+      if (site) {
+        setFormData((prev) => ({
+          ...prev,
+          payRate: site.hourlyRate || site.dayRate || undefined,
+          totalHours: site.invoicingWorkingHours || undefined,
+        }));
+        
+        // Load employees for this site
+        loadSiteEmployees(selectedSiteId);
+      } else {
+        setSiteEmployees([]);
+      }
+    } else {
+      setSiteEmployees([]);
+    }
+  }, [selectedSiteId, sites]);
+
+  const loadSiteEmployees = async (siteId: string) => {
+    try {
+      setIsLoadingSiteEmployees(true);
+      const allocations = await getAllocationsBySite(siteId);
+      setSiteEmployees(allocations);
+    } catch (error) {
+      console.error("Error loading site employees:", error);
+      toast.error("Failed to load site employees");
+    } finally {
+      setIsLoadingSiteEmployees(false);
+    }
+  };
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+
+    if (!over) return;
+
+    const taskId = active.id as string;
+    
+    // Check if dropped on a column (status) or another task
+    let newStatus: "new" | "in_progress" | "completed" | null = null;
+    
+    if (over.id === "new" || over.id === "in_progress" || over.id === "completed") {
+      newStatus = over.id as "new" | "in_progress" | "completed";
+    } else {
+      // Dropped on another task, find its status
+      const targetTask = tasks.find((t) => t.id === over.id);
+      if (targetTask) {
+        newStatus = targetTask.status;
+      }
+    }
+
+    if (!newStatus) return;
+
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task || task.status === newStatus) return;
+
+    // Check if user has permission to update this task
+    const isAssigned = task.assignedTo.includes(user?.uid || "");
+    const isAdmin = userData?.isAdmin || userData?.role === "admin";
+    
+    if (!isAssigned && !isAdmin) {
+      toast.error("You can only update tasks assigned to you");
+      return;
+    }
+
+    try {
+      await updateTaskStatus(taskId, newStatus);
+      setTasks((prev) =>
+        prev.map((t) => (t.id === taskId ? { ...t, status: newStatus! } : t))
+      );
+      toast.success("Task status updated");
+    } catch (error) {
+      console.error("Error updating task status:", error);
+      toast.error("Failed to update task status");
+    }
+  };
+
+  const handleAddTask = () => {
+    setEditingTask(null);
+    setFormData({
+      title: "",
+      description: "",
+      priority: "low",
+      siteId: "",
+      assignedTo: [],
+      deadline: "",
+      location: "",
+      category: "",
+      progress: 0,
+      subtasks: [],
+      completedImages: [],
+      payRate: undefined,
+      totalHours: undefined,
+    });
+    setSelectedSiteId("");
+    setSelectedEmployees([]);
+    setIsDialogOpen(true);
+  };
+
+  const handleEditTask = (task: Task) => {
+    // Check if user has permission to edit this task
+    const isAssigned = task.assignedTo.includes(user?.uid || "");
+    const isAdmin = userData?.isAdmin || userData?.role === "admin";
+    
+    if (!isAssigned && !isAdmin) {
+      toast.error("You can only edit tasks assigned to you");
+      return;
+    }
+
+    setEditingTask(task);
+    setFormData({
+      title: task.title,
+      description: task.description || "",
+      priority: task.priority,
+      siteId: task.siteId || "",
+      assignedTo: task.assignedTo || [],
+      deadline: task.deadline || "",
+      location: task.location || "",
+      category: task.category || "",
+      progress: task.progress,
+      subtasks: task.subtasks || [],
+      completedImages: task.completedImages || [],
+      payRate: task.payRate,
+      totalHours: task.totalHours,
+    });
+    setSelectedSiteId(task.siteId || "");
+    setSelectedEmployees(task.assignedTo || []);
+    setIsDialogOpen(true);
+  };
+
+  const handleSaveTask = async () => {
+    if (!formData.title.trim()) {
+      toast.error("Please enter a task title");
+      return;
+    }
+
+    const isAdmin = userData?.isAdmin || userData?.role === "admin";
+    const isAssigned = editingTask?.assignedTo.includes(user?.uid || "") || false;
+
+    // Employees can only update certain fields
+    if (editingTask && !isAdmin && isAssigned) {
+      // Employees can only update: description, progress, subtasks, completedImages
+      const taskData: Partial<Task> = {
+        description: formData.description,
+        progress: formData.progress,
+        subtasks: formData.subtasks,
+        completedImages: formData.completedImages,
+      };
+      
+      try {
+        setIsSaving(true);
+        await updateTask(editingTask.id, taskData);
+        toast.success("Task updated successfully");
+        setIsDialogOpen(false);
+        loadData();
+      } catch (error) {
+        console.error("Error saving task:", error);
+        toast.error("Failed to save task");
+      } finally {
+        setIsSaving(false);
+      }
+      return;
+    }
+
+    // Admin can update all fields
+    try {
+      setIsSaving(true);
+
+      const assignedToNames = selectedEmployees.map((id) => {
+        const employee = employees.find((e) => e.id === id);
+        const user = users.find((u) => u.uid === id);
+        return employee?.name || user?.name || "Unknown";
+      });
+
+      const site = sites.find((s) => s.id === selectedSiteId);
+      const siteName = site?.name;
+
+      const taskData: Omit<Task, "id" | "createdAt" | "updatedAt"> = {
+        title: formData.title,
+        description: formData.description,
+        status: editingTask?.status || "new",
+        priority: formData.priority,
+        siteId: selectedSiteId || undefined,
+        siteName: siteName,
+        assignedTo: selectedEmployees,
+        assignedToNames: assignedToNames,
+        deadline: formData.deadline || undefined,
+        subtasks: formData.subtasks,
+        location: formData.location || undefined,
+        payRate: formData.payRate,
+        totalHours: formData.totalHours,
+        completedImages: formData.completedImages,
+        progress: formData.progress,
+        category: formData.category || undefined,
+        createdBy: editingTask?.createdBy || user?.uid || "",
+        createdByName: editingTask?.createdByName || userData?.name || "",
+      };
+
+      if (editingTask) {
+        await updateTask(editingTask.id, taskData);
+        toast.success("Task updated successfully");
+      } else {
+        await createTask(taskData);
+        toast.success("Task created successfully");
+      }
+
+      setIsDialogOpen(false);
+      loadData();
+    } catch (error) {
+      console.error("Error saving task:", error);
+      toast.error("Failed to save task");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDeleteTask = async () => {
+    if (!deletingTask) return;
+
+    try {
+      await deleteTask(deletingTask.id);
+      toast.success("Task deleted successfully");
+      setIsDeleteDialogOpen(false);
+      setDeletingTask(null);
+      loadData();
+    } catch (error) {
+      console.error("Error deleting task:", error);
+      toast.error("Failed to delete task");
+    }
+  };
+
+  const handleAddSubtask = () => {
+    if (!newSubtask.trim()) return;
+
+    const subtask: Subtask = {
+      id: Date.now().toString(),
+      title: newSubtask,
+      completed: false,
+      createdAt: new Date().toISOString(),
+    };
+
+    setFormData((prev) => ({
+      ...prev,
+      subtasks: [...prev.subtasks, subtask],
+    }));
+    setNewSubtask("");
+  };
+
+  const handleToggleSubtask = (subtaskId: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      subtasks: prev.subtasks.map((st) =>
+        st.id === subtaskId ? { ...st, completed: !st.completed } : st
+      ),
+    }));
+  };
+
+  const handleDeleteSubtask = (subtaskId: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      subtasks: prev.subtasks.filter((st) => st.id !== subtaskId),
+    }));
+  };
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    try {
+      setUploadingImages(true);
+      const uploadPromises = Array.from(files).map((file) => uploadToCloudinary(file));
+      const results = await Promise.all(uploadPromises);
+      const imageUrls = results.map((r) => r.secureUrl);
+
+      setFormData((prev) => ({
+        ...prev,
+        completedImages: [...prev.completedImages, ...imageUrls],
+      }));
+
+      toast.success("Images uploaded successfully");
+    } catch (error) {
+      console.error("Error uploading images:", error);
+      toast.error("Failed to upload images");
+    } finally {
+      setUploadingImages(false);
+    }
+  };
+
+  const handleRemoveImage = (imageUrl: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      completedImages: prev.completedImages.filter((url) => url !== imageUrl),
+    }));
+  };
+
+  const getTasksByStatus = (status: "new" | "in_progress" | "completed") => {
+    return tasks.filter((t) => t.status === status);
+  };
+
+  const columns = [
+    { id: "new", title: "New", tasks: getTasksByStatus("new") },
+    { id: "in_progress", title: "In Progress", tasks: getTasksByStatus("in_progress") },
+    { id: "completed", title: "Completed", tasks: getTasksByStatus("completed") },
+  ];
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-muted-foreground">Loading tasks...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Task Dashboard</h1>
+          <p className="text-muted-foreground">Manage and track your tasks</p>
+        </div>
+        {userData?.isAdmin && (
+          <Button onClick={handleAddTask}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Task
+          </Button>
+        )}
+      </div>
+
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCorners}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+      >
+        <div className="flex gap-4 overflow-x-auto pb-4">
+          {columns.map((column) => (
+            <Column
+              key={column.id}
+              id={column.id}
+              title={column.title}
+              tasks={column.tasks}
+              onEdit={handleEditTask}
+              onDelete={(task) => {
+                setDeletingTask(task);
+                setIsDeleteDialogOpen(true);
+              }}
+              onViewMembers={(task) => {
+                setViewingTask(task);
+                setIsMembersDialogOpen(true);
+              }}
+            />
+          ))}
+        </div>
+        <DragOverlay>
+          {activeId ? (
+            <Card className="opacity-90 rotate-3">
+              <CardContent className="p-4">
+                <div className="font-semibold text-sm">
+                  {tasks.find((t) => t.id === activeId)?.title}
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+
+      {/* Add/Edit Task Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editingTask ? "Edit Task" : "Create New Task"}</DialogTitle>
+            <DialogDescription>
+              {editingTask ? "Update task details" : "Add a new task to the dashboard"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="title">Title *</Label>
+              <Input
+                id="title"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                placeholder="Enter task title"
+                disabled={editingTask && !userData?.isAdmin && editingTask.assignedTo.includes(user?.uid || "")}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Enter task description"
+                rows={3}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="priority">Priority</Label>
+                <Select
+                  value={formData.priority}
+                  onValueChange={(value: "low" | "mid" | "high") =>
+                    setFormData({ ...formData, priority: value })
+                  }
+                  disabled={editingTask && !userData?.isAdmin && editingTask.assignedTo.includes(user?.uid || "")}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="mid">Mid</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="category">Category</Label>
+                <Input
+                  id="category"
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  placeholder="e.g., Design, Dev, Research"
+                  disabled={editingTask && !userData?.isAdmin && editingTask.assignedTo.includes(user?.uid || "")}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="site">Site</Label>
+              <Select 
+                value={selectedSiteId || "none"} 
+                onValueChange={(value) => {
+                  const newSiteId = value === "none" ? "" : value;
+                  setSelectedSiteId(newSiteId);
+                }}
+                disabled={editingTask && !userData?.isAdmin && editingTask.assignedTo.includes(user?.uid || "")}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a site" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {sites.map((site) => (
+                    <SelectItem key={site.id} value={site.id}>
+                      {site.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedSiteId && (
+                <div className="mt-4 space-y-3">
+                  {/* Pay Rate and Total Hours Cards */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {formData.payRate && (
+                      <Card className="relative overflow-hidden border-2 bg-gradient-to-br from-green-500/10 via-green-500/5 to-transparent border-green-500/30 dark:from-green-500/20 dark:via-green-500/10 dark:to-transparent dark:border-green-500/50">
+                        <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-green-500/20 to-transparent rounded-bl-full"></div>
+                        <CardContent className="p-4 relative">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-500/20 backdrop-blur-sm border border-green-500/30">
+                              <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Pay Rate</p>
+                              <p className="text-lg font-bold">${formData.payRate}/hr</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                    {formData.totalHours && (
+                      <Card className="relative overflow-hidden border-2 bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/30 dark:from-blue-500/20 dark:via-blue-500/10 dark:to-transparent dark:border-blue-500/50">
+                        <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-blue-500/20 to-transparent rounded-bl-full"></div>
+                        <CardContent className="p-4 relative">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/20 backdrop-blur-sm border border-blue-500/30">
+                              <Clock className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                            </div>
+                            <div>
+                              <p className="text-xs text-muted-foreground">Total Hours</p>
+                              <p className="text-lg font-bold">{formData.totalHours} hrs</p>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+
+                  {/* Site Employees */}
+                  {isLoadingSiteEmployees ? (
+                    <div className="text-sm text-muted-foreground">Loading employees...</div>
+                  ) : siteEmployees.length > 0 ? (
+                    <div>
+                      <Label className="mb-2 block">Employees at this Site</Label>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        {siteEmployees.map((allocation, index) => {
+                          const gradientColors = [
+                            "from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/30 dark:from-blue-500/20 dark:via-blue-500/10 dark:to-transparent dark:border-blue-500/50",
+                            "from-purple-500/10 via-purple-500/5 to-transparent border-purple-500/30 dark:from-purple-500/20 dark:via-purple-500/10 dark:to-transparent dark:border-purple-500/50",
+                            "from-green-500/10 via-green-500/5 to-transparent border-green-500/30 dark:from-green-500/20 dark:via-green-500/10 dark:to-transparent dark:border-green-500/50",
+                            "from-orange-500/10 via-orange-500/5 to-transparent border-orange-500/30 dark:from-orange-500/20 dark:via-orange-500/10 dark:to-transparent dark:border-orange-500/50",
+                            "from-pink-500/10 via-pink-500/5 to-transparent border-pink-500/30 dark:from-pink-500/20 dark:via-pink-500/10 dark:to-transparent dark:border-pink-500/50",
+                            "from-indigo-500/10 via-indigo-500/5 to-transparent border-indigo-500/30 dark:from-indigo-500/20 dark:via-indigo-500/10 dark:to-transparent dark:border-indigo-500/50",
+                          ];
+                          const gradientColor = gradientColors[index % gradientColors.length];
+                          
+                          // Find employee to get email for user matching
+                          const employee = employees.find(e => e.id === allocation.employeeId);
+                          const userForEmployee = employee 
+                            ? users.find(u => u.email.toLowerCase() === employee.email.toLowerCase())
+                            : null;
+                          const employeeOrUserId = userForEmployee?.uid || allocation.employeeId;
+                          const isSelectedByAnyId = selectedEmployees.includes(allocation.employeeId) || 
+                            (userForEmployee && selectedEmployees.includes(userForEmployee.uid));
+
+                          return (
+                            <Card
+                              key={allocation.id}
+                              className={`relative overflow-hidden border-2 bg-gradient-to-br ${gradientColor} shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] cursor-pointer ${
+                                isSelectedByAnyId ? "ring-2 ring-primary ring-offset-2" : ""
+                              }`}
+                              onClick={() => {
+                                const idToUse = employeeOrUserId;
+                                setSelectedEmployees((prev) =>
+                                  prev.includes(idToUse)
+                                    ? prev.filter((id) => id !== idToUse)
+                                    : [...prev, idToUse]
+                                );
+                              }}
+                            >
+                              <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-white/10 to-transparent rounded-bl-full"></div>
+                              <CardContent className="p-3 relative">
+                                <div className="flex items-center gap-2">
+                                  <Avatar className="h-8 w-8 border-2 border-background">
+                                    <AvatarFallback className={`bg-gradient-to-br ${gradientColor.includes("blue") ? "from-blue-500 to-blue-600" : gradientColor.includes("purple") ? "from-purple-500 to-purple-600" : gradientColor.includes("green") ? "from-green-500 to-green-600" : gradientColor.includes("orange") ? "from-orange-500 to-orange-600" : gradientColor.includes("pink") ? "from-pink-500 to-pink-600" : "from-indigo-500 to-indigo-600"} text-white text-xs`}>
+                                      {allocation.employeeName
+                                        .split(" ")
+                                        .map((n) => n[0])
+                                        .join("")
+                                        .toUpperCase()
+                                        .slice(0, 2)}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold truncate">{allocation.employeeName}</p>
+                                  </div>
+                                  {isSelectedByAnyId && (
+                                    <CheckCircle2 className="h-4 w-4 text-primary flex-shrink-0" />
+                                  )}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
+
+            <div>
+              <Label>Assign Members</Label>
+              <Popover open={employeePopoverOpen} onOpenChange={setEmployeePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    className="w-full justify-start"
+                    disabled={editingTask && !userData?.isAdmin && editingTask.assignedTo.includes(user?.uid || "")}
+                  >
+                    <Users className="mr-2 h-4 w-4" />
+                    {selectedEmployees.length > 0
+                      ? `${selectedEmployees.length} member(s) selected`
+                      : "Select members"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[300px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search employees..." />
+                    <CommandList>
+                      <CommandEmpty>No employees found.</CommandEmpty>
+                      <CommandGroup>
+                        {deduplicateEmployees(employees)
+                          .sort((a, b) => {
+                            // Sort by name for better UX
+                            return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+                          })
+                          .map((employee) => (
+                            <CommandItem
+                              key={employee.id}
+                              value={employee.id}
+                              onSelect={() => {
+                                setSelectedEmployees((prev) =>
+                                  prev.includes(employee.id)
+                                    ? prev.filter((id) => id !== employee.id)
+                                    : [...prev, employee.id]
+                                );
+                              }}
+                            >
+                              <Checkbox
+                                checked={selectedEmployees.includes(employee.id)}
+                                className="mr-2"
+                              />
+                              {employee.name}
+                            </CommandItem>
+                          ))}
+                        {users
+                          .filter((user) => {
+                            // Only show users that don't have a corresponding employee record
+                            // Match by email (case-insensitive)
+                            const hasEmployeeRecord = employees.some(
+                              (emp) => emp.email.toLowerCase() === user.email.toLowerCase()
+                            );
+                            return !hasEmployeeRecord;
+                          })
+                          .map((user) => (
+                            <CommandItem
+                              key={user.uid}
+                              value={user.uid}
+                              onSelect={() => {
+                                setSelectedEmployees((prev) =>
+                                  prev.includes(user.uid)
+                                    ? prev.filter((id) => id !== user.uid)
+                                    : [...prev, user.uid]
+                                );
+                              }}
+                            >
+                              <Checkbox
+                                checked={selectedEmployees.includes(user.uid)}
+                                className="mr-2"
+                              />
+                              {user.name || user.email}
+                            </CommandItem>
+                          ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="deadline">Deadline</Label>
+                <Input
+                  id="deadline"
+                  type="date"
+                  value={formData.deadline}
+                  onChange={(e) => setFormData({ ...formData, deadline: e.target.value })}
+                  disabled={editingTask && !userData?.isAdmin && editingTask.assignedTo.includes(user?.uid || "")}
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="location">Location</Label>
+                <Input
+                  id="location"
+                  value={formData.location}
+                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                  placeholder="Task location"
+                  disabled={editingTask && !userData?.isAdmin && editingTask.assignedTo.includes(user?.uid || "")}
+                />
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="progress">Progress (0-10)</Label>
+              <Input
+                id="progress"
+                type="number"
+                min="0"
+                max="10"
+                value={formData.progress}
+                onChange={(e) =>
+                  setFormData({ ...formData, progress: parseInt(e.target.value) || 0 })
+                }
+              />
+            </div>
+
+            <div>
+              <Label>Subtasks</Label>
+              <div className="flex gap-2 mb-2">
+                <Input
+                  value={newSubtask}
+                  onChange={(e) => setNewSubtask(e.target.value)}
+                  placeholder="Add subtask"
+                  onKeyPress={(e) => {
+                    if (e.key === "Enter") {
+                      handleAddSubtask();
+                    }
+                  }}
+                />
+                <Button type="button" onClick={handleAddSubtask} size="icon">
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {formData.subtasks.map((subtask) => (
+                  <div key={subtask.id} className="flex items-center gap-2">
+                    <Checkbox
+                      checked={subtask.completed}
+                      onCheckedChange={() => handleToggleSubtask(subtask.id)}
+                    />
+                    <span
+                      className={cn(
+                        "flex-1 text-sm",
+                        subtask.completed && "line-through text-muted-foreground"
+                      )}
+                    >
+                      {subtask.title}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDeleteSubtask(subtask.id)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {(editingTask?.status === "completed" || formData.completedImages.length > 0 || editingTask) && (
+              <div>
+                <Label>Completed Images</Label>
+                <Input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleImageUpload}
+                  disabled={uploadingImages}
+                  className="mb-2"
+                />
+                {uploadingImages && <p className="text-sm text-muted-foreground">Uploading...</p>}
+                {formData.completedImages.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2 mt-2">
+                    {formData.completedImages.map((url, idx) => (
+                      <div key={idx} className="relative">
+                        <img
+                          src={url}
+                          alt={`Completed ${idx + 1}`}
+                          className="w-full h-24 object-cover rounded"
+                        />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="icon"
+                          className="absolute top-1 right-1 h-6 w-6"
+                          onClick={() => handleRemoveImage(url)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveTask} disabled={isSaving}>
+              {isSaving ? "Saving..." : editingTask ? "Update" : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the task.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteTask} className="bg-red-600">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* View Members Dialog */}
+      <Dialog open={isMembersDialogOpen} onOpenChange={setIsMembersDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Task Members</DialogTitle>
+            <DialogDescription>
+              Members assigned to: {viewingTask?.title}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            {viewingTask?.assignedToNames && viewingTask.assignedToNames.length > 0 ? (
+              viewingTask.assignedToNames.map((name, idx) => (
+                <div key={idx} className="flex items-center gap-2 p-2 border rounded">
+                  <Avatar>
+                    <AvatarFallback>{name.charAt(0).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <span>{name}</span>
+                </div>
+              ))
+            ) : (
+              <p className="text-muted-foreground">No members assigned</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+export default Tasks;
+

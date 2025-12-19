@@ -154,3 +154,5 @@ To test the automation:
 - `src/lib/firebase/invoices.ts` - Updated to trigger automation
 - `firestore.rules` - Updated security rules
 
+
+

@@ -1,5 +1,7 @@
-import cloudinary from './config';
-import { CLOUDINARY_PRESET } from './config';
+/**
+ * Client-side Cloudinary upload utilities
+ * This file is safe to import in client components as it doesn't use the Node.js SDK
+ */
 
 export interface UploadResult {
   url: string;
@@ -9,6 +11,16 @@ export interface UploadResult {
   width?: number;
   height?: number;
   bytes: number;
+}
+
+/**
+ * Get Cloudinary configuration from environment variables (client-safe)
+ */
+function getCloudinaryConfig() {
+  return {
+    cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME || 'dxyojnh09',
+    preset: process.env.NEXT_PUBLIC_CLOUDINARY_PRESET || 'finance-chat',
+  };
 }
 
 /**
@@ -22,10 +34,12 @@ export async function uploadToCloudinary(
   folder?: string
 ): Promise<UploadResult> {
   try {
+    const { cloudName, preset } = getCloudinaryConfig();
+    
     // Create form data for unsigned upload
     const formData = new FormData();
     formData.append('file', file);
-    formData.append('upload_preset', CLOUDINARY_PRESET);
+    formData.append('upload_preset', preset);
     
     if (folder) {
       formData.append('folder', folder);
@@ -33,7 +47,7 @@ export async function uploadToCloudinary(
 
     // Upload to Cloudinary using unsigned upload
     const response = await fetch(
-      `https://api.cloudinary.com/v1_1/${cloudinary.config().cloud_name}/auto/upload`,
+      `https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`,
       {
         method: 'POST',
         body: formData,
@@ -80,33 +94,6 @@ export async function uploadImage(
 }
 
 /**
- * Upload a document/file to Cloudinary
- * @param file - The file to upload
- * @param folder - Optional folder path
- * @returns Promise with upload result
- */
-export async function uploadFile(
-  file: File,
-  folder?: string
-): Promise<UploadResult> {
-  return uploadToCloudinary(file, folder);
-}
-
-/**
- * Delete a file from Cloudinary
- * @param publicId - The public ID of the file to delete
- * @returns Promise<void>
- */
-export async function deleteFromCloudinary(publicId: string): Promise<void> {
-  try {
-    await cloudinary.uploader.destroy(publicId);
-  } catch (error) {
-    console.error('Error deleting from Cloudinary:', error);
-    throw error;
-  }
-}
-
-/**
  * Get optimized image URL with transformations
  * @param publicId - The public ID of the image
  * @param options - Transformation options
@@ -121,6 +108,7 @@ export function getOptimizedImageUrl(
     format?: string;
   }
 ): string {
+  const { cloudName } = getCloudinaryConfig();
   const transformations: string[] = [];
   
   if (options?.width) transformations.push(`w_${options.width}`);
@@ -132,26 +120,6 @@ export function getOptimizedImageUrl(
     ? transformations.join(',') + '/' 
     : '';
 
-  return `https://res.cloudinary.com/${cloudinary.config().cloud_name}/image/upload/${transformString}${publicId}`;
+  return `https://res.cloudinary.com/${cloudName}/image/upload/${transformString}${publicId}`;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

@@ -157,6 +157,30 @@ const createPayrollFromInvoice = async (
     const modeOfCashFlow: CashFlowMode = "outflow";
     const typeOfCashFlow: CashFlowType = "internal_payroll";
     
+    // Determine GST and ABN registration status
+    // If invoice has GST, the employee is GST registered
+    // We can also try to get employee data if name matches
+    let gstRegistered = invoice.gst > 0;
+    let abnRegistered = false;
+    
+    // Try to get employee data to get accurate GST/ABN status
+    if (invoice.name) {
+      try {
+        const { getAllEmployees } = await import("@/lib/firebase/employees");
+        const employees = await getAllEmployees();
+        const employee = employees.find(emp => 
+          emp.name === invoice.name || emp.email === invoice.name
+        );
+        if (employee) {
+          gstRegistered = employee.gstRegistered || false;
+          abnRegistered = employee.abnRegistered || false;
+        }
+      } catch (err) {
+        // If we can't get employee data, use GST amount as indicator
+        console.warn("Could not fetch employee data for payroll:", err);
+      }
+    }
+    
     const payrollData: Omit<Payroll, "id"> = {
       month: getMonthName(paymentDate),
       date: formatDateDDMMYYYY(paymentDate),
@@ -164,8 +188,8 @@ const createPayrollFromInvoice = async (
       typeOfCashFlow,
       name: invoice.name || invoice.clientName,
       siteOfWork: invoice.siteOfWork,
-      abnRegistered: false, // Default, can be updated later
-      gstRegistered: invoice.gst > 0, // If GST exists, assume registered
+      abnRegistered: abnRegistered,
+      gstRegistered: gstRegistered,
       invoiceNumber: invoice.invoiceNumber,
       amountExclGst: invoice.amount,
       gstAmount: invoice.gst,

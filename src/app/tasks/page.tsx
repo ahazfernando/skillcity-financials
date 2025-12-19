@@ -2,37 +2,15 @@
 
 import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import ActivityLogPage from "@/pages/ActivityLog";
+import Tasks from "@/pages/Tasks";
 
-export default function ActivityLogPageRoute() {
+export default function TasksPage() {
   return (
     <ProtectedRoute>
       <Layout>
-        <ActivityLogPage />
+        <Tasks />
       </Layout>
     </ProtectedRoute>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

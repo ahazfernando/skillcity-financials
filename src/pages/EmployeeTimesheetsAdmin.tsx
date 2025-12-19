@@ -550,6 +550,7 @@ const EmployeeTimesheetsAdmin = () => {
 
                 // Calculate overall payment status for this employee's month
                 const workMonth = new Date(selectedMonth + "-01").toLocaleDateString('en-US', { month: 'long' });
+                const workMonthName = workMonth;
                 const workYear = new Date(selectedMonth + "-01").getFullYear();
                 const workMonthNum = new Date(selectedMonth + "-01").getMonth() + 1;
                 const paymentDueDate = getPaymentDueDate(workYear, workMonthNum);
