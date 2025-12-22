@@ -349,7 +349,7 @@ function Column({ id, title, tasks, onEdit, onDelete, onViewMembers, onViewDetai
 
 
   return (
-    <div className="flex-1 min-w-[320px] max-w-[380px]">
+    <div className="flex-1 min-w-[320px] max-w-[500px]">
       {/* Column Header */}
       <div className="mb-4 pb-3 border-b border-gray-200 dark:border-gray-800">
         <div className="flex items-center justify-between">
@@ -574,15 +574,7 @@ const Tasks = () => {
         prev.map((t) => (t.id === taskId ? { ...t, status: newStatus! } : t))
       );
       
-      // Send email notification for status change
-      try {
-        const updatedTask = { ...task, status: newStatus };
-        const { notifyTaskStatusChange } = await import("@/lib/resend/taskNotifications");
-        await notifyTaskStatusChange(updatedTask, oldStatus, newStatus);
-      } catch (emailError) {
-        console.error("Error sending email notification:", emailError);
-        // Don't fail the status update if email fails
-      }
+      // Email notifications removed - Resend integration disabled
       
       toast.success("Task status updated");
     } catch (error) {
@@ -720,57 +712,14 @@ const Tasks = () => {
         taskId = editingTask.id;
         savedTask = { ...taskData, id: taskId } as Task;
         
-        // Send email notifications for updates
-        try {
-          const oldAssignedTo = editingTask.assignedTo || [];
-          const newAssignedTo = selectedEmployees;
-          
-          // Check if assignment changed
-          if (JSON.stringify(oldAssignedTo.sort()) !== JSON.stringify(newAssignedTo.sort())) {
-            const { notifyTaskAssignmentChange } = await import("@/lib/resend/taskNotifications");
-            await notifyTaskAssignmentChange(
-              savedTask,
-              oldAssignedTo,
-              newAssignedTo,
-              userData?.name || "Admin"
-            );
-          }
-          
-          // Check if status changed
-          if (editingTask.status !== taskData.status) {
-            const { notifyTaskStatusChange } = await import("@/lib/resend/taskNotifications");
-            await notifyTaskStatusChange(savedTask, editingTask.status, taskData.status);
-          }
-          
-          // Check if deadline changed
-          if (editingTask.deadline !== taskData.deadline) {
-            const { notifyTaskDeadlineChange } = await import("@/lib/resend/taskNotifications");
-            await notifyTaskDeadlineChange(savedTask, editingTask.deadline, taskData.deadline);
-          }
-        } catch (emailError) {
-          console.error("Error sending email notifications:", emailError);
-          // Don't fail the task update if email fails
-        }
+        // Email notifications removed - Resend integration disabled
         
         toast.success("Task updated successfully");
       } else {
         taskId = await createTask(taskData);
         savedTask = { ...taskData, id: taskId } as Task;
         
-        // Send email notifications for new task assignments
-        if (selectedEmployees.length > 0) {
-          try {
-            const { notifyTaskAssignment } = await import("@/lib/resend/taskNotifications");
-            await notifyTaskAssignment(
-              savedTask,
-              selectedEmployees,
-              userData?.name || "Admin"
-            );
-          } catch (emailError) {
-            console.error("Error sending email notifications:", emailError);
-            // Don't fail the task creation if email fails
-          }
-        }
+        // Email notifications removed - Resend integration disabled
         
         toast.success("Task created successfully");
       }
@@ -971,7 +920,7 @@ const Tasks = () => {
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-6 overflow-x-auto pb-6">
+        <div className="flex gap-6 overflow-x-auto pb-6 w-full">
           {columns.map((column) => (
             <Column
               key={column.id}
