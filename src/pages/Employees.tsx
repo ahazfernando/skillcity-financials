@@ -107,6 +107,7 @@ const Employees = () => {
     invoiceCollectionFrequency: "" as "" | "Monthly" | "Fortnightly" | "Weekly",
     type: "employee" as "employee" | "client",
     isSkillCityEmployee: false,
+    applyGst: true,
   });
 
   const { userData } = useAuth();
@@ -273,6 +274,7 @@ const Employees = () => {
       invoiceCollectionFrequency: "",
       type: "employee",
       isSkillCityEmployee: false,
+      applyGst: true,
     });
     setEditingEmployeeId(null);
     setEmployeePayRates([]);
@@ -374,6 +376,7 @@ const Employees = () => {
       invoiceCollectionFrequency: employee.invoiceCollectionFrequency || "",
       type: employee.type || "employee",
       isSkillCityEmployee: employee.isSkillCityEmployee || false,
+      applyGst: employee.applyGst !== undefined ? employee.applyGst : true,
     });
     
     // Reset invoice view state
@@ -460,6 +463,7 @@ const Employees = () => {
           invoiceCollectionFrequency: formData.invoiceCollectionFrequency || undefined,
           type: formData.type,
           isSkillCityEmployee: formData.isSkillCityEmployee,
+          applyGst: formData.applyGst,
         });
 
         // Update user role to "employee" if email exists
@@ -503,6 +507,7 @@ const Employees = () => {
           invoiceCollectionFrequency: formData.invoiceCollectionFrequency || undefined,
           type: formData.type,
           isSkillCityEmployee: formData.isSkillCityEmployee,
+          applyGst: formData.applyGst,
         };
 
         // Add employee to Firebase
@@ -1356,6 +1361,24 @@ const Employees = () => {
                         </SelectContent>
                       </Select>
                     </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="applyGst">Apply GST</Label>
+                      <Select
+                        value={formData.applyGst ? "yes" : "no"}
+                        onValueChange={(value) => setFormData({ ...formData, applyGst: value === "yes" })}
+                      >
+                        <SelectTrigger id="applyGst">
+                          <SelectValue placeholder="Select GST option" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="yes">Yes - Calculate GST</SelectItem>
+                          <SelectItem value="no">No - Do not calculate GST</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        For inflows: GST is added. For outflows: GST is subtracted.
+                      </p>
+                    </div>
                   </div>
                 </div>
 
@@ -1699,6 +1722,24 @@ const Employees = () => {
                           <SelectItem value="inactive">Inactive</SelectItem>
                         </SelectContent>
                       </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="edit-applyGst">Apply GST</Label>
+                      <Select
+                        value={formData.applyGst ? "yes" : "no"}
+                        onValueChange={(value) => setFormData({ ...formData, applyGst: value === "yes" })}
+                      >
+                        <SelectTrigger id="edit-applyGst">
+                          <SelectValue placeholder="Select GST option" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="yes">Yes - Calculate GST</SelectItem>
+                          <SelectItem value="no">No - Do not calculate GST</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        For inflows: GST is added. For outflows: GST is subtracted.
+                      </p>
                     </div>
                   </div>
                 </div>

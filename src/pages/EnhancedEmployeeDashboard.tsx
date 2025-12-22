@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -47,6 +46,9 @@ import {
   FileCheck,
   DollarSign,
   Plus,
+  CheckSquare,
+  MapPin,
+  Users,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
@@ -58,8 +60,15 @@ import { useLiveClock } from "@/hooks/use-live-clock";
 import { useSessionTimer } from "@/hooks/use-session-timer";
 import { useLeaveRequests } from "@/hooks/use-leave-requests";
 import { useWorkRecord } from "@/hooks/use-work-record";
-import { WorkRecord } from "@/types/financial";
+import { WorkRecord, Task } from "@/types/financial";
 import { format } from "date-fns";
+import { getAllTasks } from "@/lib/firebase/tasks";
+import { getAllEmployees } from "@/lib/firebase/employees";
+import { getAllUsers } from "@/lib/firebase/users";
+import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
+import Link from "next/link";
 
 const EnhancedEmployeeDashboard = () => {
   const { user, userData } = useAuth();
@@ -81,6 +90,9 @@ const EnhancedEmployeeDashboard = () => {
   const [pendingApprovals, setPendingApprovals] = useState(0);
   const [reminders, setReminders] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [assignedTasks, setAssignedTasks] = useState<Task[]>([]);
+  const [employees, setEmployees] = useState<any[]>([]);
+  const [users, setUsers] = useState<any[]>([]);
 
   // Leave request form state
   const [leaveForm, setLeaveForm] = useState({
@@ -217,6 +229,77 @@ const EnhancedEmployeeDashboard = () => {
         }
       } catch (error) {
         console.error("Error checking reminders:", error);
+      }
+
+      // Load tasks assigned to this employee
+      try {
+        const [allTasks, allEmployees, allUsers] = await Promise.all([
+          getAllTasks(),
+          getAllEmployees(),
+          getAllUsers(),
+        ]);
+        
+        setEmployees(allEmployees);
+        setUsers(allUsers);
+        
+        // Filter tasks assigned to current employee
+        // We need to check multiple ways a task could be assigned to this employee:
+        // 1. Direct Firebase Auth UID match
+        // 2. Employee document ID match (if employee record exists)
+        // 3. Email match (through employee or user records)
+        
+        const currentUserId = firebaseAuthUid;
+        
+        // First, try to find the employee record for the current user
+        let employeeRecordId: string | null = null;
+        if (userData?.email) {
+          const employee = allEmployees.find(e => e.email?.toLowerCase() === userData.email?.toLowerCase());
+          if (employee) {
+            employeeRecordId = employee.id;
+          }
+        }
+        
+        const filteredTasks = allTasks.filter((task) => {
+          if (!task.assignedTo || task.assignedTo.length === 0) {
+            return false;
+          }
+          
+          // Check 1: Direct Firebase Auth UID match
+          if (currentUserId && task.assignedTo.includes(currentUserId)) {
+            return true;
+          }
+          
+          // Check 2: Employee document ID match
+          if (employeeRecordId && task.assignedTo.includes(employeeRecordId)) {
+            return true;
+          }
+          
+          // Check 3: Email-based matching (for any assigned ID)
+          if (userData?.email) {
+            const userEmail = userData.email.toLowerCase();
+            
+            // Check each assigned ID to see if it matches the current user
+            for (const assignedId of task.assignedTo) {
+              // Check if this ID is an employee document ID with matching email
+              const employee = allEmployees.find(e => e.id === assignedId);
+              if (employee && employee.email?.toLowerCase() === userEmail) {
+                return true;
+              }
+              
+              // Check if this ID is a user UID with matching email
+              const assignedUser = allUsers.find(u => u.uid === assignedId);
+              if (assignedUser && assignedUser.email?.toLowerCase() === userEmail) {
+                return true;
+              }
+            }
+          }
+          
+          return false;
+        });
+        
+        setAssignedTasks(filteredTasks);
+      } catch (error) {
+        console.error("Error loading tasks:", error);
       }
     } catch (error) {
       console.error("Error loading dashboard data:", error);
@@ -661,6 +744,116 @@ const EnhancedEmployeeDashboard = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Assigned Tasks Section */}
+      <Card className="relative overflow-hidden border-2 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/30 dark:from-blue-500/20 dark:via-blue-500/10 dark:to-transparent dark:border-blue-500/50 rounded-3xl">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/20 to-transparent rounded-bl-full"></div>
+        <CardHeader className="relative">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <CheckSquare className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                My Tasks
+              </CardTitle>
+              <CardDescription>Tasks assigned to you</CardDescription>
+            </div>
+            <Link href="/tasks">
+              <Button variant="outline" size="sm">
+                View All
+              </Button>
+            </Link>
+          </div>
+        </CardHeader>
+        <CardContent className="relative">
+          {isLoading ? (
+            <div className="space-y-3">
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-20 w-full" />
+            </div>
+          ) : assignedTasks.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <CheckSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>No tasks assigned to you</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {assignedTasks.slice(0, 5).map((task) => (
+                <div
+                  key={task.id}
+                  className="flex items-start justify-between p-4 rounded-lg border bg-card/50 backdrop-blur-sm hover:bg-card/80 transition-colors"
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h4 className="font-semibold text-sm truncate">{task.title}</h4>
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-xs",
+                          task.status === "completed"
+                            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                            : task.status === "in_progress"
+                            ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                            : "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                        )}
+                      >
+                        {task.status === "completed"
+                          ? "Completed"
+                          : task.status === "in_progress"
+                          ? "In Progress"
+                          : "New"}
+                      </Badge>
+                      <Badge
+                        className={cn(
+                          "text-xs",
+                          task.priority === "high"
+                            ? "bg-red-500 text-white"
+                            : task.priority === "mid"
+                            ? "bg-yellow-500 text-white"
+                            : "bg-blue-500 text-white"
+                        )}
+                      >
+                        {task.priority === "high" ? "High" : task.priority === "mid" ? "Mid" : "Low"}
+                      </Badge>
+                    </div>
+                    {task.description && (
+                      <p className="text-xs text-muted-foreground mb-2 line-clamp-2">{task.description}</p>
+                    )}
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground flex-wrap">
+                      {task.siteName && (
+                        <div className="flex items-center gap-1">
+                          <MapPin className="h-3 w-3" />
+                          <span>{task.siteName}</span>
+                        </div>
+                      )}
+                      {task.deadline && (
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          <span>{format(new Date(task.deadline), "MMM dd, yyyy")}</span>
+                        </div>
+                      )}
+                      {task.progress !== undefined && (
+                        <div className="flex items-center gap-2 flex-1 min-w-[100px]">
+                          <Progress value={(task.progress / 10) * 100} className="h-1.5 flex-1" />
+                          <span className="text-xs">{task.progress}/10</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {assignedTasks.length > 5 && (
+                <div className="text-center pt-2">
+                  <Link href="/tasks">
+                    <Button variant="ghost" size="sm">
+                      View {assignedTasks.length - 5} more task{assignedTasks.length - 5 !== 1 ? 's' : ''}
+                    </Button>
+                  </Link>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Leave Requests Section */}
       <Card className="relative overflow-hidden border-2 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-violet-500/10 via-violet-500/5 to-transparent border-violet-500/30 dark:from-violet-500/20 dark:via-violet-500/10 dark:to-transparent dark:border-violet-500/50 rounded-3xl">

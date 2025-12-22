@@ -123,3 +123,4 @@ export function getOptimizedImageUrl(
   return `https://res.cloudinary.com/${cloudName}/image/upload/${transformString}${publicId}`;
 }
 
+

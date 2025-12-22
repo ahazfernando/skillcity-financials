@@ -13,8 +13,8 @@ import { getAllWorkRecords } from "@/lib/firebase/workRecords";
 import { getAllEmployees } from "@/lib/firebase/employees";
 import { getEmployeePayRatesByEmployee } from "@/lib/firebase/employeePayRates";
 import { getAllUsers } from "@/lib/firebase/users";
-import { getAllPayrolls, updatePayroll } from "@/lib/firebase/payroll";
-import { getAllInvoices, updateInvoice } from "@/lib/firebase/invoices";
+import { getAllPayrolls, updatePayroll, addPayroll } from "@/lib/firebase/payroll";
+import { getAllInvoices, updateInvoice, addInvoice } from "@/lib/firebase/invoices";
 import { WorkRecord, Employee, Payroll, PaymentStatus } from "@/types/financial";
 import { formatCurrency } from "@/lib/utils";
 import { calculatePaymentDueDate } from "@/lib/paymentReminders";
@@ -296,11 +296,12 @@ const EmployeeTimesheetsAdmin = () => {
   };
 
   // Handle marking employee as paid
-  const handleMarkAsPaid = async (stat: any, matchingPayroll: Payroll | undefined, workMonth: string, workYear: number) => {
+  const handleMarkAsPaid = async (stat: any, matchingPayroll: Payroll | undefined, workMonthName: string, workYear: number) => {
     try {
+      setUpdatingPayrollId(stat.employeeId);
+      
       if (matchingPayroll) {
         // Update existing payroll record
-        setUpdatingPayrollId(matchingPayroll.id);
         await updatePayroll(matchingPayroll.id, { 
           status: "paid",
           paymentDate: new Date().toISOString().split('T')[0], // Set payment date to today
@@ -323,27 +324,150 @@ const EmployeeTimesheetsAdmin = () => {
           }
         }
       } else {
-        // No payroll record exists - try to find or create one
-        // First, try to find an invoice for this employee and month
-        const invoices = await getAllInvoices();
-        const workMonthName = new Date(selectedMonth + "-01").toLocaleDateString('en-US', { month: 'long' });
-        const relatedInvoice = invoices.find(inv => 
-          (inv.name === stat.employeeName || inv.clientName === stat.employeeName) &&
-          new Date(inv.issueDate).toLocaleDateString('en-US', { month: 'long' }) === workMonthName
-        );
+        // No payroll record exists - automatically create invoice and payroll using existing earnings
+        toast.info(`Creating invoice and payroll for ${stat.employeeName}...`);
         
-        if (relatedInvoice) {
-          // Update the invoice status
-          setUpdatingPayrollId(`invoice-${relatedInvoice.id}`);
-          await updateInvoice(relatedInvoice.id, { 
-            status: "paid",
-            paymentDate: new Date().toISOString().split('T')[0],
-          });
-          toast.info("Invoice marked as paid. Payroll record will be created automatically.");
-        } else {
-          toast.error("No payroll or invoice record found. Please create a payroll record first.");
-          setUpdatingPayrollId(null);
-          return;
+        try {
+          // Use existing earnings from stat object (already calculated correctly)
+          const totalEarnings = stat.totalEarnings || 0;
+          const totalHours = stat.totalHours || 0;
+          const currency = stat.currency || "AUD";
+          
+          if (totalEarnings === 0) {
+            throw new Error("No earnings found. Please ensure timesheet records have been completed.");
+          }
+          
+          // Get employee data for GST status
+          const employee = stat.employee;
+          const gstRegistered = employee?.gstRegistered || false;
+          const abnRegistered = employee?.abnRegistered || false;
+          const applyGst = employee?.applyGst !== undefined ? employee.applyGst : true; // Default to true for backward compatibility
+          
+          // Calculate GST (10% if applyGst is true and registered)
+          const gstAmount = (applyGst && gstRegistered) ? Math.round(totalEarnings * 0.1 * 100) / 100 : 0;
+          const amountExclGst = totalEarnings;
+          
+          // For invoice (inflow): GST is added
+          const invoiceTotalAmount = amountExclGst + gstAmount;
+          
+          // For payroll (outflow): GST is subtracted
+          const payrollTotalAmount = amountExclGst - gstAmount;
+          
+          // Convert month name to month number (1-12)
+          const monthNames = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+          ];
+          const workMonthNum = monthNames.findIndex(m => m.toLowerCase() === workMonthName.toLowerCase()) + 1;
+          
+          if (workMonthNum === 0) {
+            throw new Error(`Invalid month name: ${workMonthName}`);
+          }
+          
+          // Generate invoice number
+          const { calculatePaymentDateAsDate } = await import("@/lib/paymentCycle");
+          
+          const namePart = stat.employeeName.replace(/\s+/g, "-").toUpperCase();
+          const monthStr = String(workMonthNum).padStart(2, "0");
+          const invoiceNumber = `EMP-${namePart}-${workYear}-${monthStr}`;
+          
+          // Check if invoice already exists
+          const invoices = await getAllInvoices();
+          const existingInvoice = invoices.find(inv => inv.invoiceNumber === invoiceNumber);
+          
+          let invoiceId: string;
+          if (existingInvoice) {
+            invoiceId = existingInvoice.id;
+            // Update existing invoice
+            await updateInvoice(invoiceId, {
+              amount: amountExclGst,
+              gst: gstAmount,
+              totalAmount: invoiceTotalAmount, // Inflow: add GST
+              status: "paid",
+              paymentDate: new Date().toISOString().split('T')[0],
+            });
+          } else {
+            // Create new invoice
+            const issueDate = new Date(workYear, workMonthNum - 1, 1);
+            const dueDate = calculatePaymentDateAsDate(issueDate, 45);
+            
+            // Get site information from records
+            const siteId = stat.records?.[0]?.siteId || "";
+            const siteName = stat.records?.[0]?.siteName || undefined;
+            
+            const invoiceData = {
+              invoiceNumber,
+              clientName: stat.employeeName,
+              name: stat.employeeName,
+              siteId,
+              siteOfWork: siteName,
+              amount: amountExclGst,
+              gst: gstAmount,
+              totalAmount: invoiceTotalAmount, // Inflow: add GST
+              issueDate: issueDate.toISOString().split('T')[0],
+              dueDate: dueDate.toISOString().split('T')[0],
+              status: "paid" as PaymentStatus,
+              paymentDate: new Date().toISOString().split('T')[0],
+              notes: `Auto-generated from timesheet for ${workYear}-${monthStr}. Total hours: ${totalHours.toFixed(2)}`,
+            };
+            
+            invoiceId = await addInvoice(invoiceData);
+          }
+          
+          // Create payroll record
+          const payrolls = await getAllPayrolls();
+          const existingPayroll = payrolls.find(p => p.invoiceNumber === invoiceNumber);
+          
+          let payrollId: string;
+          if (existingPayroll) {
+            payrollId = existingPayroll.id;
+            // Update existing payroll
+            await updatePayroll(payrollId, {
+              amountExclGst: amountExclGst,
+              gstAmount: gstAmount,
+              totalAmount: payrollTotalAmount, // Outflow: subtract GST
+              status: "paid",
+              paymentDate: new Date().toISOString().split('T')[0],
+            });
+          } else {
+            // Create new payroll
+            const paymentDate = new Date(workYear, workMonthNum - 1, 1);
+            paymentDate.setMonth(paymentDate.getMonth() + 1);
+            
+            const formatDateDDMMYYYY = (date: Date): string => {
+              const day = String(date.getDate()).padStart(2, '0');
+              const month = String(date.getMonth() + 1).padStart(2, '0');
+              const year = date.getFullYear();
+              return `${day}.${month}.${year}`;
+            };
+            
+            const payrollData = {
+              month: workMonthName,
+              date: formatDateDDMMYYYY(paymentDate),
+              modeOfCashFlow: "outflow" as const,
+              typeOfCashFlow: "internal_payroll" as const,
+              name: stat.employeeName,
+              siteOfWork: stat.records?.[0]?.siteName || undefined,
+              abnRegistered: abnRegistered,
+              gstRegistered: gstRegistered,
+              invoiceNumber: invoiceNumber,
+              amountExclGst: amountExclGst,
+              gstAmount: gstAmount,
+              totalAmount: payrollTotalAmount, // Outflow: subtract GST
+              currency: currency,
+              paymentMethod: "bank_transfer" as const,
+              status: "paid" as PaymentStatus,
+              paymentDate: new Date().toISOString().split('T')[0],
+              notes: `Auto-generated from invoice ${invoiceNumber}. Total hours: ${totalHours.toFixed(2)}`,
+            };
+            
+            payrollId = await addPayroll(payrollData);
+          }
+          
+          toast.success(`Invoice and payroll created and marked as paid for ${stat.employeeName} (Invoice: ${formatCurrency(invoiceTotalAmount, currency)}, Payroll: ${formatCurrency(payrollTotalAmount, currency)})`);
+        } catch (autoError: any) {
+          console.error("Error creating invoice/payroll:", autoError);
+          throw new Error(`Failed to create invoice/payroll: ${autoError.message || "Unknown error"}`);
         }
       }
       

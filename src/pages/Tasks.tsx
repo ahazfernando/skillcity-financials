@@ -566,11 +566,24 @@ const Tasks = () => {
       return;
     }
 
+    const oldStatus = task.status;
+
     try {
       await updateTaskStatus(taskId, newStatus);
       setTasks((prev) =>
         prev.map((t) => (t.id === taskId ? { ...t, status: newStatus! } : t))
       );
+      
+      // Send email notification for status change
+      try {
+        const updatedTask = { ...task, status: newStatus };
+        const { notifyTaskStatusChange } = await import("@/lib/resend/taskNotifications");
+        await notifyTaskStatusChange(updatedTask, oldStatus, newStatus);
+      } catch (emailError) {
+        console.error("Error sending email notification:", emailError);
+        // Don't fail the status update if email fails
+      }
+      
       toast.success("Task status updated");
     } catch (error) {
       console.error("Error updating task status:", error);
@@ -699,11 +712,66 @@ const Tasks = () => {
         createdByName: editingTask?.createdByName || userData?.name || "",
       };
 
+      let taskId: string;
+      let savedTask: Task;
+
       if (editingTask) {
         await updateTask(editingTask.id, taskData);
+        taskId = editingTask.id;
+        savedTask = { ...taskData, id: taskId } as Task;
+        
+        // Send email notifications for updates
+        try {
+          const oldAssignedTo = editingTask.assignedTo || [];
+          const newAssignedTo = selectedEmployees;
+          
+          // Check if assignment changed
+          if (JSON.stringify(oldAssignedTo.sort()) !== JSON.stringify(newAssignedTo.sort())) {
+            const { notifyTaskAssignmentChange } = await import("@/lib/resend/taskNotifications");
+            await notifyTaskAssignmentChange(
+              savedTask,
+              oldAssignedTo,
+              newAssignedTo,
+              userData?.name || "Admin"
+            );
+          }
+          
+          // Check if status changed
+          if (editingTask.status !== taskData.status) {
+            const { notifyTaskStatusChange } = await import("@/lib/resend/taskNotifications");
+            await notifyTaskStatusChange(savedTask, editingTask.status, taskData.status);
+          }
+          
+          // Check if deadline changed
+          if (editingTask.deadline !== taskData.deadline) {
+            const { notifyTaskDeadlineChange } = await import("@/lib/resend/taskNotifications");
+            await notifyTaskDeadlineChange(savedTask, editingTask.deadline, taskData.deadline);
+          }
+        } catch (emailError) {
+          console.error("Error sending email notifications:", emailError);
+          // Don't fail the task update if email fails
+        }
+        
         toast.success("Task updated successfully");
       } else {
-        await createTask(taskData);
+        taskId = await createTask(taskData);
+        savedTask = { ...taskData, id: taskId } as Task;
+        
+        // Send email notifications for new task assignments
+        if (selectedEmployees.length > 0) {
+          try {
+            const { notifyTaskAssignment } = await import("@/lib/resend/taskNotifications");
+            await notifyTaskAssignment(
+              savedTask,
+              selectedEmployees,
+              userData?.name || "Admin"
+            );
+          } catch (emailError) {
+            console.error("Error sending email notifications:", emailError);
+            // Don't fail the task creation if email fails
+          }
+        }
+        
         toast.success("Task created successfully");
       }
 
@@ -796,8 +864,74 @@ const Tasks = () => {
     }));
   };
 
+  // Filter tasks based on user role
+  const getFilteredTasks = () => {
+    const isAdmin = userData?.isAdmin || userData?.role === "admin";
+    const currentUserId = user?.uid || "";
+    
+    // If admin, show all tasks; otherwise, show only tasks assigned to the current user
+    if (isAdmin) {
+      return tasks;
+    }
+    
+    // For employees, filter tasks where they are assigned
+    // We need to check multiple ways a task could be assigned to this employee:
+    // 1. Direct Firebase Auth UID match
+    // 2. Employee document ID match (if employee record exists)
+    // 3. Email match (through employee or user records)
+    
+    // First, try to find the employee record for the current user
+    let employeeRecordId: string | null = null;
+    if (userData?.email) {
+      const employee = employees.find(e => e.email?.toLowerCase() === userData.email?.toLowerCase());
+      if (employee) {
+        employeeRecordId = employee.id;
+      }
+    }
+    
+    return tasks.filter((task) => {
+      if (!task.assignedTo || task.assignedTo.length === 0) {
+        return false; // Don't show unassigned tasks to employees
+      }
+      
+      // Check 1: Direct Firebase Auth UID match
+      if (currentUserId && task.assignedTo.includes(currentUserId)) {
+        return true;
+      }
+      
+      // Check 2: Employee document ID match
+      if (employeeRecordId && task.assignedTo.includes(employeeRecordId)) {
+        return true;
+      }
+      
+      // Check 3: Email-based matching (for any assigned ID)
+      if (userData?.email) {
+        const userEmail = userData.email.toLowerCase();
+        
+        // Check each assigned ID to see if it matches the current user
+        for (const assignedId of task.assignedTo) {
+          // Check if this ID is an employee document ID with matching email
+          const employee = employees.find(e => e.id === assignedId);
+          if (employee && employee.email?.toLowerCase() === userEmail) {
+            return true;
+          }
+          
+          // Check if this ID is a user UID with matching email
+          const assignedUser = users.find(u => u.uid === assignedId);
+          if (assignedUser && assignedUser.email?.toLowerCase() === userEmail) {
+            return true;
+          }
+        }
+      }
+      
+      return false;
+    });
+  };
+
+  const filteredTasks = getFilteredTasks();
+
   const getTasksByStatus = (status: "new" | "in_progress" | "completed") => {
-    return tasks.filter((t) => t.status === status);
+    return filteredTasks.filter((t) => t.status === status);
   };
 
   const columns = [

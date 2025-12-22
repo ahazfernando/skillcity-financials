@@ -6,6 +6,7 @@ import {
   FileText,
   Building2,
   UserCircle,
+  CheckSquare,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -22,6 +23,7 @@ import {
 
 const menuItems = [
   { title: "Dashboard", url: "/employee", icon: LayoutDashboard },
+  { title: "Tasks", url: "/tasks", icon: CheckSquare },
   { title: "Timesheet", url: "/employee/timesheet", icon: FileText },
   { title: "Bank Details", url: "/employee/bank-details", icon: Building2 },
   { title: "Profile", url: "/employee/profile", icon: UserCircle },
@@ -60,6 +62,8 @@ export function EmployeeSidebar() {
     </Sidebar>
   );
 }
+
+
 
 
 

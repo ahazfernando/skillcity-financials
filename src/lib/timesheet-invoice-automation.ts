@@ -199,11 +199,13 @@ export const processEmployeeTimesheet = async (
     // Get GST status from employee
     const gstRegistered = employee?.gstRegistered || false;
     const abnRegistered = employee?.abnRegistered || false;
+    const applyGst = employee?.applyGst !== undefined ? employee.applyGst : true; // Default to true for backward compatibility
 
-    // Calculate GST (10% if registered)
-    const gstAmount = gstRegistered ? Math.round(totalEarnings * 0.1 * 100) / 100 : 0;
+    // Calculate GST (10% if applyGst is true and registered)
+    // For invoices (inflows): GST is added
+    const gstAmount = (applyGst && gstRegistered) ? Math.round(totalEarnings * 0.1 * 100) / 100 : 0;
     const amountExclGst = totalEarnings;
-    const totalAmount = amountExclGst + gstAmount;
+    const totalAmount = amountExclGst + gstAmount; // Inflows: add GST
 
     // Generate invoice number
     const invoiceNumber = generateInvoiceNumber(employeeName, year, month);

@@ -225,12 +225,43 @@ const Payroll = () => {
     setFormData((prev) => {
       const updated = { ...prev, [field]: value };
       
-      // Auto-calculate GST (10%) and Total = Amount (Excl. GST) + GST
+      // Auto-calculate GST (10%) based on cash flow direction
       if (field === "amountExclGst") {
         const amountExclGst = parseFloat(value as string) || 0;
         const gst = amountExclGst * 0.10; // 10% GST
-        const total = amountExclGst + gst;
-        updated.gstAmount = gst.toFixed(2);
+        
+        // Check if employee has applyGst set
+        const employee = employees.find(emp => emp.name === prev.name);
+        const applyGst = employee?.applyGst !== undefined ? employee.applyGst : true;
+        const gstRegistered = employee?.gstRegistered || prev.gstRegistered || false;
+        
+        // Only calculate GST if applyGst is true and gstRegistered is true
+        const gstAmount = (applyGst && gstRegistered) ? gst : 0;
+        
+        // For inflows: add GST, for outflows: subtract GST
+        const total = prev.modeOfCashFlow === "inflow" 
+          ? amountExclGst + gstAmount  // Inflow: add GST
+          : amountExclGst - gstAmount; // Outflow: subtract GST
+        
+        updated.gstAmount = gstAmount.toFixed(2);
+        updated.totalAmount = total.toFixed(2);
+      }
+      
+      // Recalculate GST when modeOfCashFlow changes
+      if (field === "modeOfCashFlow" && updated.amountExclGst) {
+        const amountExclGst = parseFloat(updated.amountExclGst) || 0;
+        const gst = amountExclGst * 0.10;
+        
+        const employee = employees.find(emp => emp.name === updated.name);
+        const applyGst = employee?.applyGst !== undefined ? employee.applyGst : true;
+        const gstRegistered = employee?.gstRegistered || updated.gstRegistered || false;
+        
+        const gstAmount = (applyGst && gstRegistered) ? gst : 0;
+        const total = value === "inflow" 
+          ? amountExclGst + gstAmount
+          : amountExclGst - gstAmount;
+        
+        updated.gstAmount = gstAmount.toFixed(2);
         updated.totalAmount = total.toFixed(2);
       }
       
@@ -267,10 +298,32 @@ const Payroll = () => {
   const handleEmployeeSelect = (employeeId: string) => {
     const employee = employees.find(emp => emp.id === employeeId);
     if (employee) {
-      setFormData((prev) => ({
-        ...prev,
-        name: employee.name,
-      }));
+      setFormData((prev) => {
+        const updated = {
+          ...prev,
+          name: employee.name,
+          gstRegistered: employee.gstRegistered || false,
+          abnRegistered: employee.abnRegistered || false,
+        };
+        
+        // Recalculate GST if amountExclGst is already set
+        if (prev.amountExclGst) {
+          const amountExclGst = parseFloat(prev.amountExclGst) || 0;
+          const gst = amountExclGst * 0.10;
+          const applyGst = employee.applyGst !== undefined ? employee.applyGst : true;
+          const gstRegistered = employee.gstRegistered || false;
+          
+          const gstAmount = (applyGst && gstRegistered) ? gst : 0;
+          const total = prev.modeOfCashFlow === "inflow"
+            ? amountExclGst + gstAmount
+            : amountExclGst - gstAmount;
+          
+          updated.gstAmount = gstAmount.toFixed(2);
+          updated.totalAmount = total.toFixed(2);
+        }
+        
+        return updated;
+      });
       setEmployeePopoverOpen(false);
       setEmployeeSearchValue("");
     }

@@ -162,6 +162,7 @@ const createPayrollFromInvoice = async (
     // We can also try to get employee data if name matches
     let gstRegistered = invoice.gst > 0;
     let abnRegistered = false;
+    let applyGst = true; // Default to true for backward compatibility
     
     // Try to get employee data to get accurate GST/ABN status
     if (invoice.name) {
@@ -174,12 +175,18 @@ const createPayrollFromInvoice = async (
         if (employee) {
           gstRegistered = employee.gstRegistered || false;
           abnRegistered = employee.abnRegistered || false;
+          applyGst = employee.applyGst !== undefined ? employee.applyGst : true;
         }
       } catch (err) {
         // If we can't get employee data, use GST amount as indicator
         console.warn("Could not fetch employee data for payroll:", err);
       }
     }
+    
+    // For payroll (outflow): GST is subtracted from amountExclGst
+    // Calculate GST amount if applyGst is true
+    const gstAmount = (applyGst && gstRegistered) ? invoice.gst : 0;
+    const payrollTotalAmount = invoice.amount - gstAmount; // Outflow: subtract GST
     
     const payrollData: Omit<Payroll, "id"> = {
       month: getMonthName(paymentDate),
@@ -192,8 +199,8 @@ const createPayrollFromInvoice = async (
       gstRegistered: gstRegistered,
       invoiceNumber: invoice.invoiceNumber,
       amountExclGst: invoice.amount,
-      gstAmount: invoice.gst,
-      totalAmount: invoice.totalAmount,
+      gstAmount: gstAmount,
+      totalAmount: payrollTotalAmount, // Outflow: subtract GST
       currency: "AUD",
       paymentMethod: "bank_transfer",
       status: status,

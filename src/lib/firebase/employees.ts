@@ -65,6 +65,7 @@ const docToEmployee = (doc: any): Employee => {
     isSkillCityEmployee: data.isSkillCityEmployee !== undefined ? data.isSkillCityEmployee : false, // Default to false for backward compatibility
     abnRegistered: data.abnRegistered !== undefined ? data.abnRegistered : false,
     gstRegistered: data.gstRegistered !== undefined ? data.gstRegistered : false,
+    applyGst: data.applyGst !== undefined ? data.applyGst : true, // Default to true for backward compatibility
   };
 };
 
@@ -98,6 +99,7 @@ const employeeToDoc = (employee: Omit<Employee, "id">): any => {
     isSkillCityEmployee: employee.isSkillCityEmployee !== undefined ? employee.isSkillCityEmployee : false, // Default to false for backward compatibility
     abnRegistered: employee.abnRegistered !== undefined ? employee.abnRegistered : false,
     gstRegistered: employee.gstRegistered !== undefined ? employee.gstRegistered : false,
+    applyGst: employee.applyGst !== undefined ? employee.applyGst : true, // Default to true for backward compatibility
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
   };

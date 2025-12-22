@@ -77,6 +77,7 @@ export interface Employee {
   isSkillCityEmployee?: boolean; // true if employee works for Skill City organization, false for external employees
   abnRegistered?: boolean; // ABN registration status
   gstRegistered?: boolean; // GST registration status
+  applyGst?: boolean; // Whether to calculate GST for this employee (if false, GST will not be calculated)
 }
 
 export interface Site {

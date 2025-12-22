@@ -94,9 +94,11 @@ const Invoices = () => {
       const updated = { ...prev, [field]: value };
       
       // Auto-calculate GST (10% of amount) and Total if amount changes
+      // For invoices (inflows): GST is added
       if (field === "amountExclGst" && value) {
         const amountExclGst = parseFloat(value as string) || 0;
-        const gst = amountExclGst * 0.10;
+        const gst = amountExclGst * 0.10; // 10% GST
+        // Invoices are always inflows, so add GST
         const total = amountExclGst + gst;
         updated.gstAmount = gst.toFixed(2);
         updated.totalAmount = total.toFixed(2);
