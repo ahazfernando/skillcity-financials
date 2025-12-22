@@ -5,11 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Loader2, Filter, RefreshCw } from "lucide-react";
+import { Search, Loader2, Filter, RefreshCw, Clock, CheckCircle2, User, TrendingUp, Award } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { ActivityLog, ActivityType } from "@/types/financial";
+import { ActivityLog, ActivityType, Task, Employee } from "@/types/financial";
 import { getAllActivityLogs, queryActivityLogs } from "@/lib/firebase/activityLogs";
+import { getAllTasks } from "@/lib/firebase/tasks";
+import { getAllEmployees } from "@/lib/firebase/employees";
 import { toast } from "sonner";
+import { format } from "date-fns";
 import {
   Select,
   SelectContent,
@@ -57,10 +60,30 @@ const ActivityLogPage = () => {
   const [entityFilter, setEntityFilter] = useState<string>("all");
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 20;
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [isLoadingTasks, setIsLoadingTasks] = useState(true);
 
   useEffect(() => {
     loadActivityLogs();
+    loadTaskStatus();
   }, [typeFilter, entityFilter]);
+
+  const loadTaskStatus = async () => {
+    try {
+      setIsLoadingTasks(true);
+      const [allTasks, allEmployees] = await Promise.all([
+        getAllTasks(),
+        getAllEmployees(),
+      ]);
+      setTasks(allTasks);
+      setEmployees(allEmployees);
+    } catch (error) {
+      console.error("Error loading task status:", error);
+    } finally {
+      setIsLoadingTasks(false);
+    }
+  };
 
   const loadActivityLogs = async () => {
     try {
@@ -84,6 +107,7 @@ const ActivityLogPage = () => {
 
   const handleRefresh = () => {
     loadActivityLogs();
+    loadTaskStatus();
     toast.success("Activity logs refreshed");
   };
 
@@ -137,6 +161,55 @@ const ActivityLogPage = () => {
     return colors[type] || "bg-muted";
   };
 
+  // Group tasks by employee and status
+  const getTaskStatusByEmployee = () => {
+    const inProgressTasks = tasks.filter(t => t.status === "in_progress");
+    const completedTasks = tasks.filter(t => t.status === "completed");
+
+    // Group in-progress tasks by employee
+    const inProgressByEmployee: Record<string, { employee: Employee; tasks: Task[] }> = {};
+    inProgressTasks.forEach(task => {
+      task.assignedTo?.forEach(assignedId => {
+        const employee = employees.find(emp => 
+          emp.id === assignedId || emp.email === assignedId || emp.firebaseAuthUid === assignedId
+        );
+        if (employee) {
+          if (!inProgressByEmployee[employee.id]) {
+            inProgressByEmployee[employee.id] = { employee, tasks: [] };
+          }
+          if (!inProgressByEmployee[employee.id].tasks.find(t => t.id === task.id)) {
+            inProgressByEmployee[employee.id].tasks.push(task);
+          }
+        }
+      });
+    });
+
+    // Group completed tasks by employee
+    const completedByEmployee: Record<string, { employee: Employee; tasks: Task[] }> = {};
+    completedTasks.forEach(task => {
+      task.assignedTo?.forEach(assignedId => {
+        const employee = employees.find(emp => 
+          emp.id === assignedId || emp.email === assignedId || emp.firebaseAuthUid === assignedId
+        );
+        if (employee) {
+          if (!completedByEmployee[employee.id]) {
+            completedByEmployee[employee.id] = { employee, tasks: [] };
+          }
+          if (!completedByEmployee[employee.id].tasks.find(t => t.id === task.id)) {
+            completedByEmployee[employee.id].tasks.push(task);
+          }
+        }
+      });
+    });
+
+    return {
+      inProgress: Object.values(inProgressByEmployee),
+      completed: Object.values(completedByEmployee),
+    };
+  };
+
+  const taskStatus = getTaskStatusByEmployee();
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -148,6 +221,181 @@ const ActivityLogPage = () => {
           <RefreshCw className="mr-2 h-4 w-4" />
           Refresh
         </Button>
+      </div>
+
+      {/* Employee Task Status Cards */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* In Progress Tasks Card */}
+        <Card className="relative overflow-hidden border-2 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/30 dark:from-blue-500/20 dark:via-blue-500/10 dark:to-transparent dark:border-blue-500/50">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/20 to-transparent rounded-bl-full"></div>
+          <CardHeader className="relative">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                  <Clock className="h-5 w-5" />
+                  Tasks In Progress
+                </CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Active tasks currently being worked on
+                </p>
+              </div>
+              <Badge className="bg-blue-500 text-white text-lg px-3 py-1">
+                {taskStatus.inProgress.reduce((sum, item) => sum + item.tasks.length, 0)}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="relative">
+            {isLoadingTasks ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : taskStatus.inProgress.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Clock className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No tasks in progress</p>
+              </div>
+            ) : (
+              <div className="space-y-4 max-h-[500px] overflow-y-auto">
+                {taskStatus.inProgress.map(({ employee, tasks }) => (
+                  <div
+                    key={employee.id}
+                    className="bg-background/50 backdrop-blur-sm border border-blue-200/50 dark:border-blue-800/50 rounded-lg p-4 hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
+                          <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-sm">{employee.name}</p>
+                          <p className="text-xs text-muted-foreground">{employee.email}</p>
+                        </div>
+                      </div>
+                      <Badge variant="secondary" className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                        {tasks.length} {tasks.length === 1 ? "task" : "tasks"}
+                      </Badge>
+                    </div>
+                    <div className="space-y-2">
+                      {tasks.slice(0, 3).map((task) => (
+                        <div
+                          key={task.id}
+                          className="bg-background/80 rounded-md p-3 border-l-2 border-blue-500"
+                        >
+                          <p className="font-medium text-sm mb-1">{task.title}</p>
+                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                            {task.startedAt && (
+                              <div className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                <span>Started: {format(new Date(task.startedAt), "MMM dd, yyyy HH:mm")}</span>
+                              </div>
+                            )}
+                            {task.deadline && (
+                              <div className="flex items-center gap-1">
+                                <TrendingUp className="h-3 w-3" />
+                                <span>Due: {format(new Date(task.deadline), "MMM dd, yyyy")}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      {tasks.length > 3 && (
+                        <p className="text-xs text-muted-foreground text-center pt-2">
+                          +{tasks.length - 3} more {tasks.length - 3 === 1 ? "task" : "tasks"}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Completed Tasks Card */}
+        <Card className="relative overflow-hidden border-2 shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-br from-green-500/10 via-green-500/5 to-transparent border-green-500/30 dark:from-green-500/20 dark:via-green-500/10 dark:to-transparent dark:border-green-500/50">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-green-500/20 to-transparent rounded-bl-full"></div>
+          <CardHeader className="relative">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                  <CheckCircle2 className="h-5 w-5" />
+                  Completed Tasks
+                </CardTitle>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Successfully finished tasks
+                </p>
+              </div>
+              <Badge className="bg-green-500 text-white text-lg px-3 py-1">
+                {taskStatus.completed.reduce((sum, item) => sum + item.tasks.length, 0)}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="relative">
+            {isLoadingTasks ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : taskStatus.completed.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Award className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>No completed tasks</p>
+              </div>
+            ) : (
+              <div className="space-y-4 max-h-[500px] overflow-y-auto">
+                {taskStatus.completed.map(({ employee, tasks }) => (
+                  <div
+                    key={employee.id}
+                    className="bg-background/50 backdrop-blur-sm border border-green-200/50 dark:border-green-800/50 rounded-lg p-4 hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                          <User className="h-5 w-5 text-green-600 dark:text-green-400" />
+                        </div>
+                        <div>
+                          <p className="font-semibold text-sm">{employee.name}</p>
+                          <p className="text-xs text-muted-foreground">{employee.email}</p>
+                        </div>
+                      </div>
+                      <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                        {tasks.length} {tasks.length === 1 ? "task" : "tasks"}
+                      </Badge>
+                    </div>
+                    <div className="space-y-2">
+                      {tasks.slice(0, 3).map((task) => (
+                        <div
+                          key={task.id}
+                          className="bg-background/80 rounded-md p-3 border-l-2 border-green-500"
+                        >
+                          <p className="font-medium text-sm mb-1">{task.title}</p>
+                          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                            {task.completedAt && (
+                              <div className="flex items-center gap-1">
+                                <CheckCircle2 className="h-3 w-3" />
+                                <span>Completed: {format(new Date(task.completedAt), "MMM dd, yyyy HH:mm")}</span>
+                              </div>
+                            )}
+                            {task.startedAt && (
+                              <div className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                <span>Started: {format(new Date(task.startedAt), "MMM dd, yyyy")}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                      {tasks.length > 3 && (
+                        <p className="text-xs text-muted-foreground text-center pt-2">
+                          +{tasks.length - 3} more {tasks.length - 3 === 1 ? "task" : "tasks"}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
