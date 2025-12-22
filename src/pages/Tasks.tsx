@@ -569,7 +569,7 @@ const Tasks = () => {
     const oldStatus = task.status;
 
     try {
-      await updateTaskStatus(taskId, newStatus);
+      await updateTaskStatus(taskId, newStatus, oldStatus);
       setTasks((prev) =>
         prev.map((t) => (t.id === taskId ? { ...t, status: newStatus! } : t))
       );
@@ -708,6 +708,26 @@ const Tasks = () => {
       let savedTask: Task;
 
       if (editingTask) {
+        // Check if status changed and set appropriate timestamps
+        const now = new Date().toISOString();
+        if (taskData.status !== editingTask.status) {
+          // Moving to in_progress
+          if (taskData.status === "in_progress" && editingTask.status !== "in_progress" && !editingTask.startedAt) {
+            taskData.startedAt = now;
+          }
+          // Moving to completed
+          if (taskData.status === "completed" && editingTask.status !== "completed" && !editingTask.completedAt) {
+            taskData.completedAt = now;
+          }
+          // Moving backwards - clear timestamps
+          if (taskData.status === "new" && editingTask.status === "in_progress") {
+            taskData.startedAt = undefined;
+          }
+          if (taskData.status !== "completed" && editingTask.status === "completed") {
+            taskData.completedAt = undefined;
+          }
+        }
+
         await updateTask(editingTask.id, taskData);
         taskId = editingTask.id;
         savedTask = { ...taskData, id: taskId } as Task;
@@ -1612,6 +1632,58 @@ const Tasks = () => {
                         year: "numeric",
                         month: "long",
                         day: "numeric",
+                      })}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(detailsTask.createdAt).toLocaleTimeString("en-US", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                )}
+
+                {/* Started Date */}
+                {detailsTask.startedAt && (
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      Started On
+                    </Label>
+                    <p className="text-sm">
+                      {new Date(detailsTask.startedAt).toLocaleDateString("en-US", {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(detailsTask.startedAt).toLocaleTimeString("en-US", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </p>
+                  </div>
+                )}
+
+                {/* Completed Date */}
+                {detailsTask.completedAt && (
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4" />
+                      Completed On
+                    </Label>
+                    <p className="text-sm">
+                      {new Date(detailsTask.completedAt).toLocaleDateString("en-US", {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(detailsTask.completedAt).toLocaleTimeString("en-US", {
+                        hour: "2-digit",
+                        minute: "2-digit",
                       })}
                     </p>
                   </div>

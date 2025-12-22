@@ -106,6 +106,7 @@ const Payroll = () => {
     siteOfWork: "",
     abnRegistered: false,
     gstRegistered: false,
+    calculateGst: true, // New field: whether to calculate GST
     invoiceNumber: "",
     amountExclGst: "",
     gstAmount: "",
@@ -226,20 +227,22 @@ const Payroll = () => {
       const updated = { ...prev, [field]: value };
       
       // Auto-calculate GST (10%) based on cash flow direction
-      if (field === "amountExclGst") {
-        const amountExclGst = parseFloat(value as string) || 0;
+      if (field === "amountExclGst" || field === "gstRegistered" || field === "calculateGst") {
+        const amountExclGst = parseFloat(updated.amountExclGst as string) || 0;
         const gst = amountExclGst * 0.10; // 10% GST
         
-        // Check if employee has applyGst set
-        const employee = employees.find(emp => emp.name === prev.name);
-        const applyGst = employee?.applyGst !== undefined ? employee.applyGst : true;
-        const gstRegistered = employee?.gstRegistered || prev.gstRegistered || false;
+        // Use form's calculateGst field if set, otherwise check employee's applyGst
+        const employee = employees.find(emp => emp.name === updated.name);
+        const calculateGst = updated.calculateGst !== undefined 
+          ? updated.calculateGst 
+          : (employee?.applyGst !== undefined ? employee.applyGst : true);
+        const gstRegistered = updated.gstRegistered || false;
         
-        // Only calculate GST if applyGst is true and gstRegistered is true
-        const gstAmount = (applyGst && gstRegistered) ? gst : 0;
+        // Only calculate GST if calculateGst is true and gstRegistered is true
+        const gstAmount = (calculateGst && gstRegistered) ? gst : 0;
         
         // For inflows: add GST, for outflows: subtract GST
-        const total = prev.modeOfCashFlow === "inflow" 
+        const total = updated.modeOfCashFlow === "inflow" 
           ? amountExclGst + gstAmount  // Inflow: add GST
           : amountExclGst - gstAmount; // Outflow: subtract GST
         
@@ -253,10 +256,12 @@ const Payroll = () => {
         const gst = amountExclGst * 0.10;
         
         const employee = employees.find(emp => emp.name === updated.name);
-        const applyGst = employee?.applyGst !== undefined ? employee.applyGst : true;
-        const gstRegistered = employee?.gstRegistered || updated.gstRegistered || false;
+        const calculateGst = updated.calculateGst !== undefined 
+          ? updated.calculateGst 
+          : (employee?.applyGst !== undefined ? employee.applyGst : true);
+        const gstRegistered = updated.gstRegistered || false;
         
-        const gstAmount = (applyGst && gstRegistered) ? gst : 0;
+        const gstAmount = (calculateGst && gstRegistered) ? gst : 0;
         const total = value === "inflow" 
           ? amountExclGst + gstAmount
           : amountExclGst - gstAmount;
@@ -304,16 +309,17 @@ const Payroll = () => {
           name: employee.name,
           gstRegistered: employee.gstRegistered || false,
           abnRegistered: employee.abnRegistered || false,
+          calculateGst: employee.applyGst !== undefined ? employee.applyGst : true, // Set from employee's applyGst
         };
         
         // Recalculate GST if amountExclGst is already set
         if (prev.amountExclGst) {
           const amountExclGst = parseFloat(prev.amountExclGst) || 0;
           const gst = amountExclGst * 0.10;
-          const applyGst = employee.applyGst !== undefined ? employee.applyGst : true;
-          const gstRegistered = employee.gstRegistered || false;
+          const calculateGst = updated.calculateGst;
+          const gstRegistered = updated.gstRegistered || false;
           
-          const gstAmount = (applyGst && gstRegistered) ? gst : 0;
+          const gstAmount = (calculateGst && gstRegistered) ? gst : 0;
           const total = prev.modeOfCashFlow === "inflow"
             ? amountExclGst + gstAmount
             : amountExclGst - gstAmount;
@@ -575,6 +581,7 @@ const Payroll = () => {
       siteOfWork: "",
       abnRegistered: false,
       gstRegistered: false,
+      calculateGst: true,
       invoiceNumber: "",
       amountExclGst: "",
       gstAmount: "",
@@ -596,6 +603,13 @@ const Payroll = () => {
 
   const handleEditPayroll = (payroll: Payroll) => {
     setEditingPayrollId(payroll.id);
+    
+    // Determine calculateGst based on whether GST was actually calculated
+    // If gstAmount > 0 and gstRegistered is true, then calculateGst was likely true
+    // Otherwise, default to true for backward compatibility
+    const calculateGst = payroll.gstAmount > 0 && payroll.gstRegistered ? true : 
+                         (payroll.gstAmount === 0 ? false : true);
+    
     setFormData({
       month: payroll.month,
       date: convertDateToInputFormat(payroll.date),
@@ -605,6 +619,7 @@ const Payroll = () => {
       siteOfWork: payroll.siteOfWork || "",
       abnRegistered: payroll.abnRegistered,
       gstRegistered: payroll.gstRegistered,
+      calculateGst: calculateGst,
       invoiceNumber: payroll.invoiceNumber || "",
       amountExclGst: payroll.amountExclGst.toString(),
       gstAmount: payroll.gstAmount.toString(),
@@ -2084,6 +2099,25 @@ const Payroll = () => {
                       />
                       <Label htmlFor="gstRegistered" className="cursor-pointer">GST Registered</Label>
                     </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="calculateGst">Calculate GST</Label>
+                    <Select
+                      value={formData.calculateGst ? "yes" : "no"}
+                      onValueChange={(value) => handleInputChange("calculateGst", value === "yes")}
+                    >
+                      <SelectTrigger id="calculateGst">
+                        <SelectValue placeholder="Select..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="yes">Yes - Calculate GST (10%)</SelectItem>
+                        <SelectItem value="no">No - Do not calculate GST</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Select whether GST (10%) should be calculated for this payroll entry. GST will only be calculated if both "GST Registered" is checked and "Calculate GST" is set to "Yes".
+                    </p>
                   </div>
 
                   <div className="grid grid-cols-4 gap-4">

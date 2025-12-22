@@ -305,6 +305,8 @@ export interface Task {
   createdByName?: string; // Name of user who created the task
   createdAt: string;
   updatedAt: string;
+  startedAt?: string; // ISO date string - when task was moved to "in_progress"
+  completedAt?: string; // ISO date string - when task was moved to "completed"
 }
 
 export interface Subtask {

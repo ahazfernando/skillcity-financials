@@ -41,6 +41,8 @@ const docToTask = (doc: any): Task => {
     createdByName: data.createdByName || "",
     createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt || new Date().toISOString(),
     updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt || new Date().toISOString(),
+    startedAt: data.startedAt?.toDate?.()?.toISOString() || data.startedAt || undefined,
+    completedAt: data.completedAt?.toDate?.()?.toISOString() || data.completedAt || undefined,
   };
 };
 
@@ -67,6 +69,8 @@ const taskToDoc = (task: Omit<Task, "id">) => {
     createdByName: task.createdByName || null,
     createdAt: task.createdAt ? Timestamp.fromDate(new Date(task.createdAt)) : Timestamp.now(),
     updatedAt: Timestamp.now(),
+    startedAt: task.startedAt ? Timestamp.fromDate(new Date(task.startedAt)) : null,
+    completedAt: task.completedAt ? Timestamp.fromDate(new Date(task.completedAt)) : null,
   };
 };
 
@@ -165,6 +169,8 @@ export const updateTask = async (id: string, updates: Partial<Task>): Promise<vo
     if (updates.completedImages !== undefined) updateData.completedImages = updates.completedImages || [];
     if (updates.progress !== undefined) updateData.progress = updates.progress;
     if (updates.category !== undefined) updateData.category = updates.category || null;
+    if (updates.startedAt !== undefined) updateData.startedAt = updates.startedAt ? Timestamp.fromDate(new Date(updates.startedAt)) : null;
+    if (updates.completedAt !== undefined) updateData.completedAt = updates.completedAt ? Timestamp.fromDate(new Date(updates.completedAt)) : null;
 
     await updateDoc(taskRef, updateData);
   } catch (error) {
@@ -174,9 +180,38 @@ export const updateTask = async (id: string, updates: Partial<Task>): Promise<vo
 };
 
 // Update task status (for drag and drop)
-export const updateTaskStatus = async (id: string, status: "new" | "in_progress" | "completed"): Promise<void> => {
+export const updateTaskStatus = async (id: string, status: "new" | "in_progress" | "completed", oldStatus?: "new" | "in_progress" | "completed"): Promise<void> => {
   try {
-    await updateTask(id, { status });
+    const now = new Date().toISOString();
+    const updates: Partial<Task> = { status };
+
+    // Set startedAt when moving to "in_progress" (only if not already set)
+    if (status === "in_progress" && oldStatus !== "in_progress") {
+      // Get current task to check if startedAt is already set
+      const currentTask = await getTaskById(id);
+      if (currentTask && !currentTask.startedAt) {
+        updates.startedAt = now;
+      }
+    }
+
+    // Set completedAt when moving to "completed" (only if not already set)
+    if (status === "completed" && oldStatus !== "completed") {
+      // Get current task to check if completedAt is already set
+      const currentTask = await getTaskById(id);
+      if (currentTask && !currentTask.completedAt) {
+        updates.completedAt = now;
+      }
+    }
+
+    // Clear timestamps if moving backwards
+    if (status === "new" && oldStatus === "in_progress") {
+      updates.startedAt = undefined;
+    }
+    if (status !== "completed" && oldStatus === "completed") {
+      updates.completedAt = undefined;
+    }
+
+    await updateTask(id, updates);
   } catch (error) {
     console.error("Error updating task status:", error);
     throw error;
