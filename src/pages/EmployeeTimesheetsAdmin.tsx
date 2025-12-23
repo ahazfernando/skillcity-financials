@@ -464,7 +464,7 @@ const EmployeeTimesheetsAdmin = () => {
             payrollId = await addPayroll(payrollData);
           }
           
-          toast.success(`Invoice and payroll created and marked as paid for ${stat.employeeName} (Invoice: ${formatCurrency(invoiceTotalAmount, currency)}, Payroll: ${formatCurrency(payrollTotalAmount, currency)})`);
+          toast.success(`Invoice and payroll created and marked as paid for ${stat.employeeName} (Invoice: ${formatCurrency(invoiceTotalAmount)}, Payroll: ${formatCurrency(payrollTotalAmount)})`);
         } catch (autoError: any) {
           console.error("Error creating invoice/payroll:", autoError);
           throw new Error(`Failed to create invoice/payroll: ${autoError.message || "Unknown error"}`);

@@ -171,7 +171,7 @@ const ActivityLogPage = () => {
     inProgressTasks.forEach(task => {
       task.assignedTo?.forEach(assignedId => {
         const employee = employees.find(emp => 
-          emp.id === assignedId || emp.email === assignedId || emp.firebaseAuthUid === assignedId
+          emp.id === assignedId || emp.email === assignedId
         );
         if (employee) {
           if (!inProgressByEmployee[employee.id]) {
@@ -189,7 +189,7 @@ const ActivityLogPage = () => {
     completedTasks.forEach(task => {
       task.assignedTo?.forEach(assignedId => {
         const employee = employees.find(emp => 
-          emp.id === assignedId || emp.email === assignedId || emp.firebaseAuthUid === assignedId
+          emp.id === assignedId || emp.email === assignedId
         );
         if (employee) {
           if (!completedByEmployee[employee.id]) {

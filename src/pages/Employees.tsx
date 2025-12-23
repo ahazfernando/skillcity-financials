@@ -391,6 +391,7 @@ const Employees = () => {
       type: employee.type || "employee",
       isSkillCityEmployee: employee.isSkillCityEmployee || false,
       applyGst: employee.applyGst !== undefined ? employee.applyGst : true,
+      selectedSites: [],
     });
     
     // Reset invoice view state
