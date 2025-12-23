@@ -220,6 +220,12 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     
+    // Cleaning Tracker collection
+    match /cleaningTracker/{entryId} {
+      allow read: if isAuthenticated() && isApproved();
+      allow write: if isAdmin();
+    }
+    
     // Default deny rule for any other collections
     match /{document=**} {
       allow read, write: if false;

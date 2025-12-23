@@ -72,7 +72,7 @@ export interface Employee {
   salary: number;
   startDate: string;
   status: "active" | "inactive";
-  invoiceCollectionFrequency?: "Monthly" | "Fortnightly" | "Weekly";
+  invoiceCollectionFrequency?: ("Monthly" | "Fortnightly" | "Weekly")[];
   type?: EmployeeType; // "employee" or "client" - defaults to "employee" for backward compatibility
   isSkillCityEmployee?: boolean; // true if employee works for Skill City organization, false for external employees
   abnRegistered?: boolean; // ABN registration status
@@ -314,4 +314,23 @@ export interface Subtask {
   title: string;
   completed: boolean;
   createdAt: string;
+}
+
+export interface CleaningTrackerEntry {
+  id: string;
+  workId: number; // Sequential work ID
+  month: string; // e.g., "November"
+  workDate: string; // ISO date string (YYYY-MM-DD)
+  siteName: string;
+  cleaners: CleaningTrackerCleaner[]; // Multiple cleaners per entry
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CleaningTrackerCleaner {
+  cleanerName: string;
+  workedHours: number; // e.g., 2.25, 3, 2.5
+  serviceCharge: number; // Currency amount
+  specialNotes?: string; // Optional notes
+  photosUploaded: boolean; // Whether photos were uploaded
 }

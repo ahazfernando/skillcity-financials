@@ -22,7 +22,8 @@ import {
   Receipt,
   BarChart3,
   History,
-  Archive
+  Archive,
+  Sparkles
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -52,6 +53,7 @@ const menuItems = [
   { title: "Work Schedule", url: "/schedule", icon: Calendar },
   { title: "Reminders", url: "/reminders", icon: Bell },
   { title: "Activity Log", url: "/activity-log", icon: History },
+  { title: "Cleaning Tracker", url: "/cleaning-tracker", icon: Sparkles },
 ];
 
 const adminItems = [

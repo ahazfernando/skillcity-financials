@@ -20,7 +20,8 @@ import {
   Archive,
   MessageSquare,
   Clock,
-  CheckSquare
+  CheckSquare,
+  Sparkles
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -54,6 +55,7 @@ const menuItems = [
   { title: "Reminders", url: "/reminders", icon: Bell },
   { title: "Activity Log", url: "/activity-log", icon: History },
   { title: "Employee Timesheets", url: "/employee-timesheets", icon: Clock },
+  { title: "Cleaning Tracker", url: "/cleaning-tracker", icon: Sparkles },
 ];
 
 const adminItems = [

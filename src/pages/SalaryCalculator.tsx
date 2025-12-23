@@ -136,17 +136,13 @@ const SalaryCalculator = () => {
     return calculations.reduce((sum, calc) => sum + calc.hoursWorked, 0);
   };
 
-  const getInvoiceFrequencyLabel = (frequency?: string) => {
-    switch (frequency) {
-      case "Monthly":
-        return "Monthly";
-      case "Fortnightly":
-        return "Fortnightly";
-      case "Weekly":
-        return "Weekly";
-      default:
-        return "Not set";
-    }
+  const getInvoiceFrequencyLabel = (frequency?: string | string[]) => {
+    if (!frequency) return "Not set";
+    
+    const frequencies = Array.isArray(frequency) ? frequency : [frequency];
+    if (frequencies.length === 0) return "Not set";
+    
+    return frequencies.join(", ");
   };
 
   const handleExport = () => {
@@ -155,7 +151,9 @@ const SalaryCalculator = () => {
     const data = {
       employee: selectedEmployee.name,
       email: selectedEmployee.email,
-      invoiceFrequency: selectedEmployee.invoiceCollectionFrequency || "Not set",
+      invoiceFrequency: Array.isArray(selectedEmployee.invoiceCollectionFrequency)
+        ? selectedEmployee.invoiceCollectionFrequency.join(", ")
+        : selectedEmployee.invoiceCollectionFrequency || "Not set",
       date: new Date().toLocaleDateString(),
       calculations: calculations.map((calc) => ({
         site: calc.siteName,

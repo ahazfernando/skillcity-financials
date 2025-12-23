@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Search, UserPlus, Loader2, Trash2, FileText, Building2, MapPin, Clock, Plus, Check, DollarSign } from "lucide-react";
+import { Search, UserPlus, Loader2, Trash2, FileText, Building2, MapPin, Clock, Plus, Check, DollarSign, Filter, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -34,12 +34,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Employee, Invoice, EmployeePayRate, SiteEmployeeAllocation, WorkRecord } from "@/types/financial";
+import { Employee, Invoice, EmployeePayRate, SiteEmployeeAllocation, WorkRecord, Site } from "@/types/financial";
 import { getAllEmployees, addEmployee, updateEmployee, deleteEmployee, getEmployeeByEmail } from "@/lib/firebase/employees";
 import { getAllUsers } from "@/lib/firebase/users";
 import { getAllInvoices } from "@/lib/firebase/invoices";
 import { getEmployeePayRatesByEmployee, addEmployeePayRate } from "@/lib/firebase/employeePayRates";
-import { getAllAllocations, getAllocationsByEmployee } from "@/lib/firebase/siteEmployeeAllocations";
+import { getAllAllocations, getAllocationsByEmployee, addAllocation } from "@/lib/firebase/siteEmployeeAllocations";
+import { getAllSites } from "@/lib/firebase/sites";
 import { updateUserRoleByEmail } from "@/lib/firebase/users";
 import { getAllWorkRecords } from "@/lib/firebase/workRecords";
 import { useAuth } from "@/contexts/AuthContext";
@@ -65,6 +66,7 @@ import {
 const Employees = () => {
   const [searchValue, setSearchValue] = useState("");
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [sites, setSites] = useState<Site[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingInvoices, setIsLoadingInvoices] = useState(false);
@@ -75,6 +77,8 @@ const Employees = () => {
   const [deletingEmployeeId, setDeletingEmployeeId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [invoiceFrequencyFilter, setInvoiceFrequencyFilter] = useState<string>("all");
+  const [organizationFilter, setOrganizationFilter] = useState<string>("all");
+  const [employeeListInvoiceFrequencyFilter, setEmployeeListInvoiceFrequencyFilter] = useState<string>("all");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [modalMonthRange, setModalMonthRange] = useState<DateRange | undefined>(undefined);
   const [modalInvoiceFrequencyFilter, setModalInvoiceFrequencyFilter] = useState<string>("all");
@@ -89,6 +93,8 @@ const Employees = () => {
   const [roleSearchValue, setRoleSearchValue] = useState("");
   const [rolePopoverOpen, setRolePopoverOpen] = useState(false);
   const [isAddingRole, setIsAddingRole] = useState(false);
+  const [siteSearchValue, setSiteSearchValue] = useState("");
+  const [sitePopoverOpen, setSitePopoverOpen] = useState(false);
   const [payRateFormData, setPayRateFormData] = useState({
     hourlyRate: "",
     currency: "AUD" as "LKR" | "AUD",
@@ -104,10 +110,11 @@ const Employees = () => {
     salary: "",
     startDate: "",
     status: "active" as "active" | "inactive",
-    invoiceCollectionFrequency: "" as "" | "Monthly" | "Fortnightly" | "Weekly",
+    invoiceCollectionFrequency: [] as ("Monthly" | "Fortnightly" | "Weekly")[],
     type: "employee" as "employee" | "client",
     isSkillCityEmployee: false,
     applyGst: true,
+    selectedSites: [] as string[], // Array of site IDs
   });
 
   const { userData } = useAuth();
@@ -117,10 +124,12 @@ const Employees = () => {
     const loadEmployees = async () => {
       try {
         setIsLoading(true);
-        const [fetchedEmployees, allUsers] = await Promise.all([
+        const [fetchedEmployees, allUsers, fetchedSites] = await Promise.all([
           getAllEmployees(),
           getAllUsers(),
+          getAllSites(),
         ]);
+        setSites(fetchedSites);
         
         // Create a set of admin user emails for quick lookup
         const adminEmails = new Set(
@@ -271,10 +280,11 @@ const Employees = () => {
       salary: "",
       startDate: "",
       status: "active",
-      invoiceCollectionFrequency: "",
+      invoiceCollectionFrequency: [],
       type: "employee",
       isSkillCityEmployee: false,
       applyGst: true,
+      selectedSites: [],
     });
     setEditingEmployeeId(null);
     setEmployeePayRates([]);
@@ -373,7 +383,11 @@ const Employees = () => {
       salary: employee.salary.toString(),
       startDate: employee.startDate,
       status: employee.status,
-      invoiceCollectionFrequency: employee.invoiceCollectionFrequency || "",
+      invoiceCollectionFrequency: Array.isArray(employee.invoiceCollectionFrequency) 
+        ? employee.invoiceCollectionFrequency 
+        : employee.invoiceCollectionFrequency 
+          ? [employee.invoiceCollectionFrequency] 
+          : [],
       type: employee.type || "employee",
       isSkillCityEmployee: employee.isSkillCityEmployee || false,
       applyGst: employee.applyGst !== undefined ? employee.applyGst : true,
@@ -460,7 +474,7 @@ const Employees = () => {
           salary: parseFloat(formData.salary) || 0,
           startDate: formData.startDate || new Date().toISOString().split("T")[0],
           status: formData.status,
-          invoiceCollectionFrequency: formData.invoiceCollectionFrequency || undefined,
+          invoiceCollectionFrequency: formData.invoiceCollectionFrequency.length > 0 ? formData.invoiceCollectionFrequency : undefined,
           type: formData.type,
           isSkillCityEmployee: formData.isSkillCityEmployee,
           applyGst: formData.applyGst,
@@ -504,14 +518,41 @@ const Employees = () => {
           salary: parseFloat(formData.salary) || 0,
           startDate: formData.startDate || new Date().toISOString().split("T")[0],
           status: formData.status,
-          invoiceCollectionFrequency: formData.invoiceCollectionFrequency || undefined,
+          invoiceCollectionFrequency: formData.invoiceCollectionFrequency.length > 0 ? formData.invoiceCollectionFrequency : undefined,
           type: formData.type,
           isSkillCityEmployee: formData.isSkillCityEmployee,
           applyGst: formData.applyGst,
         };
 
         // Add employee to Firebase
-        await addEmployee(newEmployee);
+        const employeeId = await addEmployee(newEmployee);
+        
+        // Create site allocations if sites are selected
+        if (formData.selectedSites.length > 0) {
+          try {
+            for (let i = 0; i < formData.selectedSites.length; i++) {
+              const siteId = formData.selectedSites[i];
+              const selectedSite = sites.find((s) => s.id === siteId);
+              if (selectedSite) {
+                await addAllocation({
+                  siteId: selectedSite.id,
+                  siteName: selectedSite.name,
+                  employeeId: employeeId,
+                  employeeName: newEmployee.name,
+                  employeeNumber: i + 1,
+                  actualWorkingTime: "",
+                  hasExtraTime: false,
+                });
+              }
+            }
+            toast.success(`Employee created and assigned to ${formData.selectedSites.length} site(s)`);
+          } catch (error) {
+            console.error("Error creating site allocations:", error);
+            toast.warning("Employee created but some site allocations failed");
+          }
+        } else {
+          toast.success("Employee created successfully!");
+        }
         
         // Update user role to "employee" if user exists with this email
         if (newEmployee.email) {
@@ -610,8 +651,30 @@ const Employees = () => {
     }
     
     // Apply search filter
-    return employee.name.toLowerCase().includes(searchValue.toLowerCase()) ||
+    const matchesSearch = employee.name.toLowerCase().includes(searchValue.toLowerCase()) ||
       (employee.role && employee.role.toLowerCase().includes(searchValue.toLowerCase()));
+    if (!matchesSearch) return false;
+    
+    // Apply organization filter
+    if (organizationFilter !== "all") {
+      if (organizationFilter === "skillcity" && !employee.isSkillCityEmployee) return false;
+      if (organizationFilter === "external" && employee.isSkillCityEmployee) return false;
+    }
+    
+    // Apply invoice collection frequency filter
+    if (employeeListInvoiceFrequencyFilter !== "all") {
+      if (!employee.invoiceCollectionFrequency || employee.invoiceCollectionFrequency.length === 0) {
+        return false;
+      }
+      const frequencies = Array.isArray(employee.invoiceCollectionFrequency) 
+        ? employee.invoiceCollectionFrequency 
+        : [employee.invoiceCollectionFrequency];
+      if (!frequencies.includes(employeeListInvoiceFrequencyFilter as "Monthly" | "Fortnightly" | "Weekly")) {
+        return false;
+      }
+    }
+    
+    return true;
   });
 
   // Pagination logic
@@ -620,10 +683,10 @@ const Employees = () => {
   const endIndex = startIndex + rowsPerPage;
   const paginatedEmployees = filteredEmployees.slice(startIndex, endIndex);
 
-  // Reset to page 1 when search changes
+  // Reset to page 1 when search or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchValue]);
+  }, [searchValue, organizationFilter, employeeListInvoiceFrequencyFilter]);
 
   // Filter invoices based on employee invoice collection frequency and date range
   const getFilteredEmployeeInvoices = () => {
@@ -632,7 +695,13 @@ const Employees = () => {
     // Filter by invoice collection frequency
     if (invoiceFrequencyFilter !== "all") {
       const employeesWithFrequency = employees.filter(
-        emp => emp.invoiceCollectionFrequency === invoiceFrequencyFilter
+        emp => {
+          if (!emp.invoiceCollectionFrequency) return false;
+          const frequencies = Array.isArray(emp.invoiceCollectionFrequency) 
+            ? emp.invoiceCollectionFrequency 
+            : [emp.invoiceCollectionFrequency];
+          return frequencies.includes(invoiceFrequencyFilter as "Monthly" | "Fortnightly" | "Weekly");
+        }
       );
       const employeeIds = new Set(employeesWithFrequency.map(emp => emp.id));
       
@@ -764,14 +833,66 @@ const Employees = () => {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="relative mb-6">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by name or role..."
-              value={searchValue}
-              onChange={(e) => setSearchValue(e.target.value)}
-              className="pl-9"
-            />
+          <div className="space-y-4 mb-6">
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by name or role..."
+                value={searchValue}
+                onChange={(e) => setSearchValue(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            
+            {/* Filters */}
+            <div className="flex flex-wrap gap-3 items-center">
+              <div className="flex items-center gap-2">
+                <Filter className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium text-muted-foreground">Filters:</span>
+              </div>
+              
+              {/* Organization Filter */}
+              <Select value={organizationFilter} onValueChange={setOrganizationFilter}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="Organization" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Organizations</SelectItem>
+                  <SelectItem value="skillcity">Skill City</SelectItem>
+                  <SelectItem value="external">External</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              {/* Invoice Collection Frequency Filter */}
+              <Select value={employeeListInvoiceFrequencyFilter} onValueChange={setEmployeeListInvoiceFrequencyFilter}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Invoice Frequency" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Frequencies</SelectItem>
+                  <SelectItem value="Weekly">Weekly</SelectItem>
+                  <SelectItem value="Fortnightly">Fortnightly</SelectItem>
+                  <SelectItem value="Monthly">Monthly</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              {/* Clear Filters Button */}
+              {(organizationFilter !== "all" || employeeListInvoiceFrequencyFilter !== "all") && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setOrganizationFilter("all");
+                    setEmployeeListInvoiceFrequencyFilter("all");
+                  }}
+                  className="h-8"
+                >
+                  <X className="h-3 w-3 mr-1" />
+                  Clear Filters
+                </Button>
+              )}
+            </div>
           </div>
 
           <div className="rounded-xl border-2 overflow-x-auto shadow-lg">
@@ -841,10 +962,14 @@ const Employees = () => {
                         <span className="text-sm">{employee.role || "-"}</span>
                       </TableCell>
                       <TableCell>
-                        {employee.invoiceCollectionFrequency ? (
-                          <Badge variant="outline" className="text-xs">
-                            {employee.invoiceCollectionFrequency}
-                          </Badge>
+                        {employee.invoiceCollectionFrequency && employee.invoiceCollectionFrequency.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {employee.invoiceCollectionFrequency.map((frequency, idx) => (
+                              <Badge key={idx} variant="outline" className="text-xs">
+                                {frequency}
+                              </Badge>
+                            ))}
+                          </div>
                         ) : (
                           <span className="text-muted-foreground">-</span>
                         )}
@@ -1146,15 +1271,118 @@ const Employees = () => {
                   </DialogDescription>
                 </DialogHeader>
                 
-                {/* Default Work Site Section - For new employees */}
-                <div className="mb-4 p-4 rounded-lg border-2 border-dashed bg-muted/30">
-                  <div className="flex items-center gap-2 mb-2">
-                    <MapPin className="h-4 w-4 text-muted-foreground" />
-                    <Label className="text-sm font-semibold">Default Work Site</Label>
+                {/* Work Site Allocation Section */}
+                <div className="mb-4 p-4 rounded-lg border-2 bg-muted/30">
+                  <div className="flex items-center gap-2 mb-3">
+                    <MapPin className="h-4 w-4 text-primary" />
+                    <Label className="text-sm font-semibold">Work Site Allocation</Label>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    Work sites will be available after the employee is created. You can assign sites in the Site Employee Allocation section.
-                  </p>
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground mb-3">
+                      Select one or more sites to assign this employee to. You can add more sites later in the Site Employee Allocation section.
+                    </p>
+                    <Popover open={sitePopoverOpen} onOpenChange={setSitePopoverOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          className="w-full justify-between"
+                        >
+                          {formData.selectedSites.length === 0
+                            ? "Select sites..."
+                            : formData.selectedSites.length === 1
+                            ? sites.find((s) => s.id === formData.selectedSites[0])?.name || "1 site selected"
+                            : `${formData.selectedSites.length} sites selected`}
+                          <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0" align="start">
+                        <Command>
+                          <CommandInput
+                            placeholder="Search sites..."
+                            value={siteSearchValue}
+                            onValueChange={setSiteSearchValue}
+                          />
+                          <CommandList>
+                            <CommandEmpty>No site found.</CommandEmpty>
+                            <CommandGroup>
+                              {sites.length === 0 ? (
+                                <CommandItem disabled>
+                                  <span className="text-muted-foreground">No sites available. Please create sites first.</span>
+                                </CommandItem>
+                              ) : (
+                                sites
+                                  .filter((site) =>
+                                    !siteSearchValue ||
+                                    site.name.toLowerCase().includes(siteSearchValue.toLowerCase()) ||
+                                    (site.clientName && site.clientName.toLowerCase().includes(siteSearchValue.toLowerCase()))
+                                  )
+                                  .map((site) => (
+                                    <CommandItem
+                                      key={site.id}
+                                      value={site.name}
+                                      onSelect={() => {
+                                        if (formData.selectedSites.includes(site.id)) {
+                                          setFormData({
+                                            ...formData,
+                                            selectedSites: formData.selectedSites.filter((id) => id !== site.id),
+                                          });
+                                        } else {
+                                          setFormData({
+                                            ...formData,
+                                            selectedSites: [...formData.selectedSites, site.id],
+                                          });
+                                        }
+                                      }}
+                                    >
+                                      <Checkbox
+                                        checked={formData.selectedSites.includes(site.id)}
+                                        className="mr-2"
+                                        onCheckedChange={() => {}}
+                                      />
+                                      <div className="flex flex-col">
+                                        <span>{site.name}</span>
+                                        {site.clientName && (
+                                          <span className="text-xs text-muted-foreground">{site.clientName}</span>
+                                        )}
+                                      </div>
+                                    </CommandItem>
+                                  ))
+                              )}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                    {formData.selectedSites.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        <p className="text-xs text-muted-foreground">
+                          Selected sites ({formData.selectedSites.length}):
+                        </p>
+                        <div className="flex flex-wrap gap-1">
+                          {formData.selectedSites.map((siteId) => {
+                            const site = sites.find((s) => s.id === siteId);
+                            return site ? (
+                              <Badge
+                                key={siteId}
+                                variant="secondary"
+                                className="text-xs cursor-pointer hover:bg-destructive hover:text-destructive-foreground"
+                                onClick={() => {
+                                  setFormData({
+                                    ...formData,
+                                    selectedSites: formData.selectedSites.filter((id) => id !== siteId),
+                                  });
+                                }}
+                              >
+                                {site.name}
+                                <X className="ml-1 h-3 w-3" />
+                              </Badge>
+                            ) : null;
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid gap-4 py-4">
@@ -1306,21 +1534,40 @@ const Employees = () => {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="invoiceCollectionFrequency">Invoice Collection Frequency</Label>
-                      <Select
-                        value={formData.invoiceCollectionFrequency}
-                        onValueChange={(value) => setFormData({ ...formData, invoiceCollectionFrequency: value as "Monthly" | "Fortnightly" | "Weekly" })}
-                      >
-                        <SelectTrigger id="invoiceCollectionFrequency">
-                          <SelectValue placeholder="Select frequency" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Weekly">Weekly</SelectItem>
-                          <SelectItem value="Fortnightly">Fortnightly</SelectItem>
-                          <SelectItem value="Monthly">Monthly</SelectItem>
-                        </SelectContent>
-                      </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="invoiceCollectionFrequency">Invoice Collection Frequency</Label>
+                    <div className="space-y-2 p-3 rounded-lg border bg-muted/30">
+                      {(["Weekly", "Fortnightly", "Monthly"] as const).map((frequency) => (
+                        <div key={frequency} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`frequency-${frequency}`}
+                            checked={formData.invoiceCollectionFrequency.includes(frequency)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setFormData({
+                                  ...formData,
+                                  invoiceCollectionFrequency: [...formData.invoiceCollectionFrequency, frequency],
+                                });
+                              } else {
+                                setFormData({
+                                  ...formData,
+                                  invoiceCollectionFrequency: formData.invoiceCollectionFrequency.filter(
+                                    (f) => f !== frequency
+                                  ),
+                                });
+                              }
+                            }}
+                          />
+                          <Label
+                            htmlFor={`frequency-${frequency}`}
+                            className="text-sm font-normal cursor-pointer"
+                          >
+                            {frequency}
+                          </Label>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
@@ -1668,21 +1915,40 @@ const Employees = () => {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="edit-invoiceCollectionFrequency">Invoice Collection Frequency</Label>
-                      <Select
-                        value={formData.invoiceCollectionFrequency}
-                        onValueChange={(value) => setFormData({ ...formData, invoiceCollectionFrequency: value as "Monthly" | "Fortnightly" | "Weekly" })}
-                      >
-                        <SelectTrigger id="edit-invoiceCollectionFrequency">
-                          <SelectValue placeholder="Select frequency" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Weekly">Weekly</SelectItem>
-                          <SelectItem value="Fortnightly">Fortnightly</SelectItem>
-                          <SelectItem value="Monthly">Monthly</SelectItem>
-                        </SelectContent>
-                      </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-invoiceCollectionFrequency">Invoice Collection Frequency</Label>
+                    <div className="space-y-2 p-3 rounded-lg border bg-muted/30">
+                      {(["Weekly", "Fortnightly", "Monthly"] as const).map((frequency) => (
+                        <div key={frequency} className="flex items-center space-x-2">
+                          <Checkbox
+                            id={`edit-frequency-${frequency}`}
+                            checked={formData.invoiceCollectionFrequency.includes(frequency)}
+                            onCheckedChange={(checked) => {
+                              if (checked) {
+                                setFormData({
+                                  ...formData,
+                                  invoiceCollectionFrequency: [...formData.invoiceCollectionFrequency, frequency],
+                                });
+                              } else {
+                                setFormData({
+                                  ...formData,
+                                  invoiceCollectionFrequency: formData.invoiceCollectionFrequency.filter(
+                                    (f) => f !== frequency
+                                  ),
+                                });
+                              }
+                            }}
+                          />
+                          <Label
+                            htmlFor={`edit-frequency-${frequency}`}
+                            className="text-sm font-normal cursor-pointer"
+                          >
+                            {frequency}
+                          </Label>
+                        </div>
+                      ))}
                     </div>
                   </div>
 
@@ -1763,7 +2029,9 @@ const Employees = () => {
                               <div className="space-y-2">
                                 <p className="text-xs text-muted-foreground">Invoice Collection Frequency</p>
                                 <p className="font-semibold text-lg">
-                                  {formData.invoiceCollectionFrequency || "Not set"}
+                                  {formData.invoiceCollectionFrequency.length > 0 
+                                    ? formData.invoiceCollectionFrequency.join(", ")
+                                    : "Not set"}
                                 </p>
                               </div>
                             </CardContent>

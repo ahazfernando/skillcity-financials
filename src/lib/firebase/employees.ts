@@ -60,7 +60,11 @@ const docToEmployee = (doc: any): Employee => {
     salary: data.salary || 0,
     startDate: safeDateToString(data.startDate),
     status: (data.status as "active" | "inactive") || "active",
-    invoiceCollectionFrequency: data.invoiceCollectionFrequency || undefined,
+    invoiceCollectionFrequency: Array.isArray(data.invoiceCollectionFrequency)
+      ? data.invoiceCollectionFrequency
+      : data.invoiceCollectionFrequency
+        ? [data.invoiceCollectionFrequency]
+        : undefined,
     type: (data.type as "employee" | "client") || "employee", // Default to "employee" for backward compatibility
     isSkillCityEmployee: data.isSkillCityEmployee !== undefined ? data.isSkillCityEmployee : false, // Default to false for backward compatibility
     abnRegistered: data.abnRegistered !== undefined ? data.abnRegistered : false,

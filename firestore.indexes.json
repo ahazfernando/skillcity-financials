@@ -1,0 +1,48 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "cleaningTracker",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "workDate",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "workId",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "cleaningTracker",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "workDate",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "workId",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "cleaningTracker",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "siteName",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "workDate",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}
+
