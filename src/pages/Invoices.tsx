@@ -6,12 +6,22 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { SearchFilter } from "@/components/SearchFilter";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Download, Plus, FileText, Calendar as CalendarIcon, Upload, X, Loader2 } from "lucide-react";
+import { Download, Plus, FileText, Calendar as CalendarIcon, Upload, X, Loader2, Archive } from "lucide-react";
+import Link from "next/link";
 import { generateMonthlyReport } from "@/lib/monthly-report-generator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
 import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
 import {
@@ -56,6 +66,8 @@ const Invoices = () => {
   const [searchValue, setSearchValue] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [payrolls, setPayrolls] = useState<Payroll[]>([]);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
@@ -661,6 +673,17 @@ const Invoices = () => {
     return matchesSearch && matchesStatus && matchesDate;
   });
 
+  // Calculate pagination
+  const totalPages = Math.ceil(filteredPayrolls.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedPayrolls = filteredPayrolls.slice(startIndex, endIndex);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchValue, statusFilter, dateRange]);
+
   return (
     <div className="space-y-6 sm:space-y-8">
       {/* Modern Header Section */}
@@ -674,6 +697,16 @@ const Invoices = () => {
             <p className="text-sm sm:text-base text-muted-foreground">Manage client invoices and payments efficiently</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+          <Button
+            variant="outline"
+            asChild
+            className="shadow-md hover:shadow-lg transition-all duration-300 border-2"
+          >
+            <Link href="/invoice-history">
+              <Archive className="mr-2 h-4 w-4" />
+              Invoice History
+            </Link>
+          </Button>
           <Button
             variant="outline"
             onClick={async () => {
@@ -853,7 +886,7 @@ const Invoices = () => {
                     </TableCell>
                   </TableRow>
                 ) : (
-                  filteredPayrolls.map((payroll) => (
+                  paginatedPayrolls.map((payroll) => (
                     <TableRow 
                       key={payroll.id}
                       className="cursor-pointer hover:bg-gradient-to-r hover:from-green-500/5 hover:to-transparent transition-all duration-200 border-b group"
@@ -915,6 +948,106 @@ const Invoices = () => {
               </TableBody>
             </Table>
           </div>
+
+          {/* Pagination Controls */}
+          {filteredPayrolls.length > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between mt-6 gap-4">
+              <div className="text-sm text-muted-foreground">
+                Showing {startIndex + 1} to {Math.min(endIndex, filteredPayrolls.length)} of {filteredPayrolls.length} records
+              </div>
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (currentPage > 1) {
+                          setCurrentPage((prev) => prev - 1);
+                        }
+                      }}
+                      className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    />
+                  </PaginationItem>
+                  
+                  {(() => {
+                    const pages: (number | 'ellipsis')[] = [];
+                    
+                    if (totalPages <= 7) {
+                      // Show all pages if 7 or fewer
+                      for (let i = 1; i <= totalPages; i++) {
+                        pages.push(i);
+                      }
+                    } else {
+                      // Always show first page
+                      pages.push(1);
+                      
+                      if (currentPage <= 3) {
+                        // Near the start: show 1, 2, 3, 4, ..., last
+                        for (let i = 2; i <= 4; i++) {
+                          pages.push(i);
+                        }
+                        pages.push('ellipsis');
+                        pages.push(totalPages);
+                      } else if (currentPage >= totalPages - 2) {
+                        // Near the end: show 1, ..., last-3, last-2, last-1, last
+                        pages.push('ellipsis');
+                        for (let i = totalPages - 3; i <= totalPages; i++) {
+                          pages.push(i);
+                        }
+                      } else {
+                        // In the middle: show 1, ..., current-1, current, current+1, ..., last
+                        pages.push('ellipsis');
+                        for (let i = currentPage - 1; i <= currentPage + 1; i++) {
+                          pages.push(i);
+                        }
+                        pages.push('ellipsis');
+                        pages.push(totalPages);
+                      }
+                    }
+                    
+                    return pages.map((page, index) => {
+                      if (page === 'ellipsis') {
+                        return (
+                          <PaginationItem key={`ellipsis-${index}`}>
+                            <PaginationEllipsis />
+                          </PaginationItem>
+                        );
+                      }
+                      return (
+                        <PaginationItem key={page}>
+                          <PaginationLink
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setCurrentPage(page);
+                            }}
+                            isActive={currentPage === page}
+                            className="cursor-pointer"
+                          >
+                            {page}
+                          </PaginationLink>
+                        </PaginationItem>
+                      );
+                    });
+                  })()}
+                  
+                  <PaginationItem>
+                    <PaginationNext
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        if (currentPage < totalPages) {
+                          setCurrentPage((prev) => prev + 1);
+                        }
+                      }}
+                      className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+          )}
         </CardContent>
       </Card>
 

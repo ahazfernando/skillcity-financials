@@ -22,7 +22,6 @@ import {
   Receipt,
   BarChart3,
   History,
-  Archive,
   Sparkles
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -40,7 +39,6 @@ const menuItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Chat", url: "/chat", icon: MessageSquare },
   { title: "Invoices", url: "/invoices", icon: FileText },
-  { title: "Invoice History", url: "/invoice-history", icon: Archive },
   { title: "Payroll", url: "/payroll", icon: Wallet },
   { title: "Expenses", url: "/expenses", icon: Receipt },
   { title: "Reports & Analytics", url: "/reports", icon: BarChart3 },

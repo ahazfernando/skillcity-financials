@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Building2, Loader2, Trash2, Users, Check, ChevronsUpDown, UserPlus } from "lucide-react";
+import { Search, Building2, Loader2, Trash2, Users, Check, ChevronsUpDown, UserPlus, Table2, Grid3x3 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -73,6 +73,7 @@ const Sites = () => {
   const [isAddingEmployee, setIsAddingEmployee] = useState(false);
   const [employeePopoverOpen, setEmployeePopoverOpen] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
+  const [viewMode, setViewMode] = useState<"table" | "card">("table");
   const [formData, setFormData] = useState({
     name: "",
     address: "",
@@ -167,6 +168,40 @@ const Sites = () => {
         ? prev.workingDays.filter(d => d !== day)
         : [...prev.workingDays, day]
     }));
+  };
+
+  // Auto-calculate day rate from invoicing working hours and hourly rate
+  const calculateDayRate = (hours: string, rate: string): string => {
+    const hoursNum = parseFloat(hours);
+    const rateNum = parseFloat(rate);
+    if (!isNaN(hoursNum) && !isNaN(rateNum) && hoursNum > 0 && rateNum > 0) {
+      return (hoursNum * rateNum).toFixed(2);
+    }
+    return "";
+  };
+
+  const handleInvoicingHoursChange = (value: string) => {
+    setFormData(prev => {
+      const updated = { ...prev, invoicingWorkingHours: value };
+      // Auto-calculate day rate if hourly rate is also present
+      if (prev.hourlyRate) {
+        const calculatedDayRate = calculateDayRate(value, prev.hourlyRate);
+        updated.dayRate = calculatedDayRate;
+      }
+      return updated;
+    });
+  };
+
+  const handleHourlyRateChange = (value: string) => {
+    setFormData(prev => {
+      const updated = { ...prev, hourlyRate: value };
+      // Auto-calculate day rate if invoicing working hours is also present
+      if (prev.invoicingWorkingHours) {
+        const calculatedDayRate = calculateDayRate(prev.invoicingWorkingHours, value);
+        updated.dayRate = calculatedDayRate;
+      }
+      return updated;
+    });
   };
 
   const handleDeleteSite = (site: Site) => {
@@ -369,7 +404,8 @@ const Sites = () => {
         </div>
           <Button 
             onClick={handleAddSite} 
-            className="w-full sm:w-auto shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
+            className="w-full sm:w-auto shadow-md hover:shadow-lg transition-all duration-300 border-2"
+            variant="outline"
             size="lg"
           >
           <Building2 className="mr-2 h-4 w-4" />
@@ -380,59 +416,80 @@ const Sites = () => {
 
       <Card className="border-2 shadow-xl">
         <CardHeader className="bg-gradient-to-r from-teal-500/10 via-cyan-500/5 to-muted/30 border-b-2">
-          <div>
-            <CardTitle className="text-xl font-bold">Site List</CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">View and manage all cleaning sites</p>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <CardTitle className="text-xl font-bold">Site List</CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">View and manage all cleaning sites</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant={viewMode === "table" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("table")}
+                className="shadow-sm"
+              >
+                <Table2 className="h-4 w-4 mr-2" />
+                Table
+              </Button>
+              <Button
+                variant={viewMode === "card" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setViewMode("card")}
+                className="shadow-sm"
+              >
+                <Grid3x3 className="h-4 w-4 mr-2" />
+                Cards
+              </Button>
+            </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           <div className="relative mb-6">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search by site name..."
               value={searchValue}
               onChange={(e) => setSearchValue(e.target.value)}
-              className="pl-9"
+              className="pl-9 border-2"
             />
           </div>
 
-          <div className="rounded-xl border-2 overflow-x-auto shadow-lg">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-gradient-to-r from-teal-500/20 via-cyan-500/10 to-teal-500/5 border-b-2">
-                  <TableHead className="font-bold text-foreground">Site Name</TableHead>
-                  <TableHead className="font-bold text-foreground">Working Days</TableHead>
-                  <TableHead className="font-bold text-foreground">Invoicing Hours</TableHead>
-                  <TableHead className="font-bold text-foreground">Hourly Rate</TableHead>
-                  <TableHead className="font-bold text-foreground">Day Rate</TableHead>
-                  <TableHead className="font-bold text-foreground">Frequency</TableHead>
-                  <TableHead className="font-bold text-foreground">Status</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8">
-                      <div className="flex items-center justify-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Loading sites...</span>
-                      </div>
-                    </TableCell>
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Loading sites...</span>
+              </div>
+            </div>
+          ) : filteredSites.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <Building2 className="h-12 w-12 mx-auto mb-4 opacity-20" />
+              <p>No sites found</p>
+            </div>
+          ) : viewMode === "table" ? (
+            <div className="rounded-xl border-2 overflow-x-auto shadow-lg">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-gradient-to-r from-teal-500/20 via-cyan-500/10 to-teal-500/5 border-b-2">
+                    <TableHead className="font-bold text-foreground">Site Name</TableHead>
+                    <TableHead className="font-bold text-foreground">Working Days</TableHead>
+                    <TableHead className="font-bold text-foreground">Invoicing Hours</TableHead>
+                    <TableHead className="font-bold text-foreground">Hourly Rate</TableHead>
+                    <TableHead className="font-bold text-foreground">Day Rate</TableHead>
+                    <TableHead className="font-bold text-foreground">Frequency</TableHead>
+                    <TableHead className="font-bold text-foreground">Status</TableHead>
                   </TableRow>
-                ) : filteredSites.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      No sites found
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredSites.map((site) => (
+                </TableHeader>
+                <TableBody>
+                  {filteredSites.map((site) => (
                     <TableRow 
                       key={site.id}
-                      className="cursor-pointer hover:bg-gradient-to-r hover:from-teal-500/5 hover:to-transparent transition-all duration-200 border-b"
+                      className="cursor-pointer hover:bg-gradient-to-r hover:from-teal-500/5 hover:to-transparent transition-all duration-200 border-b group"
                       onClick={() => handleEditSite(site)}
                     >
-                      <TableCell className="font-semibold">{site.name}</TableCell>
+                      <TableCell className="font-semibold">
+                        {site.name}
+                      </TableCell>
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           {site.workingDays && site.workingDays.length > 0 ? (
@@ -457,8 +514,8 @@ const Sites = () => {
                       </TableCell>
                       <TableCell>
                         {site.hourlyRate ? (
-                          <span className="font-medium text-blue-600 dark:text-blue-400">
-                            ${site.hourlyRate}
+                          <span className="font-medium text-foreground">
+                            ${site.hourlyRate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
                         ) : (
                           <span className="text-muted-foreground">-</span>
@@ -466,8 +523,8 @@ const Sites = () => {
                       </TableCell>
                       <TableCell>
                         {site.dayRate ? (
-                          <span className="font-medium text-green-600 dark:text-green-400">
-                            ${site.dayRate.toLocaleString()}
+                          <span className="font-bold text-teal-600 dark:text-teal-400">
+                            ${site.dayRate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
                         ) : (
                           <span className="text-muted-foreground">-</span>
@@ -495,10 +552,10 @@ const Sites = () => {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleViewEmployees(site)}
-                            className="h-8 w-8 p-0 hover:bg-primary/10 transition-all duration-200"
+                            className="h-8 w-8 p-0 hover:bg-teal-500/10 transition-all duration-200"
                             title="View employees"
                           >
-                            <Users className="h-4 w-4 text-primary" />
+                            <Users className="h-4 w-4 text-teal-600 dark:text-teal-400" />
                           </Button>
                           <Button
                             variant="ghost"
@@ -511,11 +568,126 @@ const Sites = () => {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {filteredSites.map((site, index) => {
+                const gradientColors = [
+                  "from-teal-500/20 via-cyan-500/15 to-blue-500/20",
+                  "from-emerald-500/20 via-teal-500/15 to-cyan-500/20",
+                  "from-blue-500/20 via-indigo-500/15 to-purple-500/20",
+                  "from-cyan-500/20 via-sky-500/15 to-blue-500/20",
+                  "from-teal-500/20 via-emerald-500/15 to-green-500/20",
+                  "from-cyan-500/20 via-teal-500/15 to-emerald-500/20",
+                ];
+                const gradientColor = gradientColors[index % gradientColors.length];
+                
+                return (
+                  <Card
+                    key={site.id}
+                    className={`relative overflow-hidden border-2 bg-gradient-to-br ${gradientColor} shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] group cursor-pointer`}
+                    onClick={() => handleEditSite(site)}
+                  >
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/10 to-transparent rounded-bl-full"></div>
+                    <CardHeader className="relative pb-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <CardTitle className="text-lg font-bold mb-1 line-clamp-2 group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
+                            {site.name}
+                          </CardTitle>
+                          {site.clientName && (
+                            <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                              <Building2 className="h-3 w-3" />
+                              {site.clientName}
+                            </p>
+                          )}
+                        </div>
+                        <Badge 
+                          className={site.status === "active" 
+                            ? "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20 shrink-0" 
+                            : "bg-muted text-muted-foreground shrink-0"}
+                        >
+                          {site.status}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="relative space-y-3">
+                      {site.address && (
+                        <div className="flex items-start gap-2 text-sm">
+                          <span className="text-muted-foreground min-w-[60px]">Address:</span>
+                          <span className="text-foreground line-clamp-2">{site.address}</span>
+                        </div>
+                      )}
+                      
+                      {site.workingDays && site.workingDays.length > 0 && (
+                        <div className="flex items-start gap-2">
+                          <span className="text-sm text-muted-foreground min-w-[60px]">Days:</span>
+                          <div className="flex flex-wrap gap-1">
+                            {site.workingDays.map((day) => (
+                              <Badge key={day} variant="outline" className="text-xs bg-teal-50 dark:bg-teal-950/30 border-teal-200 dark:border-teal-900/50">
+                                {day.slice(0, 3)}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-3 pt-2 border-t">
+                        {site.invoicingWorkingHours && (
+                          <div>
+                            <p className="text-xs text-muted-foreground">Hours/Day</p>
+                            <p className="text-sm font-semibold">{site.invoicingWorkingHours}Hrs</p>
+                          </div>
+                        )}
+                        {site.invoicingFrequency && (
+                          <div>
+                            <p className="text-xs text-muted-foreground">Frequency</p>
+                            <p className="text-sm font-semibold">{site.invoicingFrequency}</p>
+                          </div>
+                        )}
+                        {site.hourlyRate && (
+                          <div>
+                            <p className="text-xs text-muted-foreground">Hourly Rate</p>
+                            <p className="text-sm font-semibold">${site.hourlyRate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                          </div>
+                        )}
+                        {site.dayRate && (
+                          <div>
+                            <p className="text-xs text-muted-foreground">Day Rate</p>
+                            <p className="text-sm font-bold text-teal-600 dark:text-teal-400">${site.dayRate.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-end gap-2 pt-2 border-t" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleViewEmployees(site)}
+                          className="h-8 hover:bg-teal-500/10 transition-all duration-200"
+                          title="View employees"
+                        >
+                          <Users className="h-4 w-4 mr-1 text-teal-600 dark:text-teal-400" />
+                          <span className="text-xs">Employees</span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteSite(site)}
+                          className="h-8 text-destructive hover:text-destructive hover:bg-destructive/10 transition-all duration-200"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -641,7 +813,7 @@ const Sites = () => {
                   type="number"
                   step="0.5"
                   value={formData.invoicingWorkingHours}
-                  onChange={(e) => setFormData({ ...formData, invoicingWorkingHours: e.target.value })}
+                  onChange={(e) => handleInvoicingHoursChange(e.target.value)}
                   placeholder="10"
                 />
               </div>
@@ -671,12 +843,12 @@ const Sites = () => {
                   type="number"
                   step="0.01"
                   value={formData.hourlyRate}
-                  onChange={(e) => setFormData({ ...formData, hourlyRate: e.target.value })}
+                  onChange={(e) => handleHourlyRateChange(e.target.value)}
                   placeholder="36"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="dayRate">Day Rate</Label>
+                <Label htmlFor="dayRate">Day Rate {formData.invoicingWorkingHours && formData.hourlyRate && "(Auto-calculated)"}</Label>
                 <Input
                   id="dayRate"
                   type="number"
@@ -684,7 +856,13 @@ const Sites = () => {
                   value={formData.dayRate}
                   onChange={(e) => setFormData({ ...formData, dayRate: e.target.value })}
                   placeholder="360"
+                  className={formData.invoicingWorkingHours && formData.hourlyRate ? "bg-muted/50" : ""}
                 />
+                {formData.invoicingWorkingHours && formData.hourlyRate && (
+                  <p className="text-xs text-muted-foreground">
+                    Auto-calculated: {formData.invoicingWorkingHours} hrs × ${formData.hourlyRate}/hr = ${calculateDayRate(formData.invoicingWorkingHours, formData.hourlyRate)}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -878,7 +1056,7 @@ const Sites = () => {
                   type="number"
                   step="0.5"
                   value={formData.invoicingWorkingHours}
-                  onChange={(e) => setFormData({ ...formData, invoicingWorkingHours: e.target.value })}
+                  onChange={(e) => handleInvoicingHoursChange(e.target.value)}
                   placeholder="10"
                 />
               </div>
@@ -908,12 +1086,12 @@ const Sites = () => {
                   type="number"
                   step="0.01"
                   value={formData.hourlyRate}
-                  onChange={(e) => setFormData({ ...formData, hourlyRate: e.target.value })}
+                  onChange={(e) => handleHourlyRateChange(e.target.value)}
                   placeholder="36"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit-dayRate">Day Rate</Label>
+                <Label htmlFor="edit-dayRate">Day Rate {formData.invoicingWorkingHours && formData.hourlyRate && "(Auto-calculated)"}</Label>
                 <Input
                   id="edit-dayRate"
                   type="number"
@@ -921,7 +1099,13 @@ const Sites = () => {
                   value={formData.dayRate}
                   onChange={(e) => setFormData({ ...formData, dayRate: e.target.value })}
                   placeholder="360"
+                  className={formData.invoicingWorkingHours && formData.hourlyRate ? "bg-muted/50" : ""}
                 />
+                {formData.invoicingWorkingHours && formData.hourlyRate && (
+                  <p className="text-xs text-muted-foreground">
+                    Auto-calculated: {formData.invoicingWorkingHours} hrs × ${formData.hourlyRate}/hr = ${calculateDayRate(formData.invoicingWorkingHours, formData.hourlyRate)}
+                  </p>
+                )}
               </div>
             </div>
 
