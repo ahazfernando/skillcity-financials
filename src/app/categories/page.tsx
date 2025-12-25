@@ -2,44 +2,15 @@
 
 import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import Reports from "@/pages/Reports";
+import CategoriesPage from "@/pages/Categories";
 
-export default function ReportsPage() {
+export default function Categories() {
   return (
     <ProtectedRoute>
       <Layout>
-        <Reports />
+        <CategoriesPage />
       </Layout>
     </ProtectedRoute>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

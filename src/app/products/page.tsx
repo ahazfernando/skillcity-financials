@@ -2,44 +2,15 @@
 
 import { Layout } from "@/components/Layout";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
-import Reports from "@/pages/Reports";
+import ProductsPage from "@/pages/Products";
 
-export default function ReportsPage() {
+export default function Products() {
   return (
     <ProtectedRoute>
       <Layout>
-        <Reports />
+        <ProductsPage />
       </Layout>
     </ProtectedRoute>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

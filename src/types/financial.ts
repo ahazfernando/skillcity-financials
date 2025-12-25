@@ -334,3 +334,46 @@ export interface CleaningTrackerCleaner {
   specialNotes?: string; // Optional notes
   photosUploaded: boolean; // Whether photos were uploaded
 }
+
+// Skill City Green Stock - Product Management
+export type RepairStatus = "Not in Repair" | "In repair" | "Repaired" | "Pickup pending" | "Payment Pending";
+
+export interface Repair {
+  id?: string;
+  location: string;
+  repairBusiness: string;
+  cause: string;
+  repairPersonName: string;
+  repairPersonContact: string;
+  cost?: number;
+  assignees?: string[];
+  repairStartDate: Date;
+  repairEndDate?: Date;
+  status?: RepairStatus;
+  createdAt?: Date;
+}
+
+export interface Product {
+  id?: string;
+  equipmentCode: string;
+  name: string;
+  category: string; // Category ID reference
+  quantity: number;
+  description?: string;
+  imageUrl?: string;
+  repairs?: Repair[]; // Nested array
+  siteIds?: string[]; // Array of site IDs this product is assigned to
+  employeeIds?: string[]; // Array of employee IDs this product is assigned to
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+export interface Category {
+  id?: string;
+  name: string;
+  description?: string;
+  color?: string; // Hex color code (e.g., "#00a859")
+  icon?: string; // Icon identifier
+  createdAt?: Date;
+  updatedAt?: Date;
+}
