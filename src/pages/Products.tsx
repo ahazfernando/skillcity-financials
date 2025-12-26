@@ -50,6 +50,7 @@ import {
   Star,
   Zap,
   Shield,
+  CalendarIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -57,6 +58,10 @@ import {
   addProduct,
   updateProduct,
   deleteProduct,
+  addRepair,
+  updateRepair,
+  deleteRepair,
+  getProductById,
 } from "@/lib/firebase/products";
 import {
   getAllCategories,
@@ -64,7 +69,7 @@ import {
 import { getAllSites } from "@/lib/firebase/sites";
 import { getAllEmployees } from "@/lib/firebase/employees";
 import { getAllocationsBySite } from "@/lib/firebase/siteEmployeeAllocations";
-import { Product, Category, Site, Employee, SiteEmployeeAllocation } from "@/types/financial";
+import { Product, Category, Site, Employee, SiteEmployeeAllocation, Repair } from "@/types/financial";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Popover,
@@ -82,6 +87,8 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
 export default function ProductsPage() {
@@ -99,6 +106,24 @@ export default function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [sitePopoverOpen, setSitePopoverOpen] = useState(false);
   const [siteSearchValue, setSiteSearchValue] = useState("");
+  const [isRepairDialogOpen, setIsRepairDialogOpen] = useState(false);
+  const [isRepairManagementDialogOpen, setIsRepairManagementDialogOpen] = useState(false);
+  const [selectedProductForRepairs, setSelectedProductForRepairs] = useState<Product | null>(null);
+  const [editingRepair, setEditingRepair] = useState<Repair | null>(null);
+  const [repairFormData, setRepairFormData] = useState({
+    location: "",
+    repairBusiness: "",
+    cause: "",
+    repairPersonName: "",
+    repairPersonContact: "",
+    cost: 0,
+    assignees: [] as string[], // Employee IDs
+    repairStartDate: new Date(),
+    repairEndDate: undefined as Date | undefined,
+    status: 'Not in Repair' as 'In repair' | 'Repaired' | 'Not in Repair' | 'Pickup pending' | 'Payment Pending',
+  });
+  const [assigneePopoverOpen, setAssigneePopoverOpen] = useState(false);
+  const [assigneeSearchValue, setAssigneeSearchValue] = useState("");
   const [formData, setFormData] = useState({
     name: "",
     equipmentCode: "",
@@ -299,6 +324,135 @@ export default function ProductsPage() {
       selectedEmployees: [],
     });
     setIsDialogOpen(true);
+  };
+
+  // Repair form handlers
+  const resetRepairForm = () => {
+    setRepairFormData({
+      location: "",
+      repairBusiness: "",
+      cause: "",
+      repairPersonName: "",
+      repairPersonContact: "",
+      cost: 0,
+      assignees: [],
+      repairStartDate: new Date(),
+      repairEndDate: undefined,
+      status: 'Not in Repair',
+    });
+  };
+
+  const handleAddRepair = (product: Product) => {
+    setSelectedProductForRepairs(product);
+    setIsRepairManagementDialogOpen(true);
+  };
+
+  const handleOpenAddRepairForm = () => {
+    setEditingRepair(null);
+    resetRepairForm();
+    setIsRepairDialogOpen(true);
+  };
+
+  const handleEditRepair = (product: Product, repair: Repair) => {
+    setSelectedProductForRepairs(product);
+    setEditingRepair(repair);
+    // Convert assignee names to employee IDs if they exist
+    // If assignees are already IDs, use them; otherwise try to match by name
+    let assigneeIds: string[] = [];
+    if (repair.assignees && repair.assignees.length > 0) {
+      assigneeIds = repair.assignees.map(assignee => {
+        // Check if it's already an ID (format check)
+        if (assignee.length > 10) {
+          // Likely an ID, check if it exists in employees
+          const employee = employees.find(e => e.id === assignee);
+          if (employee) return assignee;
+        }
+        // Otherwise, try to find by name
+        const employee = employees.find(e => e.name === assignee);
+        return employee?.id || assignee; // Fallback to original if not found
+      }).filter(id => id && id.length > 0) as string[];
+    }
+    setRepairFormData({
+      location: repair.location,
+      repairBusiness: repair.repairBusiness,
+      cause: repair.cause,
+      repairPersonName: repair.repairPersonName,
+      repairPersonContact: repair.repairPersonContact,
+      cost: repair.cost || 0,
+      assignees: assigneeIds,
+      repairStartDate: repair.repairStartDate ? new Date(repair.repairStartDate) : new Date(),
+      repairEndDate: repair.repairEndDate ? new Date(repair.repairEndDate) : undefined,
+      status: repair.status || 'Not in Repair',
+    });
+    setIsRepairDialogOpen(true);
+  };
+
+  const handleRepairSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!selectedProductForRepairs?.id) return;
+    
+    try {
+      // Convert employee IDs to employee names for storage (or keep IDs if preferred)
+      // For now, we'll store both IDs and names, but primarily use names for display
+      const assigneeNames = repairFormData.assignees
+        .map(id => {
+          const employee = employees.find(e => e.id === id);
+          return employee?.name || id;
+        })
+        .filter(name => name.trim() !== "");
+      
+      const repairData = {
+        ...repairFormData,
+        assignees: assigneeNames.length > 0 ? assigneeNames : undefined,
+      };
+      
+      if (editingRepair) {
+        // Update existing repair
+        await updateRepair(selectedProductForRepairs.id, editingRepair.id!, repairData);
+        toast.success("Repair updated successfully");
+      } else {
+        // Add new repair
+        await addRepair(selectedProductForRepairs.id, repairData);
+        toast.success("Repair added successfully");
+      }
+      
+      setIsRepairDialogOpen(false);
+      setEditingRepair(null);
+      resetRepairForm();
+      await loadProducts(); // Refresh data
+      // Refresh selected product to show updated repairs
+      if (selectedProductForRepairs?.id) {
+        const updatedProduct = await getProductById(selectedProductForRepairs.id);
+        if (updatedProduct) {
+          setSelectedProductForRepairs(updatedProduct);
+        }
+      }
+    } catch (error) {
+      console.error("Error saving repair:", error);
+      toast.error(
+        editingRepair ? "Failed to update repair" : "Failed to add repair"
+      );
+    }
+  };
+
+  const handleDeleteRepair = async (productId: string, repairId: string) => {
+    if (!confirm("Are you sure you want to delete this repair?")) return;
+    try {
+      await deleteRepair(productId, repairId);
+      toast.success("Repair deleted successfully");
+      await loadProducts();
+      // Refresh selected product to show updated repairs
+      if (selectedProductForRepairs?.id === productId) {
+        const updatedProduct = await getProductById(productId);
+        if (updatedProduct) {
+          setSelectedProductForRepairs(updatedProduct);
+        }
+      }
+    } catch (error) {
+      console.error("Error deleting repair:", error);
+      toast.error("Failed to delete repair");
+    }
   };
 
   const filteredProducts = products.filter((prod) => {
@@ -801,6 +955,433 @@ export default function ProductsPage() {
                   </div>
                 </DialogContent>
               </Dialog>
+
+              {/* Repair Dialog */}
+              <Dialog open={isRepairDialogOpen} onOpenChange={setIsRepairDialogOpen}>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>
+                      {editingRepair ? "Edit Repair" : "Add Repair"}
+                    </DialogTitle>
+                    <DialogDescription>
+                      {selectedProductForRepairs && (
+                        <span>
+                          {editingRepair
+                            ? "Update repair details for"
+                            : "Add a new repair for"}{" "}
+                          <strong>{selectedProductForRepairs.name}</strong>
+                        </span>
+                      )}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleRepairSubmit}>
+                    <div className="space-y-4 py-4">
+                      {/* Date Fields - Side by Side */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="repairStartDate">Repair Start Date *</Label>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "w-full justify-start text-left font-normal",
+                                  !repairFormData.repairStartDate && "text-muted-foreground"
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {repairFormData.repairStartDate ? (
+                                  format(repairFormData.repairStartDate, "PPP")
+                                ) : (
+                                  <span>Pick a date</span>
+                                )}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                              <Calendar
+                                mode="single"
+                                selected={repairFormData.repairStartDate}
+                                onSelect={(date) => date && setRepairFormData({ ...repairFormData, repairStartDate: date })}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="repairEndDate">Repair End Date (Optional)</Label>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button
+                                variant="outline"
+                                className={cn(
+                                  "w-full justify-start text-left font-normal",
+                                  !repairFormData.repairEndDate && "text-muted-foreground"
+                                )}
+                              >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {repairFormData.repairEndDate ? (
+                                  format(repairFormData.repairEndDate, "PPP")
+                                ) : (
+                                  <span>Pick a date</span>
+                                )}
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                              <Calendar
+                                mode="single"
+                                selected={repairFormData.repairEndDate}
+                                onSelect={(date) => setRepairFormData({ ...repairFormData, repairEndDate: date })}
+                                initialFocus
+                              />
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      </div>
+
+                      {/* Location */}
+                      <div className="space-y-2">
+                        <Label htmlFor="location">Location *</Label>
+                        <Input
+                          id="location"
+                          value={repairFormData.location}
+                          onChange={(e) => setRepairFormData({ ...repairFormData, location: e.target.value })}
+                          required
+                        />
+                      </div>
+
+                      {/* Repair Business */}
+                      <div className="space-y-2">
+                        <Label htmlFor="repairBusiness">Repair Business *</Label>
+                        <Input
+                          id="repairBusiness"
+                          value={repairFormData.repairBusiness}
+                          onChange={(e) => setRepairFormData({ ...repairFormData, repairBusiness: e.target.value })}
+                          required
+                        />
+                      </div>
+
+                      {/* Cause of Repair */}
+                      <div className="space-y-2">
+                        <Label htmlFor="cause">Cause of Repair *</Label>
+                        <Textarea
+                          id="cause"
+                          value={repairFormData.cause}
+                          onChange={(e) => setRepairFormData({ ...repairFormData, cause: e.target.value })}
+                          rows={3}
+                          required
+                        />
+                      </div>
+
+                      {/* Repair Person Name and Contact - Side by Side */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="repairPersonName">Repair Person Name *</Label>
+                          <Input
+                            id="repairPersonName"
+                            value={repairFormData.repairPersonName}
+                            onChange={(e) => setRepairFormData({ ...repairFormData, repairPersonName: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="repairPersonContact">Repair Person Contact Number *</Label>
+                          <Input
+                            id="repairPersonContact"
+                            value={repairFormData.repairPersonContact}
+                            onChange={(e) => setRepairFormData({ ...repairFormData, repairPersonContact: e.target.value })}
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      {/* Repair Cost and Status - Side by Side */}
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="cost">Repair Cost ($)</Label>
+                          <Input
+                            id="cost"
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            value={repairFormData.cost}
+                            onChange={(e) => setRepairFormData({ ...repairFormData, cost: parseFloat(e.target.value) || 0 })}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="status">Status</Label>
+                          <Select
+                            value={repairFormData.status}
+                            onValueChange={(value) => setRepairFormData({ ...repairFormData, status: value as any })}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Not in Repair">Not in Repair</SelectItem>
+                              <SelectItem value="In repair">In repair</SelectItem>
+                              <SelectItem value="Repaired">Repaired</SelectItem>
+                              <SelectItem value="Pickup pending">Pickup pending</SelectItem>
+                              <SelectItem value="Payment Pending">Payment Pending</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      {/* Assignees */}
+                      <div className="space-y-2">
+                        <Label>Assignees</Label>
+                        <Popover open={assigneePopoverOpen} onOpenChange={setAssigneePopoverOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              className={cn(
+                                "w-full justify-between",
+                                repairFormData.assignees.length === 0 && "text-muted-foreground"
+                              )}
+                            >
+                              {repairFormData.assignees.length > 0
+                                ? `${repairFormData.assignees.length} employee(s) selected`
+                                : "Select employees..."}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-full p-0" align="start">
+                            <Command>
+                              <CommandInput
+                                placeholder="Search employees..."
+                                value={assigneeSearchValue}
+                                onValueChange={setAssigneeSearchValue}
+                              />
+                              <CommandList>
+                                <CommandEmpty>No employee found.</CommandEmpty>
+                                <CommandGroup>
+                                  {employees
+                                    .filter((employee) =>
+                                      !assigneeSearchValue ||
+                                      employee.name.toLowerCase().includes(assigneeSearchValue.toLowerCase()) ||
+                                      employee.email?.toLowerCase().includes(assigneeSearchValue.toLowerCase())
+                                    )
+                                    .map((employee) => {
+                                      const isSelected = repairFormData.assignees.includes(employee.id!);
+                                      return (
+                                        <CommandItem
+                                          key={employee.id}
+                                          value={employee.id}
+                                          onSelect={() => {
+                                            setRepairFormData({
+                                              ...repairFormData,
+                                              assignees: isSelected
+                                                ? repairFormData.assignees.filter((id) => id !== employee.id)
+                                                : [...repairFormData.assignees, employee.id!],
+                                            });
+                                          }}
+                                        >
+                                          <Checkbox
+                                            checked={isSelected}
+                                            className="mr-2"
+                                            onCheckedChange={() => {}}
+                                          />
+                                          <div className="flex flex-col">
+                                            <span>{employee.name}</span>
+                                            {employee.email && (
+                                              <span className="text-xs text-muted-foreground">{employee.email}</span>
+                                            )}
+                                          </div>
+                                        </CommandItem>
+                                      );
+                                    })}
+                                </CommandGroup>
+                              </CommandList>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
+                        {repairFormData.assignees.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            <p className="text-xs text-muted-foreground">
+                              Selected employees ({repairFormData.assignees.length}):
+                            </p>
+                            <div className="flex flex-wrap gap-1">
+                              {repairFormData.assignees.map((employeeId) => {
+                                const employee = employees.find((e) => e.id === employeeId);
+                                return employee ? (
+                                  <Badge
+                                    key={employeeId}
+                                    variant="secondary"
+                                    className="text-xs cursor-pointer hover:bg-destructive hover:text-destructive-foreground"
+                                    onClick={() => {
+                                      setRepairFormData({
+                                        ...repairFormData,
+                                        assignees: repairFormData.assignees.filter((id) => id !== employeeId),
+                                      });
+                                    }}
+                                  >
+                                    {employee.name}
+                                    <X className="ml-1 h-3 w-3" />
+                                  </Badge>
+                                ) : null;
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <DialogFooter>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setIsRepairDialogOpen(false);
+                          setEditingRepair(null);
+                          resetRepairForm();
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                      <Button type="submit">
+                        {editingRepair ? "Update" : "Add"} Repair
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+
+              {/* Repair Management Dialog */}
+              <Dialog open={isRepairManagementDialogOpen} onOpenChange={setIsRepairManagementDialogOpen}>
+                <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle>Manage Repairs</DialogTitle>
+                    <DialogDescription>
+                      {selectedProductForRepairs && (
+                        <span>
+                          View and manage repairs for <strong>{selectedProductForRepairs.name}</strong>
+                        </span>
+                      )}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="flex justify-end">
+                      <Button onClick={handleOpenAddRepairForm}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Repair
+                      </Button>
+                    </div>
+                    {selectedProductForRepairs?.repairs && selectedProductForRepairs.repairs.length > 0 ? (
+                      <div className="space-y-4">
+                        {selectedProductForRepairs.repairs.map((repair) => (
+                          <Card key={repair.id}>
+                            <CardContent className="p-4">
+                              <div className="flex justify-between items-start mb-3">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Badge variant="outline">
+                                      {repair.status || "Not in Repair"}
+                                    </Badge>
+                                    {repair.cost && (
+                                      <Badge variant="secondary">
+                                        ${repair.cost.toFixed(2)}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                      <p className="text-muted-foreground">Location:</p>
+                                      <p className="font-medium">{repair.location}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground">Repair Business:</p>
+                                      <p className="font-medium">{repair.repairBusiness}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground">Start Date:</p>
+                                      <p className="font-medium">
+                                        {repair.repairStartDate ? format(new Date(repair.repairStartDate), "PPP") : "N/A"}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground">End Date:</p>
+                                      <p className="font-medium">
+                                        {repair.repairEndDate ? format(new Date(repair.repairEndDate), "PPP") : "N/A"}
+                                      </p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground">Repair Person:</p>
+                                      <p className="font-medium">{repair.repairPersonName}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-muted-foreground">Contact:</p>
+                                      <p className="font-medium">{repair.repairPersonContact}</p>
+                                    </div>
+                                  </div>
+                                  {repair.cause && (
+                                    <div className="mt-3">
+                                      <p className="text-muted-foreground text-sm">Cause:</p>
+                                      <p className="text-sm">{repair.cause}</p>
+                                    </div>
+                                  )}
+                                  {repair.assignees && repair.assignees.length > 0 && (
+                                    <div className="mt-3">
+                                      <p className="text-muted-foreground text-sm mb-1">Assignees:</p>
+                                      <div className="flex flex-wrap gap-1">
+                                        {repair.assignees.map((assignee, idx) => (
+                                          <Badge key={idx} variant="outline" className="text-xs">
+                                            {assignee}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                                <div className="flex gap-2 ml-4">
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => {
+                                      handleEditRepair(selectedProductForRepairs, repair);
+                                      setIsRepairManagementDialogOpen(false);
+                                    }}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => handleDeleteRepair(selectedProductForRepairs.id!, repair.id!)}
+                                  >
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                </div>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center text-muted-foreground py-8">
+                        <Wrench className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                        <p>No repairs found for this product</p>
+                        <Button
+                          variant="outline"
+                          className="mt-4"
+                          onClick={handleOpenAddRepairForm}
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add First Repair
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsRepairManagementDialogOpen(false)}
+                    >
+                      Close
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
         </CardHeader>
@@ -873,6 +1454,14 @@ export default function ProductsPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleAddRepair(product)}
+                          title="Manage Repairs"
+                        >
+                          <Wrench className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -958,12 +1547,12 @@ export default function ProductsPage() {
                           </div>
                         </div>
                       )}
-                      {product.employeeIds && product.employeeIds.length > 0 && (
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2 text-sm">
-                            <Users className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-muted-foreground">Employees:</span>
-                          </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Users className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-muted-foreground">Employees:</span>
+                        </div>
+                        {product.employeeIds && product.employeeIds.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {product.employeeIds.map((employeeId) => (
                               <Badge key={employeeId} variant="outline" className="text-xs">
@@ -971,11 +1560,21 @@ export default function ProductsPage() {
                               </Badge>
                             ))}
                           </div>
-                        </div>
-                      )}
+                        ) : (
+                          <span className="text-xs text-muted-foreground">No employees assigned</span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleAddRepair(product)}
+                      >
+                        <Wrench className="h-4 w-4 mr-2" />
+                        Repairs
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
