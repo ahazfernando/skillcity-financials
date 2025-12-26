@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Building2, Loader2, Trash2, Users, Check, ChevronsUpDown, UserPlus, Table2, Grid3x3 } from "lucide-react";
+import { Search, Building2, Loader2, Trash2, Users, Check, ChevronsUpDown, UserPlus, Table2, Grid3x3, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -88,7 +88,10 @@ const Sites = () => {
     dayRate: "",
     invoicingFrequency: "" as "" | "Monthly" | "Fortnightly" | "Weekly",
     specialNote: "",
+    selectedEmployees: [] as string[], // Employee IDs
   });
+  const [employeeSearchValue, setEmployeeSearchValue] = useState("");
+  const [employeePopoverOpenForm, setEmployeePopoverOpenForm] = useState(false);
 
   const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -137,12 +140,24 @@ const Sites = () => {
       dayRate: "",
       invoicingFrequency: "",
       specialNote: "",
+      selectedEmployees: [],
     });
     setEditingSiteId(null);
+    setEmployeeSearchValue("");
+    setEmployeePopoverOpenForm(false);
   };
 
-  const handleEditSite = (site: Site) => {
+  const handleEditSite = async (site: Site) => {
     setEditingSiteId(site.id);
+    // Load existing allocations for this site
+    let employeeIds: string[] = [];
+    try {
+      const allocations = await getAllocationsBySite(site.id!);
+      employeeIds = allocations.map(alloc => alloc.employeeId);
+    } catch (error) {
+      console.error("Error loading allocations:", error);
+    }
+    
     setFormData({
       name: site.name,
       address: site.address,
@@ -157,6 +172,7 @@ const Sites = () => {
       dayRate: site.dayRate?.toString() || "",
       invoicingFrequency: site.invoicingFrequency || "",
       specialNote: site.specialNote || "",
+      selectedEmployees: employeeIds,
     });
     setIsEditDialogOpen(true);
   };
@@ -318,6 +334,46 @@ const Sites = () => {
           specialNote: formData.specialNote || undefined,
         });
 
+        // Update employee allocations
+        const existingSite = sites.find(s => s.id === editingSiteId);
+        if (existingSite) {
+          try {
+            // Get current allocations
+            const currentAllocations = await getAllocationsBySite(editingSiteId);
+            const currentEmployeeIds = currentAllocations.map(a => a.employeeId);
+            
+            // Remove employees that are no longer selected
+            for (const allocation of currentAllocations) {
+              if (!formData.selectedEmployees.includes(allocation.employeeId)) {
+                await deleteAllocation(allocation.id!);
+              }
+            }
+            
+            // Add new employees
+            for (let i = 0; i < formData.selectedEmployees.length; i++) {
+              const employeeId = formData.selectedEmployees[i];
+              if (!currentEmployeeIds.includes(employeeId)) {
+                const employee = allEmployees.find(emp => emp.id === employeeId);
+                if (employee) {
+                  const newAllocation: Omit<SiteEmployeeAllocation, "id"> = {
+                    siteId: existingSite.id!,
+                    siteName: existingSite.name,
+                    employeeId: employee.id!,
+                    employeeName: employee.name,
+                    employeeNumber: currentAllocations.length + i + 1,
+                    actualWorkingTime: "",
+                    hasExtraTime: false,
+                  };
+                  await addAllocation(newAllocation);
+                }
+              }
+            }
+          } catch (error) {
+            console.error("Error updating employee allocations:", error);
+            toast.error("Site updated but failed to update some employee assignments");
+          }
+        }
+
         // Reload sites to get the latest data from Firebase
         const updatedSites = await getAllSites();
         setSites(updatedSites);
@@ -343,11 +399,37 @@ const Sites = () => {
         };
 
         // Add site to Firebase
-        await addSite(newSite);
+        const newSiteId = await addSite(newSite);
         
         // Reload sites to get the latest data from Firebase
         const updatedSites = await getAllSites();
+        const createdSite = updatedSites.find(s => s.id === newSiteId);
         setSites(updatedSites);
+        
+        // Add employee allocations if employees were selected
+        if (formData.selectedEmployees.length > 0 && createdSite) {
+          try {
+            for (let i = 0; i < formData.selectedEmployees.length; i++) {
+              const employeeId = formData.selectedEmployees[i];
+              const employee = allEmployees.find(emp => emp.id === employeeId);
+              if (employee) {
+                const newAllocation: Omit<SiteEmployeeAllocation, "id"> = {
+                  siteId: createdSite.id!,
+                  siteName: createdSite.name,
+                  employeeId: employee.id!,
+                  employeeName: employee.name,
+                  employeeNumber: i + 1,
+                  actualWorkingTime: "",
+                  hasExtraTime: false,
+                };
+                await addAllocation(newAllocation);
+              }
+            }
+          } catch (error) {
+            console.error("Error adding employee allocations:", error);
+            toast.error("Site created but failed to assign some employees");
+          }
+        }
         
         toast.success("Site added successfully!");
         setIsAddDialogOpen(false);
@@ -905,6 +987,105 @@ const Sites = () => {
                 rows={3}
               />
             </div>
+
+            {/* Employee Selection */}
+            <div className="space-y-2">
+              <Label>Assign Employees</Label>
+              <Popover open={employeePopoverOpenForm} onOpenChange={setEmployeePopoverOpenForm}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className={cn(
+                      "w-full justify-between",
+                      formData.selectedEmployees.length === 0 && "text-muted-foreground"
+                    )}
+                  >
+                    {formData.selectedEmployees.length > 0
+                      ? `${formData.selectedEmployees.length} employee(s) selected`
+                      : "Select employees..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command>
+                    <CommandInput
+                      placeholder="Search employees..."
+                      value={employeeSearchValue}
+                      onValueChange={setEmployeeSearchValue}
+                    />
+                    <CommandList>
+                      <CommandEmpty>No employee found.</CommandEmpty>
+                      <CommandGroup>
+                        {allEmployees
+                          .filter((employee) =>
+                            !employeeSearchValue ||
+                            employee.name.toLowerCase().includes(employeeSearchValue.toLowerCase()) ||
+                            employee.email?.toLowerCase().includes(employeeSearchValue.toLowerCase())
+                          )
+                          .map((employee) => {
+                            const isSelected = formData.selectedEmployees.includes(employee.id!);
+                            return (
+                              <CommandItem
+                                key={employee.id}
+                                value={employee.id}
+                                onSelect={() => {
+                                  setFormData({
+                                    ...formData,
+                                    selectedEmployees: isSelected
+                                      ? formData.selectedEmployees.filter((id) => id !== employee.id)
+                                      : [...formData.selectedEmployees, employee.id!],
+                                  });
+                                }}
+                              >
+                                <Checkbox
+                                  checked={isSelected}
+                                  className="mr-2"
+                                  onCheckedChange={() => {}}
+                                />
+                                <div className="flex flex-col">
+                                  <span>{employee.name}</span>
+                                  {employee.email && (
+                                    <span className="text-xs text-muted-foreground">{employee.email}</span>
+                                  )}
+                                </div>
+                              </CommandItem>
+                            );
+                          })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              {formData.selectedEmployees.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  <p className="text-xs text-muted-foreground">
+                    Selected employees ({formData.selectedEmployees.length}):
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {formData.selectedEmployees.map((employeeId) => {
+                      const employee = allEmployees.find((e) => e.id === employeeId);
+                      return employee ? (
+                        <Badge
+                          key={employeeId}
+                          variant="secondary"
+                          className="text-xs cursor-pointer hover:bg-destructive hover:text-destructive-foreground"
+                          onClick={() => {
+                            setFormData({
+                              ...formData,
+                              selectedEmployees: formData.selectedEmployees.filter((id) => id !== employeeId),
+                            });
+                          }}
+                        >
+                          {employee.name}
+                          <X className="ml-1 h-3 w-3" />
+                        </Badge>
+                      ) : null;
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
                 </div>
                 <DialogFooter className="pt-4">
                   <Button 
@@ -1147,6 +1328,105 @@ const Sites = () => {
                 placeholder="Additional notes about the site..."
                 rows={3}
               />
+            </div>
+
+            {/* Employee Selection */}
+            <div className="space-y-2">
+              <Label>Assign Employees</Label>
+              <Popover open={employeePopoverOpenForm} onOpenChange={setEmployeePopoverOpenForm}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className={cn(
+                      "w-full justify-between",
+                      formData.selectedEmployees.length === 0 && "text-muted-foreground"
+                    )}
+                  >
+                    {formData.selectedEmployees.length > 0
+                      ? `${formData.selectedEmployees.length} employee(s) selected`
+                      : "Select employees..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command>
+                    <CommandInput
+                      placeholder="Search employees..."
+                      value={employeeSearchValue}
+                      onValueChange={setEmployeeSearchValue}
+                    />
+                    <CommandList>
+                      <CommandEmpty>No employee found.</CommandEmpty>
+                      <CommandGroup>
+                        {allEmployees
+                          .filter((employee) =>
+                            !employeeSearchValue ||
+                            employee.name.toLowerCase().includes(employeeSearchValue.toLowerCase()) ||
+                            employee.email?.toLowerCase().includes(employeeSearchValue.toLowerCase())
+                          )
+                          .map((employee) => {
+                            const isSelected = formData.selectedEmployees.includes(employee.id!);
+                            return (
+                              <CommandItem
+                                key={employee.id}
+                                value={employee.id}
+                                onSelect={() => {
+                                  setFormData({
+                                    ...formData,
+                                    selectedEmployees: isSelected
+                                      ? formData.selectedEmployees.filter((id) => id !== employee.id)
+                                      : [...formData.selectedEmployees, employee.id!],
+                                  });
+                                }}
+                              >
+                                <Checkbox
+                                  checked={isSelected}
+                                  className="mr-2"
+                                  onCheckedChange={() => {}}
+                                />
+                                <div className="flex flex-col">
+                                  <span>{employee.name}</span>
+                                  {employee.email && (
+                                    <span className="text-xs text-muted-foreground">{employee.email}</span>
+                                  )}
+                                </div>
+                              </CommandItem>
+                            );
+                          })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              {formData.selectedEmployees.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  <p className="text-xs text-muted-foreground">
+                    Selected employees ({formData.selectedEmployees.length}):
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {formData.selectedEmployees.map((employeeId) => {
+                      const employee = allEmployees.find((e) => e.id === employeeId);
+                      return employee ? (
+                        <Badge
+                          key={employeeId}
+                          variant="secondary"
+                          className="text-xs cursor-pointer hover:bg-destructive hover:text-destructive-foreground"
+                          onClick={() => {
+                            setFormData({
+                              ...formData,
+                              selectedEmployees: formData.selectedEmployees.filter((id) => id !== employeeId),
+                            });
+                          }}
+                        >
+                          {employee.name}
+                          <X className="ml-1 h-3 w-3" />
+                        </Badge>
+                      ) : null;
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
                 </div>
                 <DialogFooter className="pt-4">

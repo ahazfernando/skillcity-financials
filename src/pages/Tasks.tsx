@@ -59,6 +59,7 @@ import {
   Eye,
   MessageSquare,
   Loader2,
+  Copy,
 } from "lucide-react";
 import { Task, Site, Employee, Subtask } from "@/types/financial";
 import {
@@ -67,6 +68,7 @@ import {
   updateTask,
   deleteTask,
   updateTaskStatus,
+  getNextTaskNumber,
 } from "@/lib/firebase/tasks";
 import { getAllSites, getSiteById } from "@/lib/firebase/sites";
 import { getAllEmployees } from "@/lib/firebase/employees";
@@ -114,9 +116,10 @@ interface TaskCardProps {
   onDelete: (task: Task) => void;
   onViewMembers: (task: Task) => void;
   onViewDetails: (task: Task) => void;
+  onClone: (task: Task) => void;
 }
 
-function TaskCard({ task, onEdit, onDelete, onViewMembers, onViewDetails }: TaskCardProps) {
+function TaskCard({ task, onEdit, onDelete, onViewMembers, onViewDetails, onClone }: TaskCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id });
 
@@ -171,6 +174,31 @@ function TaskCard({ task, onEdit, onDelete, onViewMembers, onViewDetails }: Task
     if (diffDays === 1) return "Tomorrow";
     if (diffDays <= 7) return `${diffDays} days`;
     return date.toLocaleDateString("en-US", { month: "short" });
+  };
+
+  const formatDateTime = (dateString: string) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = now.getTime() - date.getTime();
+    const diffMinutes = Math.floor(diffTime / (1000 * 60));
+    const diffHours = Math.floor(diffTime / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffMinutes < 1) return "Just now";
+    if (diffMinutes < 60) return `${diffMinutes}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays === 1) return "Yesterday";
+    if (diffDays < 7) return `${diffDays}d ago`;
+    
+    // Format: "Dec 26, 2024 at 10:30 AM"
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: date.getFullYear() !== now.getFullYear() ? "numeric" : undefined,
+    }) + " at " + date.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+    });
   };
 
   return (
@@ -274,6 +302,10 @@ function TaskCard({ task, onEdit, onDelete, onViewMembers, onViewDetails }: Task
                   <Edit className="mr-2 h-4 w-4" />
                   Edit
                 </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onClone(task)}>
+                  <Copy className="mr-2 h-4 w-4" />
+                  Clone
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onViewMembers(task)}>
                   <Users className="mr-2 h-4 w-4" />
                   View Members
@@ -325,6 +357,16 @@ function TaskCard({ task, onEdit, onDelete, onViewMembers, onViewDetails }: Task
             </div>
           </div>
         )}
+
+        {/* Cloned At Indicator */}
+        {task.clonedAt && (
+          <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+            <div className="flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400">
+              <Copy className="h-3.5 w-3.5" />
+              <span>Cloned: {formatDateTime(task.clonedAt)}</span>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -338,11 +380,12 @@ interface ColumnProps {
   onDelete: (task: Task) => void;
   onViewMembers: (task: Task) => void;
   onViewDetails: (task: Task) => void;
+  onClone: (task: Task) => void;
   onAddTask?: () => void;
   isAdmin?: boolean;
 }
 
-function Column({ id, title, tasks, onEdit, onDelete, onViewMembers, onViewDetails, onAddTask, isAdmin }: ColumnProps) {
+function Column({ id, title, tasks, onEdit, onDelete, onViewMembers, onViewDetails, onClone, onAddTask, isAdmin }: ColumnProps) {
   const { setNodeRef, isOver } = useDroppable({
     id,
   });
@@ -382,6 +425,7 @@ function Column({ id, title, tasks, onEdit, onDelete, onViewMembers, onViewDetai
               onDelete={onDelete}
               onViewMembers={onViewMembers}
               onViewDetails={onViewDetails}
+              onClone={onClone}
             />
           ))}
         </SortableContext>
@@ -736,12 +780,16 @@ const Tasks = () => {
         
         toast.success("Task updated successfully");
       } else {
+        // Assign task number for new tasks
+        const nextTaskNumber = await getNextTaskNumber();
+        taskData.taskNumber = nextTaskNumber;
+        
         taskId = await createTask(taskData);
         savedTask = { ...taskData, id: taskId } as Task;
         
         // Email notifications removed - Resend integration disabled
         
-        toast.success("Task created successfully");
+        toast.success(`Task created successfully (Task #${nextTaskNumber})`);
       }
 
       setIsDialogOpen(false);
@@ -766,6 +814,49 @@ const Tasks = () => {
     } catch (error) {
       console.error("Error deleting task:", error);
       toast.error("Failed to delete task");
+    }
+  };
+
+  const handleCloneTask = async (task: Task) => {
+    try {
+      const now = new Date().toISOString();
+      const nextTaskNumber = await getNextTaskNumber();
+      
+      const clonedTask: Omit<Task, "id" | "createdAt" | "updatedAt"> = {
+        title: `${task.title} (Copy)`,
+        description: task.description,
+        status: "new", // Reset status to new
+        priority: task.priority,
+        siteId: task.siteId,
+        siteName: task.siteName,
+        assignedTo: task.assignedTo,
+        assignedToNames: task.assignedToNames,
+        deadline: task.deadline,
+        subtasks: task.subtasks?.map(subtask => ({
+          ...subtask,
+          completed: false, // Reset subtask completion
+        })),
+        location: task.location,
+        payRate: task.payRate,
+        totalHours: task.totalHours,
+        completedImages: [], // Don't copy images
+        progress: 0, // Reset progress
+        category: task.category,
+        createdBy: user?.uid || "",
+        createdByName: userData?.name || user?.email || "",
+        clonedAt: now,
+        clonedFrom: task.id,
+        taskNumber: nextTaskNumber, // Assign next task number
+        startedAt: undefined, // Reset timestamps
+        completedAt: undefined,
+      };
+
+      await createTask(clonedTask);
+      toast.success(`Task cloned successfully (Task #${nextTaskNumber})`);
+      loadData();
+    } catch (error) {
+      console.error("Error cloning task:", error);
+      toast.error("Failed to clone task");
     }
   };
 
@@ -948,6 +1039,7 @@ const Tasks = () => {
               title={column.title}
               tasks={column.tasks}
               onEdit={handleEditTask}
+              onClone={handleCloneTask}
               onDelete={(task) => {
                 setDeletingTask(task);
                 setIsDeleteDialogOpen(true);
@@ -1487,7 +1579,14 @@ const Tasks = () => {
               {/* Title and Status */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <h3 className="text-xl font-semibold">{detailsTask.title}</h3>
+                  <div className="flex items-center gap-3">
+                    {detailsTask.taskNumber && (
+                      <Badge variant="outline" className="text-sm font-mono">
+                        Task #{detailsTask.taskNumber}
+                      </Badge>
+                    )}
+                    <h3 className="text-xl font-semibold">{detailsTask.title}</h3>
+                  </div>
                   <Badge
                     variant="outline"
                     className={cn(
@@ -1789,16 +1888,28 @@ const Tasks = () => {
               Close
             </Button>
             {detailsTask && (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setIsDetailsDialogOpen(false);
-                  handleEditTask(detailsTask);
-                }}
-              >
-                <Edit className="mr-2 h-4 w-4" />
-                Edit Task
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsDetailsDialogOpen(false);
+                    handleCloneTask(detailsTask);
+                  }}
+                >
+                  <Copy className="mr-2 h-4 w-4" />
+                  Clone Task
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setIsDetailsDialogOpen(false);
+                    handleEditTask(detailsTask);
+                  }}
+                >
+                  <Edit className="mr-2 h-4 w-4" />
+                  Edit Task
+                </Button>
+              </>
             )}
           </DialogFooter>
         </DialogContent>

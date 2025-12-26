@@ -307,6 +307,9 @@ export interface Task {
   updatedAt: string;
   startedAt?: string; // ISO date string - when task was moved to "in_progress"
   completedAt?: string; // ISO date string - when task was moved to "completed"
+  clonedAt?: string; // ISO date string - when task was cloned
+  clonedFrom?: string; // ID of the original task that was cloned
+  taskNumber?: number; // Sequential task number
 }
 
 export interface Subtask {

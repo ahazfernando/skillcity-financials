@@ -9,6 +9,7 @@ import {
   query,
   where,
   orderBy,
+  limit,
   Timestamp,
 } from "firebase/firestore";
 import { db } from "./config";
@@ -43,6 +44,9 @@ const docToTask = (doc: any): Task => {
     updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt || new Date().toISOString(),
     startedAt: data.startedAt?.toDate?.()?.toISOString() || data.startedAt || undefined,
     completedAt: data.completedAt?.toDate?.()?.toISOString() || data.completedAt || undefined,
+    clonedAt: data.clonedAt?.toDate?.()?.toISOString() || data.clonedAt || undefined,
+    clonedFrom: data.clonedFrom || undefined,
+    taskNumber: data.taskNumber || undefined,
   };
 };
 
@@ -71,6 +75,9 @@ const taskToDoc = (task: Omit<Task, "id">) => {
     updatedAt: Timestamp.now(),
     startedAt: task.startedAt ? Timestamp.fromDate(new Date(task.startedAt)) : null,
     completedAt: task.completedAt ? Timestamp.fromDate(new Date(task.completedAt)) : null,
+    clonedAt: task.clonedAt ? Timestamp.fromDate(new Date(task.clonedAt)) : null,
+    clonedFrom: task.clonedFrom || null,
+    taskNumber: task.taskNumber || null,
   };
 };
 
@@ -110,6 +117,33 @@ export const getTasksByAssignedUser = async (userId: string): Promise<Task[]> =>
   } catch (error) {
     console.error("Error fetching tasks by assigned user:", error);
     throw error;
+  }
+};
+
+// Get next task number
+export const getNextTaskNumber = async (): Promise<number> => {
+  try {
+    const tasksRef = collection(db, TASKS_COLLECTION);
+    const q = query(tasksRef, orderBy("taskNumber", "desc"), limit(1));
+    const querySnapshot = await getDocs(q);
+    
+    if (querySnapshot.empty) {
+      return 1;
+    }
+    
+    const lastTask = docToTask(querySnapshot.docs[0]);
+    return (lastTask.taskNumber || 0) + 1;
+  } catch (error) {
+    console.error("Error getting next task number:", error);
+    // Fallback: try to get max from all tasks
+    try {
+      const allTasks = await getAllTasks();
+      if (allTasks.length === 0) return 1;
+      const maxNumber = Math.max(...allTasks.map(t => t.taskNumber || 0));
+      return maxNumber + 1;
+    } catch {
+      return 1;
+    }
   }
 };
 
