@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Search, Building2, Loader2, Trash2, Users, Check, ChevronsUpDown, UserPlus, Table2, Grid3x3, X } from "lucide-react";
+import { Search, Building2, Loader2, Trash2, Users, Check, ChevronsUpDown, UserPlus, Table2, Grid3x3, X, MapPin } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -89,7 +89,10 @@ const Sites = () => {
     invoicingFrequency: "" as "" | "Monthly" | "Fortnightly" | "Weekly",
     specialNote: "",
     selectedEmployees: [] as string[], // Employee IDs
+    latitude: "",
+    longitude: "",
   });
+  const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [employeeSearchValue, setEmployeeSearchValue] = useState("");
   const [employeePopoverOpenForm, setEmployeePopoverOpenForm] = useState(false);
 
@@ -141,10 +144,50 @@ const Sites = () => {
       invoicingFrequency: "",
       specialNote: "",
       selectedEmployees: [],
+      latitude: "",
+      longitude: "",
     });
     setEditingSiteId(null);
     setEmployeeSearchValue("");
     setEmployeePopoverOpenForm(false);
+  };
+
+  const handleGetCurrentLocation = async () => {
+    try {
+      setIsGettingLocation(true);
+      if (!navigator.geolocation) {
+        toast.error("Geolocation is not supported by your browser");
+        return;
+      }
+
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        });
+      });
+
+      setFormData({
+        ...formData,
+        latitude: position.coords.latitude.toString(),
+        longitude: position.coords.longitude.toString(),
+      });
+      toast.success("Location captured successfully");
+    } catch (error: any) {
+      console.error("Error getting location:", error);
+      let errorMessage = "Failed to get location";
+      if (error.code === 1) {
+        errorMessage = "Location permission denied";
+      } else if (error.code === 2) {
+        errorMessage = "Location unavailable";
+      } else if (error.code === 3) {
+        errorMessage = "Location request timed out";
+      }
+      toast.error(errorMessage);
+    } finally {
+      setIsGettingLocation(false);
+    }
   };
 
   const handleEditSite = async (site: Site) => {
@@ -173,6 +216,8 @@ const Sites = () => {
       invoicingFrequency: site.invoicingFrequency || "",
       specialNote: site.specialNote || "",
       selectedEmployees: employeeIds,
+      latitude: site.latitude?.toString() || "",
+      longitude: site.longitude?.toString() || "",
     });
     setIsEditDialogOpen(true);
   };
@@ -332,6 +377,8 @@ const Sites = () => {
           dayRate: formData.dayRate ? parseFloat(formData.dayRate) : undefined,
           invoicingFrequency: formData.invoicingFrequency || undefined,
           specialNote: formData.specialNote || undefined,
+          latitude: formData.latitude ? parseFloat(formData.latitude) : undefined,
+          longitude: formData.longitude ? parseFloat(formData.longitude) : undefined,
         });
 
         // Update employee allocations
@@ -396,6 +443,8 @@ const Sites = () => {
           dayRate: formData.dayRate ? parseFloat(formData.dayRate) : undefined,
           invoicingFrequency: formData.invoicingFrequency || undefined,
           specialNote: formData.specialNote || undefined,
+          latitude: formData.latitude ? parseFloat(formData.latitude) : undefined,
+          longitude: formData.longitude ? parseFloat(formData.longitude) : undefined,
         };
 
         // Add site to Firebase
@@ -845,6 +894,56 @@ const Sites = () => {
               />
             </div>
 
+            <div className="space-y-2">
+              <Label>Location Coordinates</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="latitude" className="text-xs">Latitude</Label>
+                  <Input
+                    id="latitude"
+                    type="number"
+                    step="any"
+                    value={formData.latitude}
+                    onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
+                    placeholder="e.g., -37.8136"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="longitude" className="text-xs">Longitude</Label>
+                  <Input
+                    id="longitude"
+                    type="number"
+                    step="any"
+                    value={formData.longitude}
+                    onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
+                    placeholder="e.g., 144.9631"
+                  />
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleGetCurrentLocation}
+                disabled={isGettingLocation}
+                className="w-full"
+              >
+                {isGettingLocation ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Getting location...
+                  </>
+                ) : (
+                  <>
+                    <MapPin className="mr-2 h-4 w-4" />
+                    Use Current Location
+                  </>
+                )}
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Set location coordinates for this site. Used for employee location validation during clock-in.
+              </p>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="contactPerson">Contact Person</Label>
@@ -1185,6 +1284,56 @@ const Sites = () => {
                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                 placeholder="123 Business St, City"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Location Coordinates</Label>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-latitude" className="text-xs">Latitude</Label>
+                  <Input
+                    id="edit-latitude"
+                    type="number"
+                    step="any"
+                    value={formData.latitude}
+                    onChange={(e) => setFormData({ ...formData, latitude: e.target.value })}
+                    placeholder="e.g., -37.8136"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-longitude" className="text-xs">Longitude</Label>
+                  <Input
+                    id="edit-longitude"
+                    type="number"
+                    step="any"
+                    value={formData.longitude}
+                    onChange={(e) => setFormData({ ...formData, longitude: e.target.value })}
+                    placeholder="e.g., 144.9631"
+                  />
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleGetCurrentLocation}
+                disabled={isGettingLocation}
+                className="w-full"
+              >
+                {isGettingLocation ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Getting location...
+                  </>
+                ) : (
+                  <>
+                    <MapPin className="mr-2 h-4 w-4" />
+                    Use Current Location
+                  </>
+                )}
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Set location coordinates for this site. Used for employee location validation during clock-in.
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">

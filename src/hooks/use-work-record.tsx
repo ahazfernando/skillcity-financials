@@ -34,6 +34,37 @@ export const useWorkRecord = (employeeId: string | null): UseWorkRecordResult =>
       const records = querySnapshot.docs
         .map((doc) => {
           const data = doc.data();
+          
+          // Convert location data if present
+          let clockInLocation = undefined;
+          if (data.clockInLocation) {
+            clockInLocation = {
+              latitude: data.clockInLocation.latitude ?? null,
+              longitude: data.clockInLocation.longitude ?? null,
+              accuracy: data.clockInLocation.accuracy ?? null,
+              timestamp: data.clockInLocation.timestamp 
+                ? (data.clockInLocation.timestamp.toDate ? data.clockInLocation.timestamp.toDate().toISOString() : data.clockInLocation.timestamp)
+                : new Date().toISOString(),
+              address: data.clockInLocation.address,
+              error: data.clockInLocation.error,
+            };
+          }
+          
+          let clockInSystemLocation = undefined;
+          if (data.clockInSystemLocation) {
+            clockInSystemLocation = {
+              timezone: data.clockInSystemLocation.timezone || "",
+              timezoneOffset: data.clockInSystemLocation.timezoneOffset ?? 0,
+              language: data.clockInSystemLocation.language || "",
+              userAgent: data.clockInSystemLocation.userAgent || "",
+              platform: data.clockInSystemLocation.platform || "",
+              timestamp: data.clockInSystemLocation.timestamp
+                ? (data.clockInSystemLocation.timestamp.toDate ? data.clockInSystemLocation.timestamp.toDate().toISOString() : data.clockInSystemLocation.timestamp)
+                : new Date().toISOString(),
+              ipAddress: data.clockInSystemLocation.ipAddress,
+            };
+          }
+          
           return {
             id: doc.id,
             employeeId: data.employeeId || "",
@@ -49,6 +80,8 @@ export const useWorkRecord = (employeeId: string | null): UseWorkRecordResult =>
             approvedBy: data.approvedBy || undefined,
             approvedAt: data.approvedAt ? (data.approvedAt.toDate ? data.approvedAt.toDate().toISOString() : data.approvedAt) : undefined,
             notes: data.notes || undefined,
+            clockInLocation,
+            clockInSystemLocation,
             createdAt: data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate().toISOString() : data.createdAt) : "",
             updatedAt: data.updatedAt ? (data.updatedAt.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt) : "",
           } as WorkRecord;

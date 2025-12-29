@@ -234,6 +234,25 @@ export type ActivityType =
   | "reject"
   | "payment";
 
+export interface ClockInLocation {
+  latitude: number | null;
+  longitude: number | null;
+  accuracy: number | null;
+  timestamp: string; // ISO timestamp
+  address?: string;
+  error?: string;
+}
+
+export interface ClockInSystemLocation {
+  timezone: string;
+  timezoneOffset: number;
+  language: string;
+  userAgent: string;
+  platform: string;
+  timestamp: string; // ISO timestamp
+  ipAddress?: string;
+}
+
 export interface WorkRecord {
   id: string;
   employeeId: string; // Firebase Auth UID
@@ -251,6 +270,8 @@ export interface WorkRecord {
   approvedBy?: string; // User ID who approved
   approvedAt?: string; // Approval timestamp
   notes?: string;
+  clockInLocation?: ClockInLocation; // GPS location at clock-in
+  clockInSystemLocation?: ClockInSystemLocation; // System info at clock-in
   createdAt: string;
   updatedAt: string;
 }
@@ -264,6 +285,25 @@ export interface BankDetails {
   branch: string;
   idNumber?: string; // Optional ID/NIC number
   swiftCode?: string; // Optional SWIFT/BIC code
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EmployeeLocation {
+  id: string;
+  employeeId: string; // Employee document ID (not Firebase Auth UID)
+  employeeName: string;
+  siteId: string; // Site ID
+  siteName: string; // Site name
+  address?: string; // Human-readable address (fetched from site)
+  latitude: number;
+  longitude: number;
+  radiusMeters: number; // Allowed radius in meters (default: 50)
+  allowWorkFromAnywhere: boolean; // If true, no location validation required
+  status: "pending" | "approved" | "rejected"; // Approval status
+  approvedBy?: string; // User ID who approved
+  approvedAt?: string; // Approval timestamp
+  notes?: string; // Additional notes
   createdAt: string;
   updatedAt: string;
 }

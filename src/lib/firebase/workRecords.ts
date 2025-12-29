@@ -35,6 +35,37 @@ const calculateHours = (clockIn: string, clockOut: string): number => {
 // Convert Firestore document to WorkRecord
 const docToWorkRecord = (doc: any): WorkRecord => {
   const data = doc.data();
+  
+  // Convert location data if present
+  let clockInLocation = undefined;
+  if (data.clockInLocation) {
+    clockInLocation = {
+      latitude: data.clockInLocation.latitude ?? null,
+      longitude: data.clockInLocation.longitude ?? null,
+      accuracy: data.clockInLocation.accuracy ?? null,
+      timestamp: data.clockInLocation.timestamp 
+        ? (data.clockInLocation.timestamp.toDate ? data.clockInLocation.timestamp.toDate().toISOString() : data.clockInLocation.timestamp)
+        : new Date().toISOString(),
+      address: data.clockInLocation.address,
+      error: data.clockInLocation.error,
+    };
+  }
+  
+  let clockInSystemLocation = undefined;
+  if (data.clockInSystemLocation) {
+    clockInSystemLocation = {
+      timezone: data.clockInSystemLocation.timezone || "",
+      timezoneOffset: data.clockInSystemLocation.timezoneOffset ?? 0,
+      language: data.clockInSystemLocation.language || "",
+      userAgent: data.clockInSystemLocation.userAgent || "",
+      platform: data.clockInSystemLocation.platform || "",
+      timestamp: data.clockInSystemLocation.timestamp
+        ? (data.clockInSystemLocation.timestamp.toDate ? data.clockInSystemLocation.timestamp.toDate().toISOString() : data.clockInSystemLocation.timestamp)
+        : new Date().toISOString(),
+      ipAddress: data.clockInSystemLocation.ipAddress,
+    };
+  }
+  
   return {
     id: doc.id,
     employeeId: data.employeeId || "",
@@ -52,6 +83,8 @@ const docToWorkRecord = (doc: any): WorkRecord => {
     approvedBy: data.approvedBy || undefined,
     approvedAt: data.approvedAt ? (data.approvedAt.toDate ? data.approvedAt.toDate().toISOString() : data.approvedAt) : undefined,
     notes: data.notes || undefined,
+    clockInLocation,
+    clockInSystemLocation,
     createdAt: data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate().toISOString() : data.createdAt) : "",
     updatedAt: data.updatedAt ? (data.updatedAt.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt) : "",
   };
@@ -79,6 +112,30 @@ const workRecordToDoc = (record: Omit<WorkRecord, "id">): any => {
   if (record.notes) doc.notes = record.notes;
   if (record.isLeave !== undefined) doc.isLeave = record.isLeave;
   if (record.leaveType) doc.leaveType = record.leaveType;
+  
+  // Handle location data
+  if (record.clockInLocation) {
+    doc.clockInLocation = {
+      latitude: record.clockInLocation.latitude,
+      longitude: record.clockInLocation.longitude,
+      accuracy: record.clockInLocation.accuracy,
+      timestamp: Timestamp.fromDate(new Date(record.clockInLocation.timestamp)),
+      address: record.clockInLocation.address,
+      error: record.clockInLocation.error,
+    };
+  }
+  
+  if (record.clockInSystemLocation) {
+    doc.clockInSystemLocation = {
+      timezone: record.clockInSystemLocation.timezone,
+      timezoneOffset: record.clockInSystemLocation.timezoneOffset,
+      language: record.clockInSystemLocation.language,
+      userAgent: record.clockInSystemLocation.userAgent,
+      platform: record.clockInSystemLocation.platform,
+      timestamp: Timestamp.fromDate(new Date(record.clockInSystemLocation.timestamp)),
+      ipAddress: record.clockInSystemLocation.ipAddress,
+    };
+  }
 
   return doc;
 };
@@ -208,7 +265,9 @@ export const clockIn = async (
   employeeId: string,
   employeeName: string,
   siteId?: string,
-  siteName?: string
+  siteName?: string,
+  clockInLocation?: WorkRecord["clockInLocation"],
+  clockInSystemLocation?: WorkRecord["clockInSystemLocation"]
 ): Promise<string> => {
   try {
     // Check if already clocked in today
@@ -231,6 +290,8 @@ export const clockIn = async (
       hoursWorked: 0,
       isWeekend: isWeekend(now),
       approvalStatus: "pending",
+      clockInLocation,
+      clockInSystemLocation,
       createdAt: clockInTime,
       updatedAt: clockInTime,
     };

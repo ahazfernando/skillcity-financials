@@ -16,6 +16,8 @@ import {
 } from "@/lib/firebase/workRecords";
 import { getAllocationsByEmployee } from "@/lib/firebase/siteEmployeeAllocations";
 import { getEmployeePayRatesByEmployee } from "@/lib/firebase/employeePayRates";
+import { getAllLocationData } from "@/lib/location";
+import { WorkRecord } from "@/types/financial";
 import { formatCurrency } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -130,7 +132,42 @@ const EmployeeDashboard = () => {
         }
       }
 
-      await clockIn(employeeId, employeeName, siteId, siteName);
+      // Capture location data
+      let clockInLocation: WorkRecord["clockInLocation"] | undefined;
+      let clockInSystemLocation: WorkRecord["clockInSystemLocation"] | undefined;
+
+      try {
+        const { employeeLocation, systemLocation } = await getAllLocationData();
+        
+        // Build clockInLocation object
+        if (employeeLocation.latitude !== null || employeeLocation.error) {
+          clockInLocation = {
+            latitude: employeeLocation.latitude,
+            longitude: employeeLocation.longitude,
+            accuracy: employeeLocation.accuracy,
+            timestamp: employeeLocation.timestamp.toISOString(),
+            address: employeeLocation.address,
+            error: employeeLocation.error,
+          };
+        }
+
+        // Build clockInSystemLocation object
+        clockInSystemLocation = {
+          timezone: systemLocation.timezone,
+          timezoneOffset: systemLocation.timezoneOffset,
+          language: systemLocation.language,
+          userAgent: systemLocation.userAgent,
+          platform: systemLocation.platform,
+          timestamp: systemLocation.timestamp.toISOString(),
+          ipAddress: systemLocation.ipAddress,
+        };
+      } catch (locationError) {
+        // Don't fail clock-in if location capture fails
+        console.error("Failed to capture location:", locationError);
+        // Continue with clock-in without location
+      }
+
+      await clockIn(employeeId, employeeName, siteId, siteName, clockInLocation, clockInSystemLocation);
       toast.success("Clocked in successfully!");
       await loadDashboardData();
     } catch (error: any) {

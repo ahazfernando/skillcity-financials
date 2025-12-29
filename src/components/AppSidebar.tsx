@@ -22,7 +22,8 @@ import {
   CheckSquare,
   Sparkles,
   Package,
-  FolderTree
+  FolderTree,
+  MapPin
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -47,6 +48,7 @@ const menuItems = [
   { title: "Reports & Analytics", url: "/reports", icon: BarChart3 },
   { title: "Employees", url: "/employees", icon: Users },
   { title: "Employee Pay Rates", url: "/employee-pay-rates", icon: DollarSign },
+  { title: "Employee Locations", url: "/employee-locations", icon: MapPin },
   { title: "Sites", url: "/sites", icon: Building2 },
   { title: "Site Employee Allocations", url: "/site-employee-allocations", icon: Network },
   { title: "Clients", url: "/clients", icon: UserCircle },
