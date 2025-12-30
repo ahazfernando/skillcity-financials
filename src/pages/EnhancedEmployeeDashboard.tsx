@@ -339,6 +339,7 @@ const EnhancedEmployeeDashboard = () => {
         const { employeeLocation, systemLocation } = await getAllLocationData();
         
         // Build clockInLocation object
+        // Only include location if we have valid coordinates or an error to track
         if (employeeLocation.latitude !== null || employeeLocation.error) {
           clockInLocation = {
             latitude: employeeLocation.latitude,
@@ -348,6 +349,13 @@ const EnhancedEmployeeDashboard = () => {
             address: employeeLocation.address,
             error: employeeLocation.error,
           };
+          
+          // Only log location errors if they're unexpected (not POSITION_UNAVAILABLE)
+          if (employeeLocation.error && 
+              employeeLocation.error !== 'Location information is unavailable' &&
+              employeeLocation.error !== 'Position update is unavailable') {
+            console.warn("Location capture warning:", employeeLocation.error);
+          }
         }
 
         // Build clockInSystemLocation object
@@ -360,9 +368,14 @@ const EnhancedEmployeeDashboard = () => {
           timestamp: systemLocation.timestamp.toISOString(),
           ipAddress: systemLocation.ipAddress,
         };
-      } catch (locationError) {
+      } catch (locationError: any) {
         // Don't fail clock-in if location capture fails
-        console.error("Failed to capture location:", locationError);
+        // Only log if it's not a geolocation unavailable error (which is expected)
+        if (locationError?.code !== 2 && 
+            locationError?.message !== 'Position update is unavailable' &&
+            locationError?.message !== 'Location information is unavailable') {
+          console.error("Failed to capture location:", locationError);
+        }
         // Continue with clock-in without location
       }
 

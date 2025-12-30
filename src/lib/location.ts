@@ -53,18 +53,23 @@ export const getEmployeeLocation = (): Promise<LocationData> => {
         });
       },
       (error) => {
-        let errorMessage = 'Unknown error';
-        switch (error.code) {
-          case error.PERMISSION_DENIED:
-            errorMessage = 'User denied the request for Geolocation';
-            break;
-          case error.POSITION_UNAVAILABLE:
-            errorMessage = 'Location information is unavailable';
-            break;
-          case error.TIMEOUT:
-            errorMessage = 'The request to get user location timed out';
-            break;
+        // Handle geolocation errors gracefully without logging to console
+        // This prevents "Position update is unavailable" from cluttering the console
+        let errorMessage = 'Location information is unavailable';
+        
+        // Handle error codes (numeric values)
+        if (error.code === 1 || error.code === error.PERMISSION_DENIED) {
+          errorMessage = 'User denied the request for Geolocation';
+        } else if (error.code === 2 || error.code === error.POSITION_UNAVAILABLE) {
+          errorMessage = 'Location information is unavailable';
+        } else if (error.code === 3 || error.code === error.TIMEOUT) {
+          errorMessage = 'The request to get user location timed out';
+        } else if (error.message) {
+          errorMessage = error.message;
         }
+        
+        // Resolve with error instead of rejecting to prevent unhandled promise rejections
+        // This prevents console errors from appearing
         resolve({
           latitude: null,
           longitude: null,

@@ -155,34 +155,90 @@ const Sites = () => {
   const handleGetCurrentLocation = async () => {
     try {
       setIsGettingLocation(true);
+      
       if (!navigator.geolocation) {
         toast.error("Geolocation is not supported by your browser");
         return;
       }
 
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0,
+      // First try with high accuracy, then fallback to lower accuracy if needed
+      const tryGetLocation = (options: PositionOptions): Promise<GeolocationPosition> => {
+        return new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              resolve(position);
+            },
+            (error) => {
+              reject(error);
+            },
+            options
+          );
         });
-      });
+      };
 
-      setFormData({
-        ...formData,
-        latitude: position.coords.latitude.toString(),
-        longitude: position.coords.longitude.toString(),
-      });
-      toast.success("Location captured successfully");
+      let position: GeolocationPosition;
+      
+      try {
+        // First attempt: High accuracy with longer timeout
+        position = await Promise.race([
+          tryGetLocation({
+            enableHighAccuracy: true,
+            timeout: 15000, // Increased timeout
+            maximumAge: 60000, // Allow 1 minute old cached position
+          }),
+          // Fallback timeout to prevent hanging
+          new Promise<GeolocationPosition>((_, reject) => 
+            setTimeout(() => reject(new Error("Location request timed out")), 20000)
+          ),
+        ]);
+      } catch (firstError: any) {
+        // If high accuracy fails, try with lower accuracy
+        console.log("High accuracy failed, trying with lower accuracy...", firstError);
+        try {
+          position = await Promise.race([
+            tryGetLocation({
+              enableHighAccuracy: false,
+              timeout: 15000,
+              maximumAge: 300000, // Allow 5 minute old cached position
+            }),
+            new Promise<GeolocationPosition>((_, reject) => 
+              setTimeout(() => reject(new Error("Location request timed out")), 20000)
+            ),
+          ]);
+        } catch (secondError: any) {
+          throw secondError;
+        }
+      }
+
+      if (position && position.coords) {
+        setFormData({
+          ...formData,
+          latitude: position.coords.latitude.toString(),
+          longitude: position.coords.longitude.toString(),
+        });
+        toast.success(`Location captured successfully (accuracy: ${Math.round(position.coords.accuracy || 0)}m)`);
+      } else {
+        throw new Error("Invalid position data received");
+      }
     } catch (error: any) {
-      console.error("Error getting location:", error);
+      // Better error logging
+      const errorDetails = {
+        message: error?.message || "Unknown error",
+        code: error?.code,
+        name: error?.name,
+        toString: error?.toString?.(),
+      };
+      console.error("Error getting location:", errorDetails);
+      
       let errorMessage = "Failed to get location";
-      if (error.code === 1) {
-        errorMessage = "Location permission denied";
-      } else if (error.code === 2) {
-        errorMessage = "Location unavailable";
-      } else if (error.code === 3) {
-        errorMessage = "Location request timed out";
+      if (error?.code === 1) {
+        errorMessage = "Location permission denied. Please enable location access in your browser settings.";
+      } else if (error?.code === 2) {
+        errorMessage = "Location unavailable. Please check your device's location services and ensure GPS/Wi-Fi is enabled.";
+      } else if (error?.code === 3 || error?.message?.includes("timed out")) {
+        errorMessage = "Location request timed out. Please ensure your device's location services are enabled and try again.";
+      } else if (error?.message) {
+        errorMessage = error.message;
       }
       toast.error(errorMessage);
     } finally {

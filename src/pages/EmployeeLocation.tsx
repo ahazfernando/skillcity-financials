@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,103 +17,66 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, MapPin, Plus, Edit2, Trash2, CheckCircle2, XCircle, Loader2, AlertCircle, ExternalLink, Eye } from "lucide-react";
-import { EmployeeLocation, Employee, Site } from "@/types/financial";
+import { MapPin, Plus, Edit2, Trash2, Loader2, Eye, ExternalLink, CheckCircle2, XCircle, Clock } from "lucide-react";
+import { EmployeeLocation, Site } from "@/types/financial";
 import {
-  getAllEmployeeLocations,
+  getEmployeeLocationsByEmployee,
   addEmployeeLocation,
   updateEmployeeLocation,
   deleteEmployeeLocation,
-  approveEmployeeLocation,
-  rejectEmployeeLocation,
 } from "@/lib/firebase/employeeLocations";
-import { getAllEmployees } from "@/lib/firebase/employees";
 import { getAllSites } from "@/lib/firebase/sites";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { isWithinRadius } from "@/lib/location";
 
-const EmployeeLocations = () => {
+const EmployeeLocation = () => {
   const { user, userData } = useAuth();
   const [locations, setLocations] = useState<EmployeeLocation[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [searchValue, setSearchValue] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
   const [editingLocation, setEditingLocation] = useState<EmployeeLocation | null>(null);
-  const [deletingLocationId, setDeletingLocationId] = useState<string | null>(null);
+  const [viewingLocation, setViewingLocation] = useState<EmployeeLocation | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
-  const [viewingLocation, setViewingLocation] = useState<EmployeeLocation | null>(null);
-  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
 
   const [formData, setFormData] = useState({
-    employeeId: "",
     siteId: "",
     address: "",
     latitude: "",
     longitude: "",
     radiusMeters: "50",
     allowWorkFromAnywhere: false,
-    status: "pending" as "pending" | "approved" | "rejected",
     notes: "",
   });
 
-  // Check if user is admin
-  const isAdmin = userData?.role === "admin" || userData?.isAdmin;
-
   useEffect(() => {
-    if (isAdmin) {
+    if (user?.uid) {
       loadData();
     }
-  }, [isAdmin]);
+  }, [user]);
 
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const [allLocations, allEmployees, allSites] = await Promise.all([
-        getAllEmployeeLocations(),
-        getAllEmployees(),
+      const [employeeLocations, allSites] = await Promise.all([
+        getEmployeeLocationsByEmployee(user?.uid || ""),
         getAllSites(),
       ]);
-      setLocations(allLocations);
-      // Filter to only show employees (not clients)
-      const actualEmployees = allEmployees.filter(
-        (emp) => !emp.type || emp.type === "employee"
-      );
-      setEmployees(actualEmployees);
-      setSites(allSites);
+      setLocations(employeeLocations);
+      setSites(allSites.filter(s => s.status === "active"));
     } catch (error: any) {
-      const errorDetails = {
-        message: error?.message || "Unknown error",
-        code: error?.code,
-        name: error?.name,
-        toString: error?.toString?.(),
-      };
-      console.error("Error loading data:", errorDetails);
-      toast.error(error?.message || "Failed to load employee locations");
+      console.error("Error loading data:", error);
+      toast.error("Failed to load your locations");
     } finally {
       setIsLoading(false);
     }
@@ -129,16 +91,11 @@ const EmployeeLocations = () => {
         return;
       }
 
-      // First try with high accuracy, then fallback to lower accuracy if needed
       const tryGetLocation = (options: PositionOptions): Promise<GeolocationPosition> => {
         return new Promise((resolve, reject) => {
           navigator.geolocation.getCurrentPosition(
-            (position) => {
-              resolve(position);
-            },
-            (error) => {
-              reject(error);
-            },
+            (position) => resolve(position),
+            (error) => reject(error),
             options
           );
         });
@@ -147,35 +104,28 @@ const EmployeeLocations = () => {
       let position: GeolocationPosition;
       
       try {
-        // First attempt: High accuracy with longer timeout
         position = await Promise.race([
           tryGetLocation({
             enableHighAccuracy: true,
-            timeout: 15000, // Increased timeout
-            maximumAge: 60000, // Allow 1 minute old cached position
+            timeout: 15000,
+            maximumAge: 60000,
           }),
-          // Fallback timeout to prevent hanging
           new Promise<GeolocationPosition>((_, reject) => 
             setTimeout(() => reject(new Error("Location request timed out")), 20000)
           ),
         ]);
       } catch (firstError: any) {
-        // If high accuracy fails, try with lower accuracy
         console.log("High accuracy failed, trying with lower accuracy...", firstError);
-        try {
-          position = await Promise.race([
-            tryGetLocation({
-              enableHighAccuracy: false,
-              timeout: 15000,
-              maximumAge: 300000, // Allow 5 minute old cached position
-            }),
-            new Promise<GeolocationPosition>((_, reject) => 
-              setTimeout(() => reject(new Error("Location request timed out")), 20000)
-            ),
-          ]);
-        } catch (secondError: any) {
-          throw secondError;
-        }
+        position = await Promise.race([
+          tryGetLocation({
+            enableHighAccuracy: false,
+            timeout: 15000,
+            maximumAge: 300000,
+          }),
+          new Promise<GeolocationPosition>((_, reject) => 
+            setTimeout(() => reject(new Error("Location request timed out")), 20000)
+          ),
+        ]);
       }
 
       if (position && position.coords) {
@@ -189,12 +139,9 @@ const EmployeeLocations = () => {
         throw new Error("Invalid position data received");
       }
     } catch (error: any) {
-      // Better error logging
       const errorDetails = {
         message: error?.message || "Unknown error",
         code: error?.code,
-        name: error?.name,
-        toString: error?.toString?.(),
       };
       console.error("Error getting location:", errorDetails);
       
@@ -235,46 +182,67 @@ const EmployeeLocations = () => {
     }
   };
 
-  const handleAdd = () => {
-    setEditingLocation(null);
+  const resetForm = () => {
     setFormData({
-      employeeId: "",
       siteId: "",
       address: "",
       latitude: "",
       longitude: "",
       radiusMeters: "50",
       allowWorkFromAnywhere: false,
-      status: "pending",
       notes: "",
     });
+    setEditingLocation(null);
+  };
+
+  const handleAdd = () => {
+    resetForm();
     setIsAddDialogOpen(true);
   };
 
   const handleEdit = (location: EmployeeLocation) => {
+    // Only allow editing if status is pending or rejected
+    if (location.status === "approved") {
+      toast.error("Approved locations cannot be edited. Please create a new location request.");
+      return;
+    }
     setEditingLocation(location);
     setFormData({
-      employeeId: location.employeeId,
       siteId: location.siteId,
       address: location.address || "",
       latitude: location.latitude.toString(),
       longitude: location.longitude.toString(),
       radiusMeters: location.radiusMeters.toString(),
       allowWorkFromAnywhere: location.allowWorkFromAnywhere,
-      status: location.status,
       notes: location.notes || "",
     });
     setIsEditDialogOpen(true);
   };
 
-  const handleDelete = (location: EmployeeLocation) => {
-    setDeletingLocationId(location.id);
-    setIsDeleteDialogOpen(true);
+  const handleDelete = async (location: EmployeeLocation) => {
+    // Only allow deleting if status is pending or rejected
+    if (location.status === "approved") {
+      toast.error("Approved locations cannot be deleted. Please contact an administrator.");
+      return;
+    }
+    try {
+      await deleteEmployeeLocation(location.id);
+      toast.success("Location request deleted successfully");
+      await loadData();
+    } catch (error: any) {
+      console.error("Error deleting location:", error);
+      toast.error(error.message || "Failed to delete location");
+    }
   };
 
   const handleSave = async () => {
-    if (!formData.employeeId || !formData.siteId) {
-      toast.error("Please fill in all required fields");
+    if (!user?.uid || !userData) {
+      toast.error("User information not available");
+      return;
+    }
+
+    if (!formData.siteId) {
+      toast.error("Please select a site");
       return;
     }
 
@@ -285,12 +253,6 @@ const EmployeeLocations = () => {
 
     try {
       setIsSaving(true);
-      const selectedEmployee = employees.find((e) => e.id === formData.employeeId);
-      if (!selectedEmployee) {
-        toast.error("Employee not found");
-        return;
-      }
-
       const selectedSite = sites.find((s) => s.id === formData.siteId);
       if (!selectedSite) {
         toast.error("Site not found");
@@ -298,8 +260,8 @@ const EmployeeLocations = () => {
       }
 
       const locationData = {
-        employeeId: formData.employeeId,
-        employeeName: selectedEmployee.name,
+        employeeId: user.uid,
+        employeeName: userData.name || user.email || "Employee",
         siteId: formData.siteId,
         siteName: selectedSite.name,
         address: formData.address || undefined,
@@ -307,68 +269,28 @@ const EmployeeLocations = () => {
         longitude: formData.allowWorkFromAnywhere ? 0 : parseFloat(formData.longitude),
         radiusMeters: parseInt(formData.radiusMeters) || 50,
         allowWorkFromAnywhere: formData.allowWorkFromAnywhere,
-        status: formData.status,
+        status: "pending" as const, // Always set to pending for employee submissions
         notes: formData.notes || undefined,
       };
 
       if (editingLocation) {
         await updateEmployeeLocation(editingLocation.id, locationData);
-        toast.success("Location updated successfully");
+        toast.success("Location request updated successfully. Waiting for admin approval.");
       } else {
         await addEmployeeLocation(locationData);
-        toast.success("Location added successfully");
+        toast.success("Location request submitted successfully. Waiting for admin approval.");
       }
 
       setIsAddDialogOpen(false);
       setIsEditDialogOpen(false);
       setEditingLocation(null);
+      resetForm();
       await loadData();
     } catch (error: any) {
       console.error("Error saving location:", error);
       toast.error(error.message || "Failed to save location");
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const handleDeleteConfirm = async () => {
-    if (!deletingLocationId) return;
-
-    try {
-      await deleteEmployeeLocation(deletingLocationId);
-      toast.success("Location deleted successfully");
-      setIsDeleteDialogOpen(false);
-      setDeletingLocationId(null);
-      await loadData();
-    } catch (error: any) {
-      console.error("Error deleting location:", error);
-      toast.error(error.message || "Failed to delete location");
-    }
-  };
-
-  const handleApprove = async (location: EmployeeLocation) => {
-    if (!user?.uid) return;
-
-    try {
-      await approveEmployeeLocation(location.id, user.uid);
-      toast.success("Location approved successfully");
-      await loadData();
-    } catch (error: any) {
-      console.error("Error approving location:", error);
-      toast.error(error.message || "Failed to approve location");
-    }
-  };
-
-  const handleReject = async (location: EmployeeLocation) => {
-    if (!user?.uid) return;
-
-    try {
-      await rejectEmployeeLocation(location.id, user.uid);
-      toast.success("Location rejected successfully");
-      await loadData();
-    } catch (error: any) {
-      console.error("Error rejecting location:", error);
-      toast.error(error.message || "Failed to reject location");
     }
   };
 
@@ -387,227 +309,148 @@ const EmployeeLocations = () => {
     window.open(url, '_blank');
   };
 
-  // Filter locations
-  const filteredLocations = locations.filter((location) => {
-    const matchesSearch =
-      location.employeeName.toLowerCase().includes(searchValue.toLowerCase()) ||
-      location.siteName.toLowerCase().includes(searchValue.toLowerCase()) ||
-      (location.address && location.address.toLowerCase().includes(searchValue.toLowerCase()));
-    
-    const matchesStatus = statusFilter === "all" || location.status === statusFilter;
-
-    return matchesSearch && matchesStatus;
-  });
-
-  // Get employee name by ID
-  const getEmployeeName = (employeeId: string) => {
-    const employee = employees.find((e) => e.id === employeeId);
-    return employee?.name || "Unknown";
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "approved":
+        return <Badge className="bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20"><CheckCircle2 className="h-3 w-3 mr-1" />Approved</Badge>;
+      case "rejected":
+        return <Badge className="bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20"><XCircle className="h-3 w-3 mr-1" />Rejected</Badge>;
+      case "pending":
+        return <Badge className="bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/20"><Clock className="h-3 w-3 mr-1" />Pending</Badge>;
+      default:
+        return <Badge>{status}</Badge>;
+    }
   };
-
-  if (!isAdmin) {
-    return (
-      <div className="space-y-4 sm:space-y-6">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight">Employee Locations</h2>
-          <p className="text-sm sm:text-base text-muted-foreground">Manage employee work locations</p>
-        </div>
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            You do not have permission to access this page. Admin access is required.
-          </AlertDescription>
-        </Alert>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6 sm:space-y-8">
       {/* Header */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-500/10 via-gray-500/5 to-background border border-slate-500/20 p-6 sm:p-8">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-500/10 via-indigo-500/5 to-background border border-blue-500/20 p-6 sm:p-8">
         <div className="absolute inset-0 bg-grid-pattern opacity-5"></div>
         <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="space-y-2">
             <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-              Employee Locations
+              My Work Locations
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground">
-              Manage approved work locations for employees
+              Set your work locations for clock-in validation. Locations require admin approval.
             </p>
           </div>
           <Button onClick={handleAdd} className="w-full sm:w-auto">
             <Plus className="mr-2 h-4 w-4" />
-            Add Location
+            Add Location Request
           </Button>
         </div>
       </div>
 
-      {/* Filters */}
-      <Card className="rounded-3xl">
-        <CardHeader>
-          <CardTitle>Filters</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by employee name, site name, or address..."
-                  value={searchValue}
-                  onChange={(e) => setSearchValue(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <div className="w-full sm:w-48">
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Filter by status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="approved">Approved</SelectItem>
-                  <SelectItem value="rejected">Rejected</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Locations Table */}
-      <Card className="rounded-3xl">
-        <CardHeader>
-          <CardTitle>Employee Locations ({filteredLocations.length})</CardTitle>
+      {/* Locations List */}
+      <Card className="rounded-3xl border-2 shadow-xl">
+        <CardHeader className="bg-gradient-to-r from-blue-500/10 via-indigo-500/5 to-muted/30 border-b-2">
+          <CardTitle>My Location Requests ({locations.length})</CardTitle>
           <CardDescription>
-            Manage work locations for employees. Approved locations can be used for clock-in validation.
+            View and manage your work location requests. Approved locations can be used for clock-in validation.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           {isLoading ? (
             <div className="space-y-4">
               {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-16 w-full" />
+                <Skeleton key={i} className="h-24 w-full" />
               ))}
             </div>
-          ) : filteredLocations.length === 0 ? (
+          ) : locations.length === 0 ? (
             <div className="text-center py-12">
               <MapPin className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">No locations found</p>
+              <p className="text-muted-foreground mb-2">No location requests yet</p>
+              <p className="text-sm text-muted-foreground">Add a location request to get started</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Employee</TableHead>
-                    <TableHead>Site</TableHead>
-                    <TableHead>Address</TableHead>
-                    <TableHead>Coordinates</TableHead>
-                    <TableHead>Radius</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredLocations.map((location) => (
-                    <TableRow key={location.id}>
-                      <TableCell className="font-medium">{location.employeeName}</TableCell>
-                      <TableCell>{location.siteName}</TableCell>
-                      <TableCell>{location.address || "-"}</TableCell>
-                      <TableCell>
-                        {location.allowWorkFromAnywhere ? (
-                          <Badge variant="outline">Anywhere</Badge>
-                        ) : (
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-sm">
-                              {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
-                            </span>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleViewLocation(location)}
-                              className="h-6 w-6 p-0"
-                              title="View on map"
-                            >
-                              <Eye className="h-3 w-3" />
-                            </Button>
+            <div className="space-y-4">
+              {locations.map((location) => (
+                <Card key={location.id} className="border-2">
+                  <CardContent className="pt-6">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                      <div className="flex-1 space-y-3">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <h3 className="font-semibold text-lg">{location.siteName}</h3>
+                            {location.address && (
+                              <p className="text-sm text-muted-foreground mt-1">{location.address}</p>
+                            )}
                           </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {location.allowWorkFromAnywhere ? (
-                          "-"
-                        ) : (
-                          `${location.radiusMeters}m`
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            location.status === "approved"
-                              ? "default"
-                              : location.status === "rejected"
-                              ? "destructive"
-                              : "secondary"
-                          }
-                        >
-                          {location.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
+                          {getStatusBadge(location.status)}
+                        </div>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                           {!location.allowWorkFromAnywhere && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleViewLocation(location)}
-                              title="View on map"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                          )}
-                          {location.status === "pending" && (
                             <>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleApprove(location)}
-                              >
-                                <CheckCircle2 className="h-4 w-4 text-green-600" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleReject(location)}
-                              >
-                                <XCircle className="h-4 w-4 text-red-600" />
-                              </Button>
+                              <div>
+                                <span className="text-muted-foreground">Coordinates: </span>
+                                <span className="font-mono">
+                                  {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-muted-foreground">Radius: </span>
+                                <span>{location.radiusMeters}m</span>
+                              </div>
                             </>
                           )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEdit(location)}
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDelete(location)}
-                          >
-                            <Trash2 className="h-4 w-4 text-destructive" />
-                          </Button>
+                          {location.allowWorkFromAnywhere && (
+                            <div>
+                              <Badge variant="outline">Work from Anywhere</Badge>
+                            </div>
+                          )}
+                          {location.approvedAt && (
+                            <div>
+                              <span className="text-muted-foreground">Approved: </span>
+                              <span>{new Date(location.approvedAt).toLocaleDateString()}</span>
+                            </div>
+                          )}
                         </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+
+                        {location.notes && (
+                          <div className="text-sm">
+                            <span className="text-muted-foreground">Notes: </span>
+                            <span>{location.notes}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {!location.allowWorkFromAnywhere && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleViewLocation(location)}
+                            title="View on map"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {location.status !== "approved" && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEdit(location)}
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDelete(location)}
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
         </CardContent>
@@ -621,43 +464,22 @@ const EmployeeLocations = () => {
             setIsAddDialogOpen(false);
             setIsEditDialogOpen(false);
             setEditingLocation(null);
+            resetForm();
           }
         }}
       >
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {editingLocation ? "Edit Location" : "Add Employee Location"}
+              {editingLocation ? "Edit Location Request" : "Add Location Request"}
             </DialogTitle>
             <DialogDescription>
               {editingLocation
-                ? "Update the employee location details"
-                : "Set up a new approved work location for an employee"}
+                ? "Update your location request. It will be resubmitted for admin approval."
+                : "Set up a new work location. Your request will be sent to an administrator for approval."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="employeeId">
-                Employee <span className="text-destructive">*</span>
-              </Label>
-              <Select
-                value={formData.employeeId}
-                onValueChange={(value) => setFormData({ ...formData, employeeId: value })}
-                disabled={!!editingLocation}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select employee" />
-                </SelectTrigger>
-                <SelectContent>
-                  {employees.map((employee) => (
-                    <SelectItem key={employee.id} value={employee.id}>
-                      {employee.name} ({employee.email})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
             <div className="space-y-2">
               <Label htmlFor="siteId">
                 Site <span className="text-destructive">*</span>
@@ -741,11 +563,6 @@ const EmployeeLocations = () => {
                     />
                   </div>
                 </div>
-                {formData.siteId && (
-                  <p className="text-xs text-muted-foreground">
-                    Coordinates are automatically fetched from the selected site. You can edit them if needed.
-                  </p>
-                )}
 
                 <Button
                   type="button"
@@ -768,7 +585,7 @@ const EmployeeLocations = () => {
                 </Button>
 
                 {/* Location Preview */}
-                {formData.latitude && formData.longitude && !formData.allowWorkFromAnywhere && (
+                {formData.latitude && formData.longitude && (
                   <div className="space-y-2">
                     <Label>Location Preview</Label>
                     <div className="rounded-lg overflow-hidden border-2 bg-muted" style={{ height: '200px' }}>
@@ -820,30 +637,11 @@ const EmployeeLocations = () => {
                     placeholder="50"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Employee must be within this radius to clock in (default: 50m)
+                    You must be within this radius to clock in (default: 50m)
                   </p>
                 </div>
               </>
             )}
-
-            <div className="space-y-2">
-              <Label htmlFor="status">Status</Label>
-              <Select
-                value={formData.status}
-                onValueChange={(value: "pending" | "approved" | "rejected") =>
-                  setFormData({ ...formData, status: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="approved">Approved</SelectItem>
-                  <SelectItem value="rejected">Rejected</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
 
             <div className="space-y-2">
               <Label htmlFor="notes">Notes (Optional)</Label>
@@ -863,6 +661,7 @@ const EmployeeLocations = () => {
                 setIsAddDialogOpen(false);
                 setIsEditDialogOpen(false);
                 setEditingLocation(null);
+                resetForm();
               }}
             >
               Cancel
@@ -874,34 +673,14 @@ const EmployeeLocations = () => {
                   Saving...
                 </>
               ) : (
-                "Save"
+                "Submit for Approval"
               )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the employee location.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeletingLocationId(null)}>
-              Cancel
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive">
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* View Location on Map Dialog */}
+      {/* View Location Dialog */}
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
         <DialogContent className="max-w-4xl w-full">
           <DialogHeader>
@@ -909,7 +688,7 @@ const EmployeeLocations = () => {
             <DialogDescription>
               {viewingLocation && (
                 <>
-                  {viewingLocation.employeeName} - {viewingLocation.siteName}
+                  {viewingLocation.siteName}
                   {viewingLocation.address && ` • ${viewingLocation.address}`}
                 </>
               )}
@@ -917,7 +696,7 @@ const EmployeeLocations = () => {
           </DialogHeader>
           {viewingLocation && !viewingLocation.allowWorkFromAnywhere && (
             <div className="space-y-4">
-              <div className="rounded-lg overflow-hidden border-2 bg-muted" style={{ height: '400px', position: 'relative' }}>
+              <div className="rounded-lg overflow-hidden border-2 bg-muted" style={{ height: '400px' }}>
                 <iframe
                   width="100%"
                   height="100%"
@@ -978,4 +757,4 @@ const EmployeeLocations = () => {
   );
 };
 
-export default EmployeeLocations;
+export default EmployeeLocation;

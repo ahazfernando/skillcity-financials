@@ -87,7 +87,27 @@ export const getEmployeeLocationsByEmployee = async (employeeId: string): Promis
     );
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(docToEmployeeLocation);
-  } catch (error) {
+  } catch (error: any) {
+    // If index error, fallback to client-side filtering
+    if (error?.code === "failed-precondition" || error?.message?.includes("index")) {
+      console.warn("Index not found, using client-side filtering. Please deploy Firestore indexes.");
+      try {
+        // Fallback: Get all locations and filter client-side
+        const locationsRef = collection(db, EMPLOYEE_LOCATIONS_COLLECTION);
+        const q = query(locationsRef, where("employeeId", "==", employeeId));
+        const querySnapshot = await getDocs(q);
+        const locations = querySnapshot.docs.map(docToEmployeeLocation);
+        // Sort by createdAt descending on client side
+        return locations.sort((a, b) => {
+          const dateA = new Date(a.createdAt).getTime();
+          const dateB = new Date(b.createdAt).getTime();
+          return dateB - dateA;
+        });
+      } catch (fallbackError) {
+        console.error("Error in fallback query:", fallbackError);
+        throw fallbackError;
+      }
+    }
     console.error("Error fetching employee locations by employee:", error);
     throw error;
   }
@@ -105,13 +125,14 @@ export const getApprovedEmployeeLocationsByEmployee = async (employeeId: string)
     );
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(docToEmployeeLocation);
-  } catch (error) {
-    console.error("Error fetching approved employee locations:", error);
+  } catch (error: any) {
     // If composite index error, fallback to client-side filtering
-    if (error instanceof Error && error.message.includes("index")) {
+    if (error?.code === "failed-precondition" || error?.message?.includes("index")) {
+      console.warn("Index not found, using client-side filtering. Please deploy Firestore indexes.");
       const allLocations = await getEmployeeLocationsByEmployee(employeeId);
       return allLocations.filter((loc) => loc.status === "approved");
     }
+    console.error("Error fetching approved employee locations:", error);
     throw error;
   }
 };
