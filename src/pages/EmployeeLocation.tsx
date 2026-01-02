@@ -24,7 +24,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { MapPin, Plus, Edit2, Trash2, Loader2, Eye, ExternalLink, CheckCircle2, XCircle, Clock } from "lucide-react";
-import { EmployeeLocation, Site } from "@/types/financial";
+import type { EmployeeLocation } from "@/types/financial";
+import { Site } from "@/types/financial";
 import {
   getEmployeeLocationsByEmployee,
   addEmployeeLocation,
