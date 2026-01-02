@@ -68,6 +68,7 @@ import { getAllPayrolls, addPayroll, updatePayroll, deletePayroll } from "@/lib/
 import { getAllInvoices } from "@/lib/firebase/invoices";
 import { getAllSites } from "@/lib/firebase/sites";
 import { getAllClients, addClient } from "@/lib/firebase/clients";
+import { addExpense } from "@/lib/firebase/expenses";
 import { uploadToCloudinary } from "@/lib/cloudinary/upload-client";
 import { toast } from "sonner";
 import { calculatePaymentDate } from "@/lib/paymentCycle";
@@ -124,6 +125,8 @@ const Payroll = () => {
     receiptUrl: "",
     frequency: "Monthly" as PayrollFrequency,
     paymentCycle: 45,
+    exchangeRate: "",
+    audEquivalent: "",
   });
 
   // Helper function to deduplicate employees
@@ -264,6 +267,22 @@ const Payroll = () => {
     setFormData((prev) => {
       const updated = { ...prev, [field]: value };
       
+      // Calculate AUD equivalent when LKR is selected and exchange rate/amount changes
+      if (field === "amountExclGst" || field === "exchangeRate" || field === "currency") {
+        if (updated.currency === "LKR" && updated.exchangeRate && updated.amountExclGst) {
+          const amount = parseFloat(String(updated.amountExclGst)) || 0;
+          const rate = parseFloat(String(updated.exchangeRate)) || 0;
+          if (rate > 0) {
+            const audAmount = amount / rate;
+            updated.audEquivalent = audAmount.toFixed(2);
+          } else {
+            updated.audEquivalent = "";
+          }
+        } else {
+          updated.audEquivalent = "";
+        }
+      }
+
       // Auto-calculate GST (10%) based on cash flow direction
       // Trigger calculation when amount, GST Registered status, or Calculate GST changes
       if (field === "amountExclGst" || field === "gstRegistered" || field === "calculateGst" || field === "modeOfCashFlow") {
@@ -676,15 +695,44 @@ const Payroll = () => {
         frequency: formData.frequency,
         paymentCycle: formData.paymentCycle,
         receiptUrl: receiptUrl || undefined,
+        ...(formData.currency === "LKR" && formData.exchangeRate && {
+          exchangeRate: parseFloat(formData.exchangeRate) || undefined,
+          audEquivalent: parseFloat(formData.audEquivalent) || undefined,
+        } as any),
       };
 
       const payrollId = await addPayroll(newPayroll);
       
+      // If currency is LKR, create an expense entry in AUD using the AUD equivalent
+      if (formData.currency === "LKR" && formData.exchangeRate && formData.audEquivalent) {
+        try {
+          const audAmount = parseFloat(formData.audEquivalent);
+          
+          if (audAmount > 0) {
+            await addExpense({
+              category: "other",
+              description: `Payroll: ${formData.name} - ${formData.amountExclGst} LKR (${audAmount.toFixed(2)} AUD)`,
+              amount: audAmount,
+              date: formattedDate, // Already in DD.MM.YYYY format
+              paymentMethod: formData.paymentMethod,
+              vendor: formData.name,
+              receiptUrl: receiptUrl || undefined,
+              notes: `Converted from ${formData.amountExclGst} LKR at exchange rate ${formData.exchangeRate} (1 AUD = ${formData.exchangeRate} LKR). Total LKR: ${formData.totalAmount}. Original payroll ID: ${payrollId}`,
+              status: "pending",
+            });
+            toast.success(`Payroll added successfully! Expense entry created: ${audAmount.toFixed(2)} AUD`);
+          }
+        } catch (error) {
+          console.error("Error creating expense entry:", error);
+          toast.warning("Payroll added, but failed to create expense entry. Please add it manually.");
+        }
+      } else {
+        toast.success("Payroll added successfully!");
+      }
+      
       // Reload payrolls
       const updatedPayrolls = await getAllPayrolls();
       setPayrolls(updatedPayrolls);
-      
-      toast.success("Payroll added successfully!");
       setIsAddDialogOpen(false);
       setReceiptFile(null);
       setEmployeePopoverOpen(false);
@@ -744,6 +792,8 @@ const Payroll = () => {
       receiptUrl: "",
       frequency: "Monthly",
       paymentCycle: 45,
+      exchangeRate: "",
+      audEquivalent: "",
     });
     setReceiptFile(null);
     setEditingPayrollId(null);
@@ -781,6 +831,8 @@ const Payroll = () => {
       receiptUrl: payroll.receiptUrl || "",
       frequency: payroll.frequency || "Monthly",
       paymentCycle: payroll.paymentCycle || 45,
+      exchangeRate: (payroll as any).exchangeRate || "",
+      audEquivalent: (payroll as any).audEquivalent || "",
     });
     setReceiptFile(null);
     setIsAddDialogOpen(true);
@@ -854,6 +906,10 @@ const Payroll = () => {
         ...(formData.frequency && { frequency: formData.frequency }),
         ...(formData.paymentCycle !== undefined && { paymentCycle: formData.paymentCycle }),
         ...(receiptUrl && { receiptUrl: receiptUrl }),
+        ...(formData.currency === "LKR" && formData.exchangeRate && {
+          exchangeRate: parseFloat(formData.exchangeRate) || undefined,
+          audEquivalent: parseFloat(formData.audEquivalent) || undefined,
+        } as any),
       };
 
       await updatePayroll(editingPayrollId, updatedPayroll);
@@ -2375,7 +2431,14 @@ const Payroll = () => {
                       <Label htmlFor="currency">Currency</Label>
                       <Select
                         value={formData.currency}
-                        onValueChange={(value) => handleInputChange("currency", value)}
+                        onValueChange={(value) => {
+                          handleInputChange("currency", value);
+                          // Clear exchange rate fields when switching away from LKR
+                          if (value !== "LKR") {
+                            handleInputChange("exchangeRate", "");
+                            handleInputChange("audEquivalent", "");
+                          }
+                        }}
                       >
                         <SelectTrigger id="currency">
                           <SelectValue />
@@ -2387,6 +2450,40 @@ const Payroll = () => {
                       </Select>
                     </div>
                   </div>
+
+                  {formData.currency === "LKR" && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="exchangeRate">LKR to AUD Exchange Rate *</Label>
+                        <Input
+                          id="exchangeRate"
+                          type="number"
+                          step="0.0001"
+                          value={formData.exchangeRate}
+                          onChange={(e) => handleInputChange("exchangeRate", e.target.value)}
+                          placeholder="e.g., 200.00"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Enter the exchange rate (1 AUD = X LKR)
+                        </p>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="audEquivalent">AUD Equivalent</Label>
+                        <Input
+                          id="audEquivalent"
+                          type="number"
+                          step="0.01"
+                          value={formData.audEquivalent}
+                          readOnly
+                          className="bg-muted"
+                          placeholder="Auto-calculated"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Amount converted to AUD
+                        </p>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">

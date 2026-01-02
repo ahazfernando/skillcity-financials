@@ -194,20 +194,16 @@ const Sites = () => {
       } catch (firstError: any) {
         // If high accuracy fails, try with lower accuracy
         console.log("High accuracy failed, trying with lower accuracy...", firstError);
-        try {
-          position = await Promise.race([
-            tryGetLocation({
-              enableHighAccuracy: false,
-              timeout: 15000,
-              maximumAge: 300000, // Allow 5 minute old cached position
-            }),
-            new Promise<GeolocationPosition>((_, reject) => 
-              setTimeout(() => reject(new Error("Location request timed out")), 20000)
-            ),
-          ]);
-        } catch (secondError: any) {
-          throw secondError;
-        }
+        position = await Promise.race([
+          tryGetLocation({
+            enableHighAccuracy: false,
+            timeout: 15000,
+            maximumAge: 300000, // Allow 5 minute old cached position
+          }),
+          new Promise<GeolocationPosition>((_, reject) => 
+            setTimeout(() => reject(new Error("Location request timed out")), 20000)
+          ),
+        ]);
       }
 
       if (position && position.coords) {
