@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { SearchFilter } from "@/components/SearchFilter";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Plus, FileText, X, Loader2, Check, ChevronsUpDown, Search, Edit2, LayoutGrid, Table as TableIcon, CalendarIcon, TrendingUp, TrendingDown, DollarSign, Trash2, Upload, File } from "lucide-react";
+import { Plus, FileText, X, Loader2, Check, ChevronsUpDown, Search, Edit2, LayoutGrid, Table as TableIcon, CalendarIcon, TrendingUp, TrendingDown, DollarSign, Trash2, Upload, File, Download, Eye } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -51,7 +51,7 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency, formatCurrencySimple } from "@/lib/utils";
 import { Calendar } from "@/components/ui/calendar";
 import { DateRange } from "react-day-picker";
 import { format } from "date-fns";
@@ -62,11 +62,13 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart";
-import { PaymentStatus, Employee, CashFlowMode, CashFlowType, PaymentMethod, PayrollFrequency, type Payroll, type Invoice } from "@/types/financial";
+import { PaymentStatus, Employee, CashFlowMode, CashFlowType, PaymentMethod, PayrollFrequency, type Payroll, type Invoice, type Client } from "@/types/financial";
 import { getAllEmployees, addEmployee } from "@/lib/firebase/employees";
 import { getAllPayrolls, addPayroll, updatePayroll, deletePayroll } from "@/lib/firebase/payroll";
 import { getAllInvoices } from "@/lib/firebase/invoices";
 import { getAllSites } from "@/lib/firebase/sites";
+import { getAllClients, addClient } from "@/lib/firebase/clients";
+import { uploadReceipt } from "@/lib/firebase/storage";
 import { toast } from "sonner";
 import { calculatePaymentDate } from "@/lib/paymentCycle";
 
@@ -85,12 +87,14 @@ const Payroll = () => {
   const [payrolls, setPayrolls] = useState<Payroll[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const [sites, setSites] = useState<any[]>([]);
   const [isProcessingInvoices, setIsProcessingInvoices] = useState(false);
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
   const [employeePopoverOpen, setEmployeePopoverOpen] = useState(false);
   const [employeeSearchValue, setEmployeeSearchValue] = useState("");
   const [isAddingEmployee, setIsAddingEmployee] = useState(false);
+  const [isAddingClient, setIsAddingClient] = useState(false);
   const [monthPopoverOpen, setMonthPopoverOpen] = useState(false);
   const [formMonthPopoverOpen, setFormMonthPopoverOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"card" | "table">("table");
@@ -170,11 +174,12 @@ const Payroll = () => {
         }
         
         // Fetch data - reload payrolls if new ones were created
-        const [fetchedPayrolls, fetchedInvoices, fetchedEmployees, fetchedSites] = await Promise.all([
+        const [fetchedPayrolls, fetchedInvoices, fetchedEmployees, fetchedSites, fetchedClients] = await Promise.all([
           getAllPayrolls(),
           getAllInvoices(),
           getAllEmployees(),
           getAllSites(),
+          getAllClients(),
         ]);
         
         // If new payrolls were created, show a toast notification
@@ -186,6 +191,7 @@ const Payroll = () => {
         // Filter out clients and inactive employees, then deduplicate
         const filteredEmployees = fetchedEmployees.filter(emp => emp.status === "active" && (!emp.type || emp.type === "employee"));
         setEmployees(deduplicateEmployees(filteredEmployees));
+        setClients(fetchedClients.filter(c => c.status === "active"));
         setSites(fetchedSites.filter(s => s.status === "active"));
       } catch (error) {
         console.error("Error loading data:", error);
@@ -198,6 +204,40 @@ const Payroll = () => {
 
     loadData();
   }, []);
+
+  // Auto-calculate GST whenever amount, GST Registered status, or Calculate GST changes
+  useEffect(() => {
+    if (formData.amountExclGst) {
+      const amountExclGst = parseFloat(String(formData.amountExclGst)) || 0;
+      const gst = amountExclGst * 0.10;
+      const gstRegistered = formData.gstRegistered === true;
+      const calculateGst = formData.calculateGst === true;
+      
+      // Calculate GST if either GST Registered is checked OR Calculate GST is set to Yes
+      const shouldCalculateGst = (gstRegistered || calculateGst) && amountExclGst > 0;
+      const gstAmount = shouldCalculateGst ? gst : 0;
+      
+      // Determine calculation logic based on type
+      const isEmployeePayroll = formData.typeOfCashFlow === "internal_payroll" || formData.typeOfCashFlow === "cleaner_payroll";
+      const isInvoice = formData.typeOfCashFlow === "invoice";
+      
+      // For invoices/employers: always add GST
+      // For employees: if Calculate GST is Yes, always add; otherwise follow inflow/outflow
+      const total = isInvoice && shouldCalculateGst
+        ? amountExclGst + gstAmount  // Always add for invoices/employers
+        : calculateGst && shouldCalculateGst && isEmployeePayroll
+          ? amountExclGst + gstAmount  // Always add for employees when Calculate GST is Yes
+          : formData.modeOfCashFlow === "inflow" 
+            ? amountExclGst + gstAmount  // Inflow: add GST
+            : amountExclGst - gstAmount;  // Outflow: subtract GST
+      
+      setFormData((prev) => ({
+        ...prev,
+        gstAmount: gstAmount.toFixed(2),
+        totalAmount: total.toFixed(2),
+      }));
+    }
+  }, [formData.amountExclGst, formData.gstRegistered, formData.calculateGst, formData.modeOfCashFlow, formData.typeOfCashFlow]);
 
   // Calculate payment status based on payment cycle
   // On the paymentCycle day (e.g., 45th day): pending
@@ -227,24 +267,42 @@ const Payroll = () => {
       const updated = { ...prev, [field]: value };
       
       // Auto-calculate GST (10%) based on cash flow direction
-      if (field === "amountExclGst" || field === "gstRegistered" || field === "calculateGst") {
-        const amountExclGst = parseFloat(updated.amountExclGst as string) || 0;
-        const gst = amountExclGst * 0.10; // 10% GST
+      // Trigger calculation when amount, GST Registered status, or Calculate GST changes
+      if (field === "amountExclGst" || field === "gstRegistered" || field === "calculateGst" || field === "modeOfCashFlow") {
+        // Parse amount, handling both string and number types
+        let amountExclGst = 0;
+        if (typeof updated.amountExclGst === 'string') {
+          amountExclGst = parseFloat(updated.amountExclGst) || 0;
+        } else if (typeof updated.amountExclGst === 'number') {
+          amountExclGst = updated.amountExclGst;
+        } else {
+          amountExclGst = parseFloat(String(updated.amountExclGst || 0)) || 0;
+        }
         
-        // Use form's calculateGst field if set, otherwise check employee's applyGst
-        const employee = employees.find(emp => emp.name === updated.name);
-        const calculateGst = updated.calculateGst !== undefined 
-          ? updated.calculateGst 
-          : (employee?.applyGst !== undefined ? employee.applyGst : true);
-        const gstRegistered = updated.gstRegistered || false;
+        // Calculate 10% GST
+        const gst = amountExclGst * 0.10;
         
-        // Only calculate GST if calculateGst is true and gstRegistered is true
-        const gstAmount = (calculateGst && gstRegistered) ? gst : 0;
+        // Check if GST Registered is checked or Calculate GST is set to Yes
+        const gstRegistered = updated.gstRegistered === true || updated.gstRegistered === "true";
+        const calculateGst = updated.calculateGst === true;
         
-        // For inflows: add GST, for outflows: subtract GST
-        const total = updated.modeOfCashFlow === "inflow" 
-          ? amountExclGst + gstAmount  // Inflow: add GST
-          : amountExclGst - gstAmount; // Outflow: subtract GST
+        // Calculate GST amount: 10% if either GST Registered is checked OR Calculate GST is Yes, and amount > 0
+        const shouldCalculateGst = (gstRegistered || calculateGst) && amountExclGst > 0;
+        const gstAmount = shouldCalculateGst ? gst : 0;
+        
+        // Determine calculation logic based on type
+        const isEmployeePayroll = updated.typeOfCashFlow === "internal_payroll" || updated.typeOfCashFlow === "cleaner_payroll";
+        const isInvoice = updated.typeOfCashFlow === "invoice";
+        
+        // For invoices/employers: always add GST
+        // For employees: if Calculate GST is Yes, always add; otherwise follow inflow/outflow
+        const total = isInvoice && shouldCalculateGst
+          ? amountExclGst + gstAmount  // Always add for invoices/employers
+          : calculateGst && shouldCalculateGst && isEmployeePayroll
+            ? amountExclGst + gstAmount  // Always add for employees when Calculate GST is Yes
+            : updated.modeOfCashFlow === "inflow" 
+              ? amountExclGst + gstAmount  // Inflow: add GST
+              : amountExclGst - gstAmount; // Outflow: subtract GST
         
         updated.gstAmount = gstAmount.toFixed(2);
         updated.totalAmount = total.toFixed(2);
@@ -252,19 +310,28 @@ const Payroll = () => {
       
       // Recalculate GST when modeOfCashFlow changes
       if (field === "modeOfCashFlow" && updated.amountExclGst) {
-        const amountExclGst = parseFloat(updated.amountExclGst) || 0;
+        const amountExclGst = parseFloat(String(updated.amountExclGst || 0)) || 0;
         const gst = amountExclGst * 0.10;
         
-        const employee = employees.find(emp => emp.name === updated.name);
-        const calculateGst = updated.calculateGst !== undefined 
-          ? updated.calculateGst 
-          : (employee?.applyGst !== undefined ? employee.applyGst : true);
-        const gstRegistered = updated.gstRegistered || false;
+        // Auto-calculate GST when GST Registered is checked OR Calculate GST is Yes
+        const gstRegistered = Boolean(updated.gstRegistered);
+        const calculateGst = Boolean(updated.calculateGst);
+        const shouldCalculateGst = (gstRegistered || calculateGst) && amountExclGst > 0;
+        const gstAmount = shouldCalculateGst ? gst : 0;
         
-        const gstAmount = (calculateGst && gstRegistered) ? gst : 0;
-        const total = value === "inflow" 
-          ? amountExclGst + gstAmount
-          : amountExclGst - gstAmount;
+        // Determine calculation logic based on type
+        const isEmployeePayroll = updated.typeOfCashFlow === "internal_payroll" || updated.typeOfCashFlow === "cleaner_payroll";
+        const isInvoice = updated.typeOfCashFlow === "invoice";
+        
+        // For invoices/employers: always add GST
+        // For employees: if Calculate GST is Yes, always add; otherwise follow inflow/outflow
+        const total = isInvoice && shouldCalculateGst
+          ? amountExclGst + gstAmount  // Always add for invoices/employers
+          : calculateGst && shouldCalculateGst && isEmployeePayroll
+            ? amountExclGst + gstAmount  // Always add for employees when Calculate GST is Yes
+            : value === "inflow" 
+              ? amountExclGst + gstAmount  // Inflow: add GST
+              : amountExclGst - gstAmount; // Outflow: subtract GST
         
         updated.gstAmount = gstAmount.toFixed(2);
         updated.totalAmount = total.toFixed(2);
@@ -276,19 +343,39 @@ const Payroll = () => {
         const cycle = field === "paymentCycle" ? (value as number) : updated.paymentCycle;
         if (date && cycle) {
           updated.status = calculatePaymentStatus(date, cycle);
-          // Auto-calculate payment date: work date + payment cycle (only if payment date not manually set)
-          if (date && !updated.paymentDate) {
+          // Auto-calculate payment date: work date + payment cycle (always calculate when date or cycle changes)
+          if (date) {
             try {
-              // Convert date to DD.MM.YYYY if needed
-              let dateStr = date;
+              // Parse the date (could be YYYY-MM-DD format from input)
+              let dateObj: Date;
               if (date.includes('-')) {
-                // Convert from YYYY-MM-DD to DD.MM.YYYY
-                const parts = date.split('-');
+                // YYYY-MM-DD format
+                dateObj = new Date(date + 'T00:00:00'); // Add time to avoid timezone issues
+              } else if (date.includes('.')) {
+                // DD.MM.YYYY format
+                const parts = date.split('.');
                 if (parts.length === 3) {
-                  dateStr = `${parts[2]}.${parts[1]}.${parts[0]}`;
+                  dateObj = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+                } else {
+                  dateObj = new Date(date);
                 }
+              } else {
+                dateObj = new Date(date);
               }
-              updated.paymentDate = calculatePaymentDate(dateStr, cycle);
+              
+              // Validate date
+              if (isNaN(dateObj.getTime())) {
+                console.error("Invalid date:", date);
+              } else {
+                // Add payment cycle days
+                dateObj.setDate(dateObj.getDate() + cycle);
+                
+                // Format as YYYY-MM-DD for the date input
+                const year = dateObj.getFullYear();
+                const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+                const day = String(dateObj.getDate()).padStart(2, '0');
+                updated.paymentDate = `${year}-${month}-${day}`;
+              }
             } catch (error) {
               console.error("Error calculating payment date:", error);
             }
@@ -314,15 +401,28 @@ const Payroll = () => {
         
         // Recalculate GST if amountExclGst is already set
         if (prev.amountExclGst) {
-          const amountExclGst = parseFloat(prev.amountExclGst) || 0;
+          const amountExclGst = parseFloat(String(prev.amountExclGst || 0)) || 0;
           const gst = amountExclGst * 0.10;
-          const calculateGst = updated.calculateGst;
-          const gstRegistered = updated.gstRegistered || false;
+          const gstRegistered = Boolean(updated.gstRegistered);
+          const calculateGst = Boolean(updated.calculateGst);
           
-          const gstAmount = (calculateGst && gstRegistered) ? gst : 0;
-          const total = prev.modeOfCashFlow === "inflow"
-            ? amountExclGst + gstAmount
-            : amountExclGst - gstAmount;
+          // Auto-calculate GST when GST Registered is checked OR Calculate GST is Yes
+          const shouldCalculateGst = (gstRegistered || calculateGst) && amountExclGst > 0;
+          const gstAmount = shouldCalculateGst ? gst : 0;
+          
+          // Determine calculation logic based on type
+          const isEmployeePayroll = updated.typeOfCashFlow === "internal_payroll" || updated.typeOfCashFlow === "cleaner_payroll";
+          const isInvoice = updated.typeOfCashFlow === "invoice";
+          
+          // For invoices/employers: always add GST
+          // For employees: if Calculate GST is Yes, always add; otherwise follow inflow/outflow
+          const total = isInvoice && shouldCalculateGst
+            ? amountExclGst + gstAmount  // Always add for invoices/employers
+            : calculateGst && shouldCalculateGst && isEmployeePayroll
+              ? amountExclGst + gstAmount  // Always add for employees when Calculate GST is Yes
+              : prev.modeOfCashFlow === "inflow"
+                ? amountExclGst + gstAmount  // Inflow: add GST
+                : amountExclGst - gstAmount; // Outflow: subtract GST
           
           updated.gstAmount = gstAmount.toFixed(2);
           updated.totalAmount = total.toFixed(2);
@@ -380,6 +480,63 @@ const Payroll = () => {
       toast.error("Failed to add employee. Please try again.");
     } finally {
       setIsAddingEmployee(false);
+    }
+  };
+
+  const handleClientSelect = (clientName: string) => {
+    const client = clients.find(c => c.name === clientName || (c.companyName && c.companyName === clientName));
+    if (client) {
+      setFormData((prev) => ({
+        ...prev,
+        name: client.companyName || client.name,
+      }));
+      setEmployeePopoverOpen(false);
+      setEmployeeSearchValue("");
+    }
+  };
+
+  const handleAddNewClient = async (name: string) => {
+    if (!name.trim()) {
+      toast.error("Please enter a name");
+      return;
+    }
+
+    // Check if client already exists
+    const existingClient = clients.find(
+      c => c.name.toLowerCase() === name.trim().toLowerCase() || 
+           (c.companyName && c.companyName.toLowerCase() === name.trim().toLowerCase())
+    );
+    if (existingClient) {
+      handleClientSelect(existingClient.name);
+      return;
+    }
+
+    try {
+      setIsAddingClient(true);
+      await addClient({
+        name: name.trim(),
+        email: "",
+        phone: "",
+        status: "active",
+      });
+
+      // Reload clients list
+      const updatedClients = await getAllClients();
+      setClients(updatedClients.filter(c => c.status === "active"));
+
+      // Select the newly added client
+      setFormData((prev) => ({
+        ...prev,
+        name: name.trim(),
+      }));
+      setEmployeePopoverOpen(false);
+      setEmployeeSearchValue("");
+      toast.success(`Client "${name.trim()}" added successfully!`);
+    } catch (error) {
+      console.error("Error adding client:", error);
+      toast.error("Failed to add client. Please try again.");
+    } finally {
+      setIsAddingClient(false);
     }
   };
 
@@ -502,6 +659,30 @@ const Payroll = () => {
         ? calculatePaymentStatus(formData.date, formData.paymentCycle)
         : "pending";
       
+      // Upload files to Firebase Storage if there are new files (blob URLs)
+      let uploadedFileUrls: string[] = [];
+      if (attachedFiles.length > 0) {
+        try {
+          // Upload files that are new (have blob URLs)
+          const uploadPromises = attachedFiles.map(async (file, index) => {
+            const currentUrl = formData.attachedFiles[index];
+            // If it's already a Firebase URL, keep it; otherwise upload
+            if (currentUrl && !currentUrl.startsWith('blob:') && !currentUrl.startsWith('data:')) {
+              return currentUrl;
+            }
+            // Upload new file
+            const tempId = `temp_${Date.now()}_${index}`;
+            return await uploadReceipt(file, tempId);
+          });
+          
+          uploadedFileUrls = await Promise.all(uploadPromises);
+        } catch (error) {
+          console.error("Error uploading files:", error);
+          toast.error("Failed to upload some files. Please try again.");
+          return;
+        }
+      }
+      
       const newPayroll: Omit<Payroll, "id"> = {
         month: formData.month || new Date().toLocaleString('default', { month: 'long' }),
         date: formattedDate,
@@ -523,10 +704,10 @@ const Payroll = () => {
         notes: formData.notes || undefined,
         frequency: formData.frequency,
         paymentCycle: formData.paymentCycle,
-        attachedFiles: formData.attachedFiles.length > 0 ? formData.attachedFiles : undefined,
+        attachedFiles: uploadedFileUrls.length > 0 ? uploadedFileUrls : undefined,
       };
 
-      await addPayroll(newPayroll);
+      const payrollId = await addPayroll(newPayroll);
       
       // Reload payrolls
       const updatedPayrolls = await getAllPayrolls();
@@ -669,6 +850,30 @@ const Payroll = () => {
         ? calculatePaymentStatus(formData.date, formData.paymentCycle)
         : undefined;
       
+      // Upload new files to Firebase Storage if there are new files (blob URLs)
+      let uploadedFileUrls: string[] = [];
+      if (attachedFiles.length > 0) {
+        try {
+          // Upload files that are new (have blob URLs)
+          const uploadPromises = attachedFiles.map(async (file, index) => {
+            const currentUrl = formData.attachedFiles[index];
+            // If it's already a Firebase URL, keep it; otherwise upload
+            if (currentUrl && !currentUrl.startsWith('blob:') && !currentUrl.startsWith('data:')) {
+              return currentUrl;
+            }
+            // Upload new file
+            const tempId = `temp_${Date.now()}_${index}`;
+            return await uploadReceipt(file, tempId);
+          });
+          
+          uploadedFileUrls = await Promise.all(uploadPromises);
+        } catch (error) {
+          console.error("Error uploading files:", error);
+          toast.error("Failed to upload some files. Please try again.");
+          return;
+        }
+      }
+      
       const updatedPayroll: Partial<Omit<Payroll, "id">> = {
         ...(formData.month && { month: formData.month }),
         ...(formattedDate && { date: formattedDate }),
@@ -690,7 +895,7 @@ const Payroll = () => {
         ...(formData.notes !== undefined && { notes: formData.notes || undefined }),
         ...(formData.frequency && { frequency: formData.frequency }),
         ...(formData.paymentCycle !== undefined && { paymentCycle: formData.paymentCycle }),
-        ...(formData.attachedFiles.length > 0 && { attachedFiles: formData.attachedFiles }),
+        ...(uploadedFileUrls.length > 0 && { attachedFiles: uploadedFileUrls }),
       };
 
       await updatePayroll(editingPayrollId, updatedPayroll);
@@ -1615,16 +1820,16 @@ const Payroll = () => {
                       </TableCell>
                       <TableCell>
                         <span className="font-medium text-foreground">
-                          ${payroll.amountExclGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          {formatCurrencySimple(payroll.amountExclGst, payroll.currency || 'AUD')}
                         </span>
                       </TableCell>
                       <TableCell>
                         <span className="text-sm text-muted-foreground">
-                          ${payroll.gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          {formatCurrencySimple(payroll.gstAmount, payroll.currency || 'AUD')}
                         </span>
                       </TableCell>
                       <TableCell className="font-bold text-green-600 dark:text-green-400">
-                        ${payroll.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {formatCurrencySimple(payroll.totalAmount, payroll.currency || 'AUD')}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="text-xs">
@@ -1745,15 +1950,15 @@ const Payroll = () => {
                     <div className="space-y-2 pt-2 border-t">
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-muted-foreground">Amount (Excl. GST)</span>
-                        <span className="font-medium">${payroll.amountExclGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <span className="font-medium">{formatCurrencySimple(payroll.amountExclGst, payroll.currency || 'AUD')}</span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-muted-foreground">GST Amount</span>
-                        <span className="font-medium">${payroll.gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <span className="font-medium">{formatCurrencySimple(payroll.gstAmount, payroll.currency || 'AUD')}</span>
                       </div>
                       <div className="flex justify-between items-center pt-2 border-t">
                         <span className="font-semibold">Total Amount</span>
-                        <span className="font-bold text-lg">${payroll.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        <span className="font-bold text-lg">{formatCurrencySimple(payroll.totalAmount, payroll.currency || 'AUD')}</span>
                       </div>
                     </div>
 
@@ -1923,15 +2128,20 @@ const Payroll = () => {
                       <Label htmlFor="typeOfCashFlow">Type of Cash Flow *</Label>
                       <Select
                         value={formData.typeOfCashFlow}
-                        onValueChange={(value) => handleInputChange("typeOfCashFlow", value as CashFlowType)}
+                        onValueChange={(value) => {
+                          handleInputChange("typeOfCashFlow", value as CashFlowType);
+                          // Clear name when type changes
+                          handleInputChange("name", "");
+                          setEmployeeSearchValue("");
+                        }}
                       >
                         <SelectTrigger id="typeOfCashFlow">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="invoice">Invoice</SelectItem>
-                          <SelectItem value="internal_payroll">Internal Payroll</SelectItem>
-                          <SelectItem value="cleaner_payroll">Cleaner Payroll</SelectItem>
+                          <SelectItem value="invoice">Invoice (Employer/Client)</SelectItem>
+                          <SelectItem value="internal_payroll">Internal Payroll (Employee)</SelectItem>
+                          <SelectItem value="cleaner_payroll">Cleaner Payroll (Employee)</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -1939,7 +2149,17 @@ const Payroll = () => {
                       <Label htmlFor="frequency">Payroll Frequency</Label>
                       <Select
                         value={formData.frequency}
-                        onValueChange={(value) => handleInputChange("frequency", value as PayrollFrequency)}
+                        onValueChange={(value) => {
+                          handleInputChange("frequency", value as PayrollFrequency);
+                          // If "Immediate" is selected, set payment date to today
+                          if (value === "Immediate") {
+                            const today = new Date();
+                            const year = today.getFullYear();
+                            const month = String(today.getMonth() + 1).padStart(2, '0');
+                            const day = String(today.getDate()).padStart(2, '0');
+                            handleInputChange("paymentDate", `${year}-${month}-${day}`);
+                          }
+                        }}
                       >
                         <SelectTrigger id="frequency">
                           <SelectValue />
@@ -1948,6 +2168,7 @@ const Payroll = () => {
                           <SelectItem value="Weekly">Weekly</SelectItem>
                           <SelectItem value="Fortnightly">Fortnightly</SelectItem>
                           <SelectItem value="Monthly">Monthly</SelectItem>
+                          <SelectItem value="Immediate">Immediate</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -1955,7 +2176,10 @@ const Payroll = () => {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="name">Name *</Label>
+                      <Label htmlFor="name">
+                        Name * 
+                        {formData.typeOfCashFlow === "invoice" ? " (Employer/Client)" : " (Employee)"}
+                      </Label>
                       <Popover open={employeePopoverOpen} onOpenChange={setEmployeePopoverOpen}>
                         <PopoverTrigger asChild>
                           <Button
@@ -1965,14 +2189,14 @@ const Payroll = () => {
                             className="w-full justify-between"
                             disabled={isLoadingEmployees}
                           >
-                            {formData.name || "Select employee..."}
+                            {formData.name || (formData.typeOfCashFlow === "invoice" ? "Select employer/client..." : "Select employee...")}
                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-[350px] p-0" align="start">
                           <Command>
                             <CommandInput 
-                              placeholder="Search employee..." 
+                              placeholder={formData.typeOfCashFlow === "invoice" ? "Search employer/client..." : "Search employee..."} 
                               value={employeeSearchValue}
                               onValueChange={setEmployeeSearchValue}
                             />
@@ -1985,48 +2209,78 @@ const Payroll = () => {
                               ) : (
                                 <>
                               <CommandGroup>
-                                    {employees
-                                      .filter(employee => 
-                                        !employeeSearchValue || 
-                                        employee.name.toLowerCase().includes(employeeSearchValue.toLowerCase())
-                                      )
-                                      .filter((employee, index, self) => 
-                                        // Additional deduplication: keep only first occurrence of each name
-                                        index === self.findIndex(emp => 
-                                          emp.name.toLowerCase().trim() === employee.name.toLowerCase().trim()
+                                    {formData.typeOfCashFlow === "invoice" ? (
+                                      // Show clients for invoice
+                                      clients
+                                        .filter(client => 
+                                          !employeeSearchValue || 
+                                          client.name.toLowerCase().includes(employeeSearchValue.toLowerCase()) ||
+                                          (client.companyName && client.companyName.toLowerCase().includes(employeeSearchValue.toLowerCase()))
                                         )
-                                      )
-                                      .map((employee) => (
-                                  <CommandItem
-                                    key={employee.id}
-                                    value={employee.name}
-                                    onSelect={() => handleEmployeeSelect(employee.id)}
-                                  >
-                                    <Check
-                                      className={cn(
-                                        "mr-2 h-4 w-4",
-                                        formData.name === employee.name
-                                          ? "opacity-100"
-                                          : "opacity-0"
-                                      )}
-                                    />
-                                    {employee.name}
-                                  </CommandItem>
-                                ))}
+                                        .map((client) => (
+                                          <CommandItem
+                                            key={client.id}
+                                            value={client.companyName || client.name}
+                                            onSelect={() => handleClientSelect(client.name)}
+                                          >
+                                            <Check
+                                              className={cn(
+                                                "mr-2 h-4 w-4",
+                                                formData.name === (client.companyName || client.name)
+                                                  ? "opacity-100"
+                                                  : "opacity-0"
+                                              )}
+                                            />
+                                            {client.companyName || client.name}
+                                          </CommandItem>
+                                        ))
+                                    ) : (
+                                      // Show employees for internal_payroll and cleaner_payroll
+                                      employees
+                                        .filter(employee => 
+                                          !employeeSearchValue || 
+                                          employee.name.toLowerCase().includes(employeeSearchValue.toLowerCase())
+                                        )
+                                        .filter((employee, index, self) => 
+                                          index === self.findIndex(emp => 
+                                            emp.name.toLowerCase().trim() === employee.name.toLowerCase().trim()
+                                          )
+                                        )
+                                        .map((employee) => (
+                                          <CommandItem
+                                            key={employee.id}
+                                            value={employee.name}
+                                            onSelect={() => handleEmployeeSelect(employee.id)}
+                                          >
+                                            <Check
+                                              className={cn(
+                                                "mr-2 h-4 w-4",
+                                                formData.name === employee.name
+                                                  ? "opacity-100"
+                                                  : "opacity-0"
+                                              )}
+                                            />
+                                            {employee.name}
+                                          </CommandItem>
+                                        ))
+                                    )}
                               </CommandGroup>
                                   {employeeSearchValue && 
-                                   !employees.some(emp => 
-                                     emp.name.toLowerCase() === employeeSearchValue.trim().toLowerCase()
-                                   ) && 
                                    employeeSearchValue.trim().length > 0 && (
                                     <CommandGroup>
                                       <CommandItem
                                         value={`add-${employeeSearchValue}`}
-                                        onSelect={() => handleAddNewEmployee(employeeSearchValue)}
-                                        disabled={isAddingEmployee}
+                                        onSelect={() => {
+                                          if (formData.typeOfCashFlow === "invoice") {
+                                            handleAddNewClient(employeeSearchValue);
+                                          } else {
+                                            handleAddNewEmployee(employeeSearchValue);
+                                          }
+                                        }}
+                                        disabled={isAddingEmployee || isAddingClient}
                                         className="text-primary"
                                       >
-                                        {isAddingEmployee ? (
+                                        {(isAddingEmployee || isAddingClient) ? (
                                           <>
                                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                             Adding...
@@ -2040,8 +2294,12 @@ const Payroll = () => {
                                       </CommandItem>
                                     </CommandGroup>
                                   )}
-                                  {!employeeSearchValue && employees.length === 0 && (
-                                    <CommandEmpty>No employees found.</CommandEmpty>
+                                  {!employeeSearchValue && (
+                                    <CommandEmpty>
+                                      {formData.typeOfCashFlow === "invoice" 
+                                        ? "No clients found." 
+                                        : "No employees found."}
+                                    </CommandEmpty>
                                   )}
                                 </>
                               )}
@@ -2116,7 +2374,7 @@ const Payroll = () => {
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground mt-1">
-                      Select whether GST (10%) should be calculated for this payroll entry. GST will only be calculated if both "GST Registered" is checked and "Calculate GST" is set to "Yes".
+                      When "GST Registered" is checked, GST (10%) will be automatically calculated on the amount excluding GST.
                     </p>
                   </div>
 
@@ -2167,9 +2425,7 @@ const Payroll = () => {
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="AUD">AUD</SelectItem>
-                          <SelectItem value="USD">USD</SelectItem>
-                          <SelectItem value="EUR">EUR</SelectItem>
-                          <SelectItem value="GBP">GBP</SelectItem>
+                          <SelectItem value="LKR">LKR</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -2293,28 +2549,69 @@ const Payroll = () => {
                     </div>
                     {attachedFiles.length > 0 && (
                       <div className="space-y-2 mt-2">
-                        {attachedFiles.map((file, index) => (
-                          <div
-                            key={index}
-                            className="flex items-center justify-between p-2 border rounded-md bg-muted/50"
-                          >
-                            <div className="flex items-center gap-2">
-                              <File className="h-4 w-4 text-muted-foreground" />
-                              <span className="text-sm truncate max-w-[300px]">{file.name}</span>
-                              <span className="text-xs text-muted-foreground">
-                                ({(file.size / 1024).toFixed(2)} KB)
-                              </span>
-                            </div>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6"
-                              onClick={() => handleRemoveAttachedFile(index)}
+                        {attachedFiles.map((file, index) => {
+                          const fileUrl = formData.attachedFiles[index];
+                          const isImage = file.type.startsWith('image/');
+                          const isBlobUrl = fileUrl?.startsWith('blob:');
+                          
+                          return (
+                            <div
+                              key={index}
+                              className="flex items-center justify-between p-2 border rounded-md bg-muted/50"
                             >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ))}
+                              <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <File className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                <span className="text-sm truncate">{file.name}</span>
+                                <span className="text-xs text-muted-foreground flex-shrink-0">
+                                  ({(file.size / 1024).toFixed(2)} KB)
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-1 flex-shrink-0">
+                                {fileUrl && !isBlobUrl && (
+                                  <>
+                                    {isImage && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8"
+                                        onClick={() => window.open(fileUrl, '_blank')}
+                                        title="View image"
+                                      >
+                                        <Eye className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={() => {
+                                        const link = document.createElement('a');
+                                        link.href = fileUrl;
+                                        link.download = file.name;
+                                        link.target = '_blank';
+                                        document.body.appendChild(link);
+                                        link.click();
+                                        document.body.removeChild(link);
+                                      }}
+                                      title="Download file"
+                                    >
+                                      <Download className="h-4 w-4" />
+                                    </Button>
+                                  </>
+                                )}
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8"
+                                  onClick={() => handleRemoveAttachedFile(index)}
+                                  title="Remove file"
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

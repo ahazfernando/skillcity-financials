@@ -1,5 +1,5 @@
 export type PaymentStatus = "pending" | "received" | "paid" | "overdue" | "late";
-export type PayrollFrequency = "Weekly" | "Fortnightly" | "Monthly";
+export type PayrollFrequency = "Weekly" | "Fortnightly" | "Monthly" | "Immediate";
 
 export interface Invoice {
   id: string;

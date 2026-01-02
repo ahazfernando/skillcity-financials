@@ -5,12 +5,19 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// Format currency as AUD
-export function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat('en-AU', {
+// Format currency based on currency code
+export function formatCurrency(amount: number, currency: string = 'AUD'): string {
+  const locale = currency === 'LKR' ? 'en-LK' : 'en-AU';
+  return new Intl.NumberFormat(locale, {
     style: 'currency',
-    currency: 'AUD',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
+    currency: currency,
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   }).format(amount);
+}
+
+// Format currency with symbol only (no decimals for display)
+export function formatCurrencySimple(amount: number, currency: string = 'AUD'): string {
+  const symbol = currency === 'LKR' ? 'LKR' : '$';
+  return `${symbol}${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
