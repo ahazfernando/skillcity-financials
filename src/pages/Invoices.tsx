@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { SearchFilter } from "@/components/SearchFilter";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Download, Plus, FileText, Calendar as CalendarIcon, Upload, X, Loader2, Archive } from "lucide-react";
+import { Download, Plus, FileText, Calendar as CalendarIcon, Upload, X, Loader2, Archive, Eye } from "lucide-react";
 import Link from "next/link";
 import { generateMonthlyReport } from "@/lib/monthly-report-generator";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -49,7 +49,7 @@ import { getAllEmployees, addEmployee } from "@/lib/firebase/employees";
 import { calculatePaymentDateAsDate, calculatePaymentDate } from "@/lib/paymentCycle";
 import { getAllSites, addSite } from "@/lib/firebase/sites";
 import { getAllReminders, addReminder, updateReminder, queryReminders } from "@/lib/firebase/reminders";
-import { uploadReceipt } from "@/lib/firebase/storage";
+import { uploadToCloudinary } from "@/lib/cloudinary/upload-client";
 import { toast } from "sonner";
 import {
   Command,
@@ -542,6 +542,20 @@ const Invoices = () => {
           : formData.paymentDate;
       }
 
+      // Upload receipt file to Cloudinary if a new file was selected
+      let receiptUrl = formData.receiptUrl;
+      if (receiptFile && formData.receiptUrl?.startsWith('blob:')) {
+        try {
+          const result = await uploadToCloudinary(receiptFile, 'invoice-receipts');
+          receiptUrl = result.secureUrl || result.url;
+        } catch (error) {
+          console.error("Error uploading receipt:", error);
+          toast.error("Failed to upload receipt. Please try again.");
+          setIsSaving(false);
+          return;
+        }
+      }
+
       const updatedPayroll: Partial<Omit<Payroll, "id">> = {
         invoiceNumber: formData.invoiceNumber || undefined,
         name: formData.name,
@@ -555,6 +569,7 @@ const Invoices = () => {
         paymentReceiptNumber: formData.paymentReceiptNumber || undefined,
         status: formData.status,
         notes: formData.notes || undefined,
+        receiptUrl: receiptUrl || undefined,
       };
 
       await updatePayroll(editingPayrollId, updatedPayroll);
@@ -1416,18 +1431,88 @@ const Invoices = () => {
                           {(receiptFile.size / 1024 / 1024).toFixed(2)} MB
                         </p>
                       </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="flex-shrink-0"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRemoveFile();
-                        }}
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {formData.receiptUrl && formData.receiptUrl.startsWith('blob:') && (
+                          <>
+                            {(receiptFile.type.startsWith('image/') || receiptFile.name.toLowerCase().endsWith('.pdf')) && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.open(formData.receiptUrl, '_blank');
+                                }}
+                                title="View file"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                            )}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-8 w-8 p-0"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                try {
+                                  // For blob URLs, download directly
+                                  if (formData.receiptUrl.startsWith('blob:')) {
+                                    const link = document.createElement('a');
+                                    link.href = formData.receiptUrl;
+                                    link.download = receiptFile.name;
+                                    link.target = '_blank';
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                  } else if (formData.receiptUrl.includes('cloudinary.com') || formData.receiptUrl.includes('res.cloudinary.com')) {
+                                    // For Cloudinary URLs, fetch and download
+                                    const response = await fetch(formData.receiptUrl);
+                                    const blob = await response.blob();
+                                    const url = window.URL.createObjectURL(blob);
+                                    const link = document.createElement('a');
+                                    link.href = url;
+                                    link.download = receiptFile.name;
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                    window.URL.revokeObjectURL(url);
+                                  } else {
+                                    // For other URLs
+                                    const link = document.createElement('a');
+                                    link.href = formData.receiptUrl;
+                                    link.download = receiptFile.name;
+                                    link.target = '_blank';
+                                    document.body.appendChild(link);
+                                    link.click();
+                                    document.body.removeChild(link);
+                                  }
+                                } catch (error) {
+                                  console.error("Error downloading file:", error);
+                                  toast.error("Failed to download file. Please try again.");
+                                }
+                              }}
+                              title="Download file"
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                          </>
+                        )}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="flex-shrink-0 h-8 w-8 p-0"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveFile();
+                          }}
+                          title="Remove file"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                     <Button
                       type="button"
@@ -1447,10 +1532,69 @@ const Invoices = () => {
                     <div className="flex items-center justify-center gap-3">
                       <FileText className="h-10 w-10 text-primary flex-shrink-0" />
                       <div className="flex flex-col items-start flex-1 min-w-0">
-                        <p className="text-sm font-medium">Existing receipt</p>
-                        <p className="text-xs text-muted-foreground">
-                          Click to upload a new file
+                        <p className="text-sm font-medium truncate">Existing receipt</p>
+                        <p className="text-xs text-muted-foreground truncate w-full">
+                          {formData.receiptUrl.split('/').pop()?.split('?')[0] || 'Receipt file'}
                         </p>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {(formData.receiptUrl.includes('.jpg') || formData.receiptUrl.includes('.jpeg') || 
+                          formData.receiptUrl.includes('.png') || formData.receiptUrl.includes('.pdf') ||
+                          formData.receiptUrl.includes('.gif') || formData.receiptUrl.includes('.webp')) && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.open(formData.receiptUrl, '_blank');
+                            }}
+                            title="View receipt"
+                          >
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        )}
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            try {
+                              const fileName = formData.receiptUrl.split('/').pop()?.split('?')[0] || 'receipt';
+                              // For Cloudinary URLs, fetch and download
+                              if (formData.receiptUrl.includes('cloudinary.com') || formData.receiptUrl.includes('res.cloudinary.com')) {
+                                const response = await fetch(formData.receiptUrl);
+                                const blob = await response.blob();
+                                const url = window.URL.createObjectURL(blob);
+                                const link = document.createElement('a');
+                                link.href = url;
+                                link.download = fileName;
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                                window.URL.revokeObjectURL(url);
+                              } else {
+                                // For other URLs
+                                const link = document.createElement('a');
+                                link.href = formData.receiptUrl;
+                                link.download = fileName;
+                                link.target = '_blank';
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                              }
+                            } catch (error) {
+                              console.error("Error downloading file:", error);
+                              toast.error("Failed to download file. Please try again.");
+                            }
+                          }}
+                          title="Download receipt"
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
                     <Button

@@ -68,7 +68,7 @@ import { getAllPayrolls, addPayroll, updatePayroll, deletePayroll } from "@/lib/
 import { getAllInvoices } from "@/lib/firebase/invoices";
 import { getAllSites } from "@/lib/firebase/sites";
 import { getAllClients, addClient } from "@/lib/firebase/clients";
-import { uploadReceipt } from "@/lib/firebase/storage";
+import { uploadToCloudinary } from "@/lib/cloudinary/upload-client";
 import { toast } from "sonner";
 import { calculatePaymentDate } from "@/lib/paymentCycle";
 
@@ -283,7 +283,7 @@ const Payroll = () => {
         const gst = amountExclGst * 0.10;
         
         // Check if GST Registered is checked or Calculate GST is set to Yes
-        const gstRegistered = updated.gstRegistered === true || updated.gstRegistered === "true";
+        const gstRegistered = updated.gstRegistered === true || String(updated.gstRegistered) === "true";
         const calculateGst = updated.calculateGst === true;
         
         // Calculate GST amount: 10% if either GST Registered is checked OR Calculate GST is Yes, and amount > 0
@@ -555,28 +555,49 @@ const Payroll = () => {
       return;
     }
     
-    // Add to attached files array
+    // Add to attached files array (new files are appended)
     setAttachedFiles((prev) => [...prev, file]);
     const fileUrl = URL.createObjectURL(file);
-    setFormData((prev) => ({
-      ...prev,
-      attachedFiles: [...prev.attachedFiles, fileUrl],
-    }));
+    setFormData((prev) => {
+      // Keep existing files (non-blob URLs) and append new blob URL
+      const existingFiles = prev.attachedFiles.filter(url => 
+        url && !url.startsWith('blob:') && !url.startsWith('data:')
+      );
+      return {
+        ...prev,
+        attachedFiles: [...existingFiles, fileUrl],
+      };
+    });
   };
 
-  const handleRemoveAttachedFile = (index: number) => {
-    setAttachedFiles((prev) => {
-      const newFiles = prev.filter((_, i) => i !== index);
-      return newFiles;
-    });
-    setFormData((prev) => {
-      const newUrls = prev.attachedFiles.filter((_, i) => i !== index);
-      // Revoke blob URL if it exists
-      if (prev.attachedFiles[index]?.startsWith('blob:')) {
-        URL.revokeObjectURL(prev.attachedFiles[index]);
-      }
-      return { ...prev, attachedFiles: newUrls };
-    });
+  const handleRemoveAttachedFile = (index: number, isExistingFile: boolean = false) => {
+    if (isExistingFile) {
+      // Remove existing file URL (from database)
+      setFormData((prev) => {
+        const newUrls = prev.attachedFiles.filter((_, i) => i !== index);
+        return { ...prev, attachedFiles: newUrls };
+      });
+    } else {
+      // Remove new file (File object)
+      setAttachedFiles((prev) => {
+        const newFiles = prev.filter((_, i) => i !== index);
+        return newFiles;
+      });
+      setFormData((prev) => {
+        // Find the corresponding URL in formData.attachedFiles
+        // New files are appended after existing files
+        const existingFileCount = prev.attachedFiles.filter(url => 
+          !url.startsWith('blob:') && !url.startsWith('data:')
+        ).length;
+        const urlIndex = existingFileCount + index;
+        const newUrls = prev.attachedFiles.filter((_, i) => i !== urlIndex);
+        // Revoke blob URL if it exists
+        if (prev.attachedFiles[urlIndex]?.startsWith('blob:')) {
+          URL.revokeObjectURL(prev.attachedFiles[urlIndex]);
+        }
+        return { ...prev, attachedFiles: newUrls };
+      });
+    }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -659,28 +680,35 @@ const Payroll = () => {
         ? calculatePaymentStatus(formData.date, formData.paymentCycle)
         : "pending";
       
-      // Upload files to Firebase Storage if there are new files (blob URLs)
+      // Upload files to Cloudinary if there are new files (blob URLs)
       let uploadedFileUrls: string[] = [];
+      
+      // Separate existing files (Cloudinary/Firebase URLs) from new files (blob URLs)
+      const existingFileUrls = formData.attachedFiles.filter(url => 
+        url && !url.startsWith('blob:') && !url.startsWith('data:')
+      );
+      
+      // Upload new files (File objects) to Cloudinary
       if (attachedFiles.length > 0) {
         try {
-          // Upload files that are new (have blob URLs)
-          const uploadPromises = attachedFiles.map(async (file, index) => {
-            const currentUrl = formData.attachedFiles[index];
-            // If it's already a Firebase URL, keep it; otherwise upload
-            if (currentUrl && !currentUrl.startsWith('blob:') && !currentUrl.startsWith('data:')) {
-              return currentUrl;
-            }
-            // Upload new file
-            const tempId = `temp_${Date.now()}_${index}`;
-            return await uploadReceipt(file, tempId);
+          const uploadPromises = attachedFiles.map(async (file) => {
+            // Upload new file to Cloudinary
+            const result = await uploadToCloudinary(file, 'payroll-receipts');
+            return result.secureUrl || result.url;
           });
           
-          uploadedFileUrls = await Promise.all(uploadPromises);
+          const newFileUrls = await Promise.all(uploadPromises);
+          // Merge existing URLs with newly uploaded URLs
+          uploadedFileUrls = [...existingFileUrls, ...newFileUrls];
         } catch (error) {
           console.error("Error uploading files:", error);
           toast.error("Failed to upload some files. Please try again.");
+          setIsSaving(false);
           return;
         }
+      } else {
+        // No new files, just keep existing ones
+        uploadedFileUrls = existingFileUrls;
       }
       
       const newPayroll: Omit<Payroll, "id"> = {
@@ -850,28 +878,34 @@ const Payroll = () => {
         ? calculatePaymentStatus(formData.date, formData.paymentCycle)
         : undefined;
       
-      // Upload new files to Firebase Storage if there are new files (blob URLs)
+      // Upload new files to Cloudinary and merge with existing files
       let uploadedFileUrls: string[] = [];
+      
+      // Get existing file URLs (those that are already Cloudinary/Firebase URLs)
+      const existingFileUrls = formData.attachedFiles.filter(url => 
+        url && !url.startsWith('blob:') && !url.startsWith('data:')
+      );
+      
+      // Upload new files (File objects) to Cloudinary
       if (attachedFiles.length > 0) {
         try {
-          // Upload files that are new (have blob URLs)
-          const uploadPromises = attachedFiles.map(async (file, index) => {
-            const currentUrl = formData.attachedFiles[index];
-            // If it's already a Firebase URL, keep it; otherwise upload
-            if (currentUrl && !currentUrl.startsWith('blob:') && !currentUrl.startsWith('data:')) {
-              return currentUrl;
-            }
-            // Upload new file
-            const tempId = `temp_${Date.now()}_${index}`;
-            return await uploadReceipt(file, tempId);
+          const uploadPromises = attachedFiles.map(async (file) => {
+            // Upload new file to Cloudinary
+            const result = await uploadToCloudinary(file, 'payroll-receipts');
+            return result.secureUrl || result.url;
           });
           
-          uploadedFileUrls = await Promise.all(uploadPromises);
+          const newFileUrls = await Promise.all(uploadPromises);
+          // Merge existing URLs with newly uploaded URLs
+          uploadedFileUrls = [...existingFileUrls, ...newFileUrls];
         } catch (error) {
           console.error("Error uploading files:", error);
           toast.error("Failed to upload some files. Please try again.");
           return;
         }
+      } else {
+        // No new files, just keep existing ones
+        uploadedFileUrls = existingFileUrls;
       }
       
       const updatedPayroll: Partial<Omit<Payroll, "id">> = {
@@ -2547,16 +2581,116 @@ const Payroll = () => {
                         </p>
                       </div>
                     </div>
-                    {attachedFiles.length > 0 && (
+                    {(formData.attachedFiles.length > 0 || attachedFiles.length > 0) && (
                       <div className="space-y-2 mt-2">
+                        {/* Display existing files (from database) */}
+                        {formData.attachedFiles
+                          .filter(url => url && !url.startsWith('blob:') && !url.startsWith('data:'))
+                          .map((fileUrl, index) => {
+                            // Extract filename from URL or use a default name
+                            const fileName = fileUrl.split('/').pop()?.split('?')[0] || `File ${index + 1}`;
+                            const isImage = /\.(jpg|jpeg|png|gif|webp)$/i.test(fileName);
+                            const isPdf = /\.(pdf)$/i.test(fileName);
+                            const canView = isImage || isPdf;
+                            
+                            return (
+                              <div
+                                key={`existing-${index}`}
+                                className="flex items-center justify-between p-2 border rounded-md bg-muted/50"
+                              >
+                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                  <File className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                                  <span className="text-sm truncate">{fileName}</span>
+                                  <span className="text-xs text-muted-foreground flex-shrink-0">
+                                    (Existing)
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  {canView && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8"
+                                      onClick={() => window.open(fileUrl, '_blank')}
+                                      title={isImage ? "View image" : "View PDF"}
+                                    >
+                                      <Eye className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={async () => {
+                                      try {
+                                        // For Cloudinary URLs, fetch and download
+                                        if (fileUrl.includes('cloudinary.com') || fileUrl.includes('res.cloudinary.com')) {
+                                          const response = await fetch(fileUrl);
+                                          const blob = await response.blob();
+                                          const url = window.URL.createObjectURL(blob);
+                                          const link = document.createElement('a');
+                                          link.href = url;
+                                          link.download = fileName;
+                                          document.body.appendChild(link);
+                                          link.click();
+                                          document.body.removeChild(link);
+                                          window.URL.revokeObjectURL(url);
+                                        } else {
+                                          // For other URLs
+                                          const link = document.createElement('a');
+                                          link.href = fileUrl;
+                                          link.download = fileName;
+                                          link.target = '_blank';
+                                          document.body.appendChild(link);
+                                          link.click();
+                                          document.body.removeChild(link);
+                                        }
+                                      } catch (error) {
+                                        console.error("Error downloading file:", error);
+                                        toast.error("Failed to download file. Please try again.");
+                                      }
+                                    }}
+                                    title="Download file"
+                                  >
+                                    <Download className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => {
+                                      // Find the actual index in formData.attachedFiles
+                                      const actualIndex = formData.attachedFiles.findIndex((url, i) => 
+                                        url === fileUrl && !url.startsWith('blob:') && !url.startsWith('data:')
+                                      );
+                                      if (actualIndex !== -1) {
+                                        handleRemoveAttachedFile(actualIndex, true);
+                                      }
+                                    }}
+                                    title="Remove file"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        
+                        {/* Display new files (File objects) */}
                         {attachedFiles.map((file, index) => {
-                          const fileUrl = formData.attachedFiles[index];
+                          // New files are appended after existing files, so find the corresponding URL
+                          const existingFileCount = formData.attachedFiles.filter(url => 
+                            url && !url.startsWith('blob:') && !url.startsWith('data:')
+                          ).length;
+                          const fileUrl = formData.attachedFiles[existingFileCount + index];
                           const isImage = file.type.startsWith('image/');
+                          const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+                          const canView = isImage || isPdf;
                           const isBlobUrl = fileUrl?.startsWith('blob:');
                           
                           return (
                             <div
-                              key={index}
+                              key={`new-${index}`}
                               className="flex items-center justify-between p-2 border rounded-md bg-muted/50"
                             >
                               <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -2567,15 +2701,15 @@ const Payroll = () => {
                                 </span>
                               </div>
                               <div className="flex items-center gap-1 flex-shrink-0">
-                                {fileUrl && !isBlobUrl && (
+                                {fileUrl ? (
                                   <>
-                                    {isImage && (
+                                    {canView && (
                                       <Button
                                         variant="ghost"
                                         size="icon"
                                         className="h-8 w-8"
                                         onClick={() => window.open(fileUrl, '_blank')}
-                                        title="View image"
+                                        title={isImage ? "View image" : "View PDF"}
                                       >
                                         <Eye className="h-4 w-4" />
                                       </Button>
@@ -2584,26 +2718,48 @@ const Payroll = () => {
                                       variant="ghost"
                                       size="icon"
                                       className="h-8 w-8"
-                                      onClick={() => {
-                                        const link = document.createElement('a');
-                                        link.href = fileUrl;
-                                        link.download = file.name;
-                                        link.target = '_blank';
-                                        document.body.appendChild(link);
-                                        link.click();
-                                        document.body.removeChild(link);
+                                      onClick={async () => {
+                                        try {
+                                          // For Cloudinary URLs, fetch and download
+                                          if (fileUrl.includes('cloudinary.com') || fileUrl.includes('res.cloudinary.com')) {
+                                            const response = await fetch(fileUrl);
+                                            const blob = await response.blob();
+                                            const url = window.URL.createObjectURL(blob);
+                                            const link = document.createElement('a');
+                                            link.href = url;
+                                            link.download = file.name;
+                                            document.body.appendChild(link);
+                                            link.click();
+                                            document.body.removeChild(link);
+                                            window.URL.revokeObjectURL(url);
+                                          } else {
+                                            // For blob URLs or other URLs
+                                            const link = document.createElement('a');
+                                            link.href = fileUrl;
+                                            link.download = file.name;
+                                            link.target = '_blank';
+                                            document.body.appendChild(link);
+                                            link.click();
+                                            document.body.removeChild(link);
+                                          }
+                                        } catch (error) {
+                                          console.error("Error downloading file:", error);
+                                          toast.error("Failed to download file. Please try again.");
+                                        }
                                       }}
                                       title="Download file"
                                     >
                                       <Download className="h-4 w-4" />
                                     </Button>
                                   </>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground">Uploading...</span>
                                 )}
                                 <Button
                                   variant="ghost"
                                   size="icon"
                                   className="h-8 w-8"
-                                  onClick={() => handleRemoveAttachedFile(index)}
+                                  onClick={() => handleRemoveAttachedFile(index, false)}
                                   title="Remove file"
                                 >
                                   <X className="h-4 w-4" />
@@ -2639,16 +2795,16 @@ const Payroll = () => {
                     Cancel
                   </Button>
                   <Button 
-                    onClick={editingPayrollId ? handleUpdatePayroll : handleAddPayroll} 
+                    onClick={handleAddPayroll} 
                     disabled={isSaving}
                   >
                     {isSaving ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        {editingPayrollId ? "Updating..." : "Saving..."}
+                        Saving...
                       </>
                     ) : (
-                      editingPayrollId ? "Update Payroll" : "Add Payroll"
+                      "Save Payroll"
                     )}
                   </Button>
                 </DialogFooter>
@@ -2657,37 +2813,6 @@ const Payroll = () => {
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This action cannot be undone. This will permanently delete the payroll record for{" "}
-              <span className="font-semibold">{payrollToDelete?.name}</span> from{" "}
-              <span className="font-semibold">{payrollToDelete?.month}</span>.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeletePayroll}
-              disabled={isDeleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isDeleting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Deleting...
-                </>
-              ) : (
-                "Delete"
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 };
