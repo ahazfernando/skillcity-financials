@@ -108,7 +108,12 @@ export const updateClient = async (
     Object.keys(updates).forEach((key) => {
       if (updates[key as keyof typeof updates] !== undefined) {
         const value = updates[key as keyof typeof updates];
-        updateData[key] = value || null;
+        // Handle arrays specially - preserve empty arrays, don't convert to null
+        if (Array.isArray(value)) {
+          updateData[key] = value;
+        } else {
+          updateData[key] = value || null;
+        }
       }
     });
 

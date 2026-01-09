@@ -173,22 +173,44 @@ const Clients = () => {
     setSiteSearchValue("");
   };
 
-  const handleEditClient = (client: ClientDisplay) => {
+  const handleEditClient = async (client: ClientDisplay) => {
     setEditingClientId(client.id);
     setEditingClientSource(client.source);
-    setOriginalClientData(client);
-    // Load sites from client.sites if available, otherwise use companyName as fallback
-    const clientSites = (client as any).sites || [];
+    
+    // If client is from clients collection, fetch the latest data to ensure sites are loaded
+    let clientWithSites = client;
+    if (client.source === "client") {
+      try {
+        const { getClientById } = await import("@/lib/firebase/clients");
+        const fullClient = await getClientById(client.id);
+        if (fullClient) {
+          clientWithSites = {
+            ...client,
+            ...fullClient,
+            source: "client" as const,
+          };
+        }
+      } catch (error) {
+        console.error("Error fetching client details:", error);
+      }
+    }
+    
+    setOriginalClientData(clientWithSites);
+    
+    // Load sites from client.sites - ensure it's always an array
+    const clientSites = (clientWithSites as any).sites;
+    const sitesArray = Array.isArray(clientSites) ? clientSites : [];
+    
     setFormData({
-      name: client.name,
-      companyName: client.companyName || "",
-      email: client.email,
-      phone: client.phone,
-      address: client.address || "",
-      contactPerson: client.contactPerson || "",
-      status: client.status,
-      notes: client.notes || "",
-      selectedSites: clientSites.length > 0 ? clientSites : [],
+      name: clientWithSites.name,
+      companyName: clientWithSites.companyName || "",
+      email: clientWithSites.email,
+      phone: clientWithSites.phone,
+      address: clientWithSites.address || "",
+      contactPerson: clientWithSites.contactPerson || "",
+      status: clientWithSites.status,
+      notes: clientWithSites.notes || "",
+      selectedSites: sitesArray,
     });
     setIsEditDialogOpen(true);
   };
@@ -238,8 +260,22 @@ const Clients = () => {
           if (formData.notes !== (originalClientData.notes || "")) {
             updates.notes = formData.notes || undefined;
           }
-          if (JSON.stringify(formData.selectedSites) !== JSON.stringify((originalClientData as any).sites || [])) {
-            updates.sites = formData.selectedSites.length > 0 ? formData.selectedSites : undefined;
+          
+          // Compare sites arrays properly (handle order and undefined/null)
+          const originalSites = (originalClientData as any).sites || [];
+          const newSites = formData.selectedSites || [];
+          
+          // Sort both arrays for comparison to handle order differences
+          const sortedOriginalSites = [...originalSites].sort();
+          const sortedNewSites = [...newSites].sort();
+          
+          // Compare arrays element by element
+          const sitesChanged = sortedOriginalSites.length !== sortedNewSites.length ||
+            sortedOriginalSites.some((siteId: string, index: number) => siteId !== sortedNewSites[index]);
+          
+          if (sitesChanged) {
+            // Always include sites field - use empty array to ensure it's saved (even if empty)
+            updates.sites = newSites;
           }
           
           return updates;
@@ -248,6 +284,7 @@ const Clients = () => {
         // Update existing client - check if it's from clients collection or employees collection
         if (editingClientSource === "employee") {
           // Update employee that is marked as client
+          // Note: Sites can only be saved for clients in the clients collection, not employees
           const updates = buildPartialUpdate();
           const employeeUpdates: Partial<Omit<Employee, "id">> = {};
           
@@ -261,9 +298,22 @@ const Clients = () => {
           employeeUpdates.type = "client";
           
           await updateEmployee(editingClientId, employeeUpdates);
+          
+          // If sites were changed and this is an employee-client, we can't save sites to employees
+          // We should log a warning or show a message to the user
+          if (updates.sites !== undefined) {
+            console.warn("Sites cannot be saved for clients that are stored as employees. Sites are only supported for clients in the clients collection.");
+          }
         } else {
           // Update client from clients collection - only send changed fields
           const updates = buildPartialUpdate();
+          
+          // If sites were changed, ensure they're included in the update (even if empty array)
+          if (updates.sites !== undefined) {
+            // Use the formData.selectedSites directly (already set in buildPartialUpdate)
+            // This ensures empty arrays are saved properly
+          }
+          
           await updateClient(editingClientId, updates);
         }
 
