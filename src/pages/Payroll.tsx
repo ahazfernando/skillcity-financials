@@ -698,7 +698,7 @@ const Payroll = () => {
         : "pending";
       
       // Upload receipt files to Cloudinary if new files were selected
-      let receiptUrl = formData.receiptUrl;
+      const receiptUrl = formData.receiptUrl;
       const uploadedFiles: Array<{ url: string; filename: string }> = [];
       
       if (receiptFiles.length > 0) {
@@ -965,7 +965,7 @@ const Payroll = () => {
         : undefined;
       
       // Upload receipt files to Cloudinary if new files were selected
-      let receiptUrl = formData.receiptUrl;
+      const receiptUrl = formData.receiptUrl;
       const uploadedFiles: Array<{ url: string; filename: string }> = [];
       
       if (receiptFiles.length > 0) {
