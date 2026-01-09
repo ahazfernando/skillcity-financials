@@ -923,7 +923,7 @@ const Payroll = () => {
       audEquivalent: audEquivalent,
       attachedFiles: payroll.attachedFiles 
         ? (Array.isArray(payroll.attachedFiles) && payroll.attachedFiles.length > 0 && typeof payroll.attachedFiles[0] === 'string'
-            ? payroll.attachedFiles.map((url: string) => ({ 
+            ? (payroll.attachedFiles as string[]).map((url: string) => ({ 
                 url, 
                 filename: url.split('/').pop()?.split('?')[0] || 'Receipt' 
               }))
