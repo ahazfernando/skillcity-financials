@@ -83,6 +83,7 @@ const Employees = () => {
   const [modalMonthRange, setModalMonthRange] = useState<DateRange | undefined>(undefined);
   const [modalInvoiceFrequencyFilter, setModalInvoiceFrequencyFilter] = useState<string>("all");
   const [showAllInvoices, setShowAllInvoices] = useState(false);
+  const [showAdmins, setShowAdmins] = useState(true); // Toggle to show/hide admins
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 8;
   const [employeePayRates, setEmployeePayRates] = useState<EmployeePayRate[]>([]);
@@ -208,14 +209,102 @@ const Employees = () => {
           }
         }
         
-        // Filter out clients only - include admin employees
-        const actualEmployees = fetchedEmployees.filter(
+        // Filter out clients - show all employees
+        let actualEmployees = fetchedEmployees.filter(
           (emp) => {
-            // Filter out clients only - show all employees including admins
+            // Filter out clients only
             if (emp.type && emp.type !== "employee") return false;
             return true;
           }
         );
+
+        // If showAdmins is true, include admin users who might not have employee records
+        if (showAdmins) {
+          // Get admin users from the users collection
+          const adminUsers = allUsers.filter(
+            (user) => (user.role === "admin" || user.isAdmin) && user.approved
+          );
+
+          // Create a map of existing employees by email for quick lookup
+          const employeeMap = new Map<string, Employee>();
+          actualEmployees.forEach((emp) => {
+            if (emp.email) {
+              employeeMap.set(emp.email.toLowerCase(), emp);
+            }
+          });
+
+          // Track if any admin records were created or updated
+          let adminRecordsModified = false;
+
+          // For each admin user, check if they have an employee record
+          for (const adminUser of adminUsers) {
+            const adminEmail = adminUser.email.toLowerCase();
+            if (!employeeMap.has(adminEmail)) {
+              // Admin doesn't have an employee record - create one
+              try {
+                const startDate = adminUser.createdAt
+                  ? adminUser.createdAt.toISOString().split("T")[0]
+                  : new Date().toISOString().split("T")[0];
+
+                await addEmployee({
+                  name: adminUser.name || "Unknown",
+                  role: "admin",
+                  email: adminUser.email,
+                  phone: "",
+                  salary: 0,
+                  startDate,
+                  status: "active",
+                  type: "employee",
+                  isSkillCityEmployee: false,
+                });
+
+                adminRecordsModified = true;
+              } catch (error) {
+                console.error(`Error creating employee record for admin ${adminUser.email}:`, error);
+                // Continue even if creation fails
+              }
+            } else {
+              // Admin has an employee record - ensure it has the admin role if not already set
+              const existingEmployee = employeeMap.get(adminEmail);
+              if (existingEmployee && existingEmployee.role?.toLowerCase() !== "admin") {
+                try {
+                  await updateEmployee(existingEmployee.id, { role: "admin" });
+                  adminRecordsModified = true;
+                } catch (error) {
+                  console.error(`Error updating employee role for admin ${adminUser.email}:`, error);
+                }
+              }
+            }
+          }
+
+          // Reload employees from Firebase if any admin records were modified
+          if (adminRecordsModified) {
+            const reloadedEmployees = await getAllEmployees();
+            actualEmployees = reloadedEmployees.filter(
+              (emp) => {
+                if (emp.type && emp.type !== "employee") return false;
+                return true;
+              }
+            );
+          }
+        } else {
+          // Filter out admins if showAdmins is false
+          const adminEmails = new Set(
+            allUsers
+              .filter((user) => (user.role === "admin" || user.isAdmin) && user.approved)
+              .map((user) => user.email.toLowerCase())
+          );
+          actualEmployees = actualEmployees.filter((emp) => {
+            if (emp.email && adminEmails.has(emp.email.toLowerCase())) {
+              // Check if role is admin
+              if (emp.role?.toLowerCase() === "admin") {
+                return false;
+              }
+            }
+            return true;
+          });
+        }
+
         // Sort employees alphabetically by name
         const sortedEmployees = actualEmployees.sort((a, b) =>
           a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
@@ -230,7 +319,7 @@ const Employees = () => {
     };
 
     loadEmployees();
-  }, [userData]);
+  }, [userData, showAdmins]);
 
   // Load invoices from Firebase
   useEffect(() => {
@@ -549,11 +638,34 @@ const Employees = () => {
         }
         
         // Reload employees to get the latest data from Firebase
-        const updatedEmployees = await getAllEmployees();
-        // Filter out clients - only show actual employees
-        const actualEmployees = updatedEmployees.filter(
+        const [updatedEmployees, allUsers] = await Promise.all([
+          getAllEmployees(),
+          getAllUsers(),
+        ]);
+        
+        // Filter out clients - show employees based on showAdmins setting
+        let actualEmployees = updatedEmployees.filter(
           (emp) => !emp.type || emp.type === "employee"
         );
+
+        // Apply admin filter based on showAdmins state
+        if (!showAdmins) {
+          const adminEmails = new Set(
+            allUsers
+              .filter(user => (user.role === "admin" || user.isAdmin) && user.approved)
+              .map(user => user.email.toLowerCase())
+          );
+          actualEmployees = actualEmployees.filter((emp) => {
+            if (emp.email && adminEmails.has(emp.email.toLowerCase())) {
+              return false;
+            }
+            if (emp.role?.toLowerCase() === "admin") {
+              return false;
+            }
+            return true;
+          });
+        }
+
         // Sort employees alphabetically by name
         const sortedEmployees = actualEmployees.sort((a, b) =>
           a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
@@ -585,29 +697,37 @@ const Employees = () => {
         getAllUsers(),
       ]);
       
-      // Create a set of admin user emails for quick lookup
-      const adminEmails = new Set(
-        allUsers
-          .filter(user => user.role === "admin" || user.isAdmin)
-          .map(user => user.email.toLowerCase())
-      );
-      
-      // Filter out clients and admins - only show actual employees
-      const actualEmployees = updatedEmployees.filter(
+      // Filter out clients - show employees based on showAdmins setting
+      let actualEmployees = updatedEmployees.filter(
         (emp) => {
           // Filter out clients
           if (emp.type && emp.type !== "employee") return false;
-          // Filter out admins by role (case-insensitive, handle variations)
-          if (emp.role) {
-            const roleLower = emp.role.toLowerCase().trim();
-            if (roleLower === "admin" || roleLower === "administrator") return false;
-          }
-          // Filter out admins by email match
-          if (emp.email && adminEmails.has(emp.email.toLowerCase())) return false;
           return true;
         }
       );
-      setEmployees(actualEmployees);
+
+      // Apply admin filter based on showAdmins state
+      if (!showAdmins) {
+        const adminEmails = new Set(
+          allUsers
+            .filter(user => (user.role === "admin" || user.isAdmin) && user.approved)
+            .map(user => user.email.toLowerCase())
+        );
+        actualEmployees = actualEmployees.filter((emp) => {
+          if (emp.email && adminEmails.has(emp.email.toLowerCase())) {
+            return false;
+          }
+          if (emp.role?.toLowerCase() === "admin") {
+            return false;
+          }
+          return true;
+        });
+      }
+
+      const sortedEmployees = actualEmployees.sort((a, b) =>
+        a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+      );
+      setEmployees(sortedEmployees);
       
       toast.success("Employee deleted successfully!");
       setIsDeleteDialogOpen(false);
@@ -624,10 +744,12 @@ const Employees = () => {
   };
 
   const filteredEmployees = employees.filter(employee => {
-    // Exclude admins (double-check to ensure they're filtered out)
-    if (employee.role) {
-      const roleLower = employee.role.toLowerCase().trim();
-      if (roleLower === "admin" || roleLower === "administrator") return false;
+    // Apply admin filter based on showAdmins state
+    if (!showAdmins) {
+      if (employee.role) {
+        const roleLower = employee.role.toLowerCase().trim();
+        if (roleLower === "admin" || roleLower === "administrator") return false;
+      }
     }
     
     // Apply search filter
@@ -666,7 +788,7 @@ const Employees = () => {
   // Reset to page 1 when search or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchValue, organizationFilter, employeeListInvoiceFrequencyFilter]);
+  }, [searchValue, organizationFilter, employeeListInvoiceFrequencyFilter, showAdmins]);
 
   // Filter invoices based on employee invoice collection frequency and date range
   const getFilteredEmployeeInvoices = () => {
@@ -856,6 +978,21 @@ const Employees = () => {
                   <SelectItem value="Monthly">Monthly</SelectItem>
                 </SelectContent>
               </Select>
+              
+              {/* Show Admins Toggle */}
+              <div className="flex items-center space-x-2 px-3 py-2 border rounded-md">
+                <Checkbox
+                  id="showAdmins"
+                  checked={showAdmins}
+                  onCheckedChange={(checked) => setShowAdmins(checked as boolean)}
+                />
+                <Label
+                  htmlFor="showAdmins"
+                  className="text-sm font-medium cursor-pointer"
+                >
+                  Show Admins
+                </Label>
+              </div>
               
               {/* Clear Filters Button */}
               {(organizationFilter !== "all" || employeeListInvoiceFrequencyFilter !== "all") && (
