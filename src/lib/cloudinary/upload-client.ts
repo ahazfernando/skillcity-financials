@@ -27,11 +27,13 @@ function getCloudinaryConfig() {
  * Upload a file to Cloudinary using unsigned upload with preset
  * @param file - The file to upload
  * @param folder - Optional folder path in Cloudinary
+ * @param filename - Optional original filename to preserve in Cloudinary
  * @returns Promise with upload result containing URL and metadata
  */
 export async function uploadToCloudinary(
   file: File,
-  folder?: string
+  folder?: string,
+  filename?: string
 ): Promise<UploadResult> {
   try {
     const { cloudName, preset } = getCloudinaryConfig();
@@ -43,6 +45,21 @@ export async function uploadToCloudinary(
     
     if (folder) {
       formData.append('folder', folder);
+    }
+
+    // Preserve original filename if provided
+    // For unsigned uploads, use public_id and filename_override parameters
+    if (filename) {
+      // Use filename_override to preserve the original filename in the response
+      // This parameter is allowed in unsigned uploads
+      formData.append('filename_override', filename);
+      
+      // Set public_id to use the filename (Cloudinary will preserve the extension)
+      // Sanitize filename for Cloudinary public_id (only alphanumeric, underscore, hyphen, dot)
+      // Keep the extension as Cloudinary needs it
+      const sanitizedFilename = filename.replace(/[^a-zA-Z0-9_.-]/g, '_');
+      const publicId = folder ? `${folder}/${sanitizedFilename}` : sanitizedFilename;
+      formData.append('public_id', publicId);
     }
 
     // Upload to Cloudinary using unsigned upload

@@ -47,6 +47,11 @@ const docToPayroll = (doc: any): Payroll => {
     allowances: data.allowances || undefined,
     deductions: data.deductions || undefined,
     receiptUrl: data.receiptUrl || undefined,
+    frequency: data.frequency || undefined,
+    paymentCycle: data.paymentCycle || undefined,
+    exchangeRate: data.exchangeRate || undefined,
+    audEquivalent: data.audEquivalent || undefined,
+    attachedFiles: data.attachedFiles || undefined, // Can be string[] or Array<{url, filename}>
     createdAt: data.createdAt ? (data.createdAt.toDate ? data.createdAt.toDate().toISOString() : data.createdAt) : undefined,
     updatedAt: data.updatedAt ? (data.updatedAt.toDate ? data.updatedAt.toDate().toISOString() : data.updatedAt) : undefined,
     movedToHistoryAt: data.movedToHistoryAt || undefined,
@@ -88,6 +93,11 @@ const payrollToDoc = (payroll: Omit<Payroll, "id">): any => {
   if (payroll.allowances !== undefined) doc.allowances = payroll.allowances;
   if (payroll.deductions !== undefined) doc.deductions = payroll.deductions;
   if (payroll.receiptUrl) doc.receiptUrl = payroll.receiptUrl;
+  if (payroll.frequency) doc.frequency = payroll.frequency;
+  if (payroll.paymentCycle !== undefined) doc.paymentCycle = payroll.paymentCycle;
+  if (payroll.exchangeRate !== undefined) doc.exchangeRate = payroll.exchangeRate;
+  if (payroll.audEquivalent !== undefined) doc.audEquivalent = payroll.audEquivalent;
+  if (payroll.attachedFiles) doc.attachedFiles = payroll.attachedFiles;
   if (payroll.movedToHistoryAt) doc.movedToHistoryAt = payroll.movedToHistoryAt;
 
   return doc;

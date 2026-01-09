@@ -47,7 +47,7 @@ export interface Payroll {
   notes?: string; // Additional notes
   frequency?: PayrollFrequency; // "Weekly", "Fortnightly", "Monthly"
   paymentCycle?: number; // Payment cycle in days (default: 45)
-  attachedFiles?: string[]; // Array of file URLs
+  attachedFiles?: Array<{ url: string; filename: string }> | string[]; // Array of file objects with URL and filename, or legacy string URLs
   // Legacy fields for backward compatibility
   employeeId?: string;
   employeeName?: string;
