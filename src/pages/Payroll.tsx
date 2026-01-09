@@ -2932,13 +2932,14 @@ const Payroll = () => {
                           )}
                           {formData.attachedFiles && formData.attachedFiles.length > 0 && formData.attachedFiles.map((item, index) => {
                             // Handle both legacy string format and new object format
-                            const fileItem = typeof item === 'string' 
-                              ? { url: item, filename: item.split('/').pop()?.split('?')[0] || `Receipt ${index + 1}` }
-                              : item;
-                            const fileUrl = typeof item === 'string' ? item : item.url;
-                            const fileName = typeof item === 'string' 
-                              ? item.split('/').pop()?.split('?')[0] || `Receipt ${index + 1}`
-                              : item.filename;
+                            const itemValue = item as string | { url: string; filename: string };
+                            const fileItem = typeof itemValue === 'string' 
+                              ? { url: itemValue, filename: itemValue.split('/').pop()?.split('?')[0] || `Receipt ${index + 1}` }
+                              : itemValue;
+                            const fileUrl = typeof itemValue === 'string' ? itemValue : itemValue.url;
+                            const fileName = typeof itemValue === 'string' 
+                              ? itemValue.split('/').pop()?.split('?')[0] || `Receipt ${index + 1}`
+                              : itemValue.filename;
                             
                             return (
                               <div key={index} className="flex items-center justify-center gap-3 p-3 bg-muted/50 rounded-lg">
