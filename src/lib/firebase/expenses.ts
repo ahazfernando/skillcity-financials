@@ -71,11 +71,35 @@ export const addExpense = async (
   expense: Omit<Expense, "id">
 ): Promise<string> => {
   try {
-    const expenseData = {
-      ...expense,
+    // Remove undefined values as Firebase doesn't allow them
+    const expenseData: any = {
+      category: expense.category,
+      description: expense.description,
+      amount: expense.amount,
+      date: expense.date,
+      paymentMethod: expense.paymentMethod,
+      status: expense.status,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
     };
+    
+    // Only add optional fields if they have values
+    if (expense.vendor !== undefined && expense.vendor !== null && expense.vendor !== "") {
+      expenseData.vendor = expense.vendor;
+    }
+    if (expense.receiptUrl !== undefined && expense.receiptUrl !== null && expense.receiptUrl !== "") {
+      expenseData.receiptUrl = expense.receiptUrl;
+    }
+    if (expense.notes !== undefined && expense.notes !== null && expense.notes !== "") {
+      expenseData.notes = expense.notes;
+    }
+    if (expense.approvedBy !== undefined && expense.approvedBy !== null && expense.approvedBy !== "") {
+      expenseData.approvedBy = expense.approvedBy;
+    }
+    if (expense.approvedAt !== undefined && expense.approvedAt !== null && expense.approvedAt !== "") {
+      expenseData.approvedAt = expense.approvedAt;
+    }
+    
     const docRef = await addDoc(collection(db, EXPENSES_COLLECTION), expenseData);
     return docRef.id;
   } catch (error) {
@@ -92,9 +116,34 @@ export const updateExpense = async (
   try {
     const expenseRef = doc(db, EXPENSES_COLLECTION, id);
     const updateData: any = {
-      ...updates,
       updatedAt: Timestamp.now(),
     };
+    
+    // Only add fields that are defined and not undefined
+    if (updates.category !== undefined) updateData.category = updates.category;
+    if (updates.description !== undefined) updateData.description = updates.description;
+    if (updates.amount !== undefined) updateData.amount = updates.amount;
+    if (updates.date !== undefined) updateData.date = updates.date;
+    if (updates.paymentMethod !== undefined) updateData.paymentMethod = updates.paymentMethod;
+    if (updates.status !== undefined) updateData.status = updates.status;
+    
+    // Optional fields - only add if they have a value (not undefined, null, or empty string)
+    if (updates.vendor !== undefined && updates.vendor !== null && updates.vendor !== "") {
+      updateData.vendor = updates.vendor;
+    }
+    if (updates.receiptUrl !== undefined && updates.receiptUrl !== null && updates.receiptUrl !== "") {
+      updateData.receiptUrl = updates.receiptUrl;
+    }
+    if (updates.notes !== undefined && updates.notes !== null && updates.notes !== "") {
+      updateData.notes = updates.notes;
+    }
+    if (updates.approvedBy !== undefined && updates.approvedBy !== null && updates.approvedBy !== "") {
+      updateData.approvedBy = updates.approvedBy;
+    }
+    if (updates.approvedAt !== undefined && updates.approvedAt !== null && updates.approvedAt !== "") {
+      updateData.approvedAt = updates.approvedAt;
+    }
+    
     await updateDoc(expenseRef, updateData);
   } catch (error) {
     console.error("Error updating expense:", error);

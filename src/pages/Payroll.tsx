@@ -973,11 +973,6 @@ const Payroll = () => {
           : formData.paymentDate;
       }
 
-      // Calculate status based on payment cycle if date is provided, otherwise keep existing status
-      const calculatedStatus = formData.date 
-        ? calculatePaymentStatus(formData.date, formData.paymentCycle)
-        : undefined;
-      
       // Upload receipt files to Cloudinary if new files were selected
       const receiptUrl = formData.receiptUrl;
       const uploadedFiles: Array<{ url: string; filename: string }> = [];
@@ -1042,7 +1037,7 @@ const Payroll = () => {
         ...(formData.paymentMethod && { paymentMethod: formData.paymentMethod }),
         ...(formattedPaymentDate !== undefined && { paymentDate: formattedPaymentDate }),
         ...(formData.paymentReceiptNumber !== undefined && { paymentReceiptNumber: formData.paymentReceiptNumber || undefined }),
-        ...(calculatedStatus && { status: calculatedStatus }),
+        ...(formData.status && { status: formData.status }),
         ...(formData.notes !== undefined && { notes: formData.notes || undefined }),
         ...(formData.frequency && { frequency: formData.frequency }),
         ...(formData.paymentCycle !== undefined && { paymentCycle: formData.paymentCycle }),
@@ -2724,7 +2719,9 @@ const Payroll = () => {
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-muted-foreground">
-                        Status is auto-calculated based on payment cycle
+                        {editingPayrollId 
+                          ? "You can manually change the status when editing"
+                          : "Status is auto-calculated based on payment cycle"}
                       </p>
                     </div>
                   </div>
