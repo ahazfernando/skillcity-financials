@@ -927,17 +927,52 @@ const Invoices = () => {
                         )}
                       </TableCell>
                       <TableCell>
-                        <span className="font-medium text-foreground">
-                          ${payroll.amountExclGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
+                        {payroll.currency === "LKR" && payroll.audEquivalent !== undefined && payroll.totalAmount > 0 ? (
+                          <div className="flex flex-col">
+                            <span className="font-medium text-foreground">
+                              ${((payroll.amountExclGst / payroll.totalAmount) * payroll.audEquivalent).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              LKR {payroll.amountExclGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="font-medium text-foreground">
+                            ${payroll.amountExclGst.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell>
-                        <span className="text-sm text-muted-foreground">
-                          ${payroll.gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
+                        {payroll.currency === "LKR" && payroll.audEquivalent !== undefined && payroll.totalAmount > 0 ? (
+                          <div className="flex flex-col">
+                            <span className="text-sm text-muted-foreground">
+                              ${((payroll.gstAmount / payroll.totalAmount) * payroll.audEquivalent).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              LKR {payroll.gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">
+                            ${payroll.gstAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell className="font-bold text-green-600 dark:text-green-400">
-                        ${payroll.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        {payroll.currency === "LKR" && payroll.audEquivalent !== undefined ? (
+                          <div className="flex flex-col">
+                            <span>
+                              ${payroll.audEquivalent.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                            <span className="text-xs text-muted-foreground font-normal">
+                              LKR {payroll.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
+                          </div>
+                        ) : (
+                          <span>
+                            ${payroll.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <span className="text-sm font-medium">{formatDate(payroll.date)}</span>

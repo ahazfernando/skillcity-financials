@@ -625,6 +625,20 @@ const Payroll = () => {
     setReceiptFileNames([]);
   };
 
+  const handleRemoveAttachedFile = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      attachedFiles: prev.attachedFiles.filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleRemoveReceiptUrl = () => {
+    setFormData((prev) => ({
+      ...prev,
+      receiptUrl: "",
+    }));
+  };
+
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(true);
@@ -2927,6 +2941,19 @@ const Payroll = () => {
                                 >
                                   <Download className="h-4 w-4" />
                                 </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveReceiptUrl();
+                                  }}
+                                  title="Remove receipt"
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
                               </div>
                             </div>
                           )}
@@ -3001,6 +3028,19 @@ const Payroll = () => {
                                     title="Download receipt"
                                   >
                                     <Download className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRemoveAttachedFile(index);
+                                    }}
+                                    title="Remove file"
+                                  >
+                                    <X className="h-4 w-4" />
                                   </Button>
                                 </div>
                               </div>
@@ -3086,6 +3126,19 @@ const Payroll = () => {
                                 title="Download receipt"
                               >
                                 <Download className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveReceiptUrl();
+                                }}
+                                title="Remove receipt"
+                              >
+                                <X className="h-4 w-4" />
                               </Button>
                             </div>
                           </div>
