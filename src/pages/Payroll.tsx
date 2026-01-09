@@ -275,8 +275,11 @@ const Payroll = () => {
           if (rate > 0) {
             const audAmount = amount / rate;
             updated.audEquivalent = audAmount.toFixed(2);
+            // When LKR is selected, Total Amount should equal AUD Equivalent
+            updated.totalAmount = audAmount.toFixed(2);
           } else {
             updated.audEquivalent = "";
+            updated.totalAmount = "";
           }
         } else {
           updated.audEquivalent = "";
@@ -284,8 +287,9 @@ const Payroll = () => {
       }
 
       // Auto-calculate GST (10%) based on cash flow direction
-      // Trigger calculation when amount, GST Registered status, or Calculate GST changes
-      if (field === "amountExclGst" || field === "gstRegistered" || field === "calculateGst" || field === "modeOfCashFlow") {
+      // Trigger calculation when amount, GST Registered status, Calculate GST changes, or currency changes from LKR
+      // Skip this calculation if currency is LKR (Total Amount should equal AUD Equivalent)
+      if ((field === "amountExclGst" || field === "gstRegistered" || field === "calculateGst" || field === "modeOfCashFlow" || (field === "currency" && prev.currency === "LKR" && updated.currency !== "LKR")) && updated.currency !== "LKR") {
         // Parse amount, handling both string and number types
         let amountExclGst = 0;
         if (typeof updated.amountExclGst === 'string') {
@@ -326,7 +330,8 @@ const Payroll = () => {
       }
       
       // Recalculate GST when modeOfCashFlow changes
-      if (field === "modeOfCashFlow" && updated.amountExclGst) {
+      // Skip this calculation if currency is LKR (Total Amount should equal AUD Equivalent)
+      if (field === "modeOfCashFlow" && updated.amountExclGst && updated.currency !== "LKR") {
         const amountExclGst = parseFloat(String(updated.amountExclGst || 0)) || 0;
         const gst = amountExclGst * 0.10;
         
@@ -808,6 +813,21 @@ const Payroll = () => {
     const calculateGst = payroll.gstAmount > 0 && payroll.gstRegistered ? true : 
                          (payroll.gstAmount === 0 ? false : true);
     
+    // Calculate AUD equivalent and set Total Amount if currency is LKR
+    let audEquivalent = (payroll as any).audEquivalent || "";
+    let totalAmount = payroll.totalAmount.toString();
+    
+    if (payroll.currency === "LKR" && (payroll as any).exchangeRate && payroll.amountExclGst) {
+      const amount = payroll.amountExclGst;
+      const rate = parseFloat(String((payroll as any).exchangeRate)) || 0;
+      if (rate > 0) {
+        const audAmount = amount / rate;
+        audEquivalent = audAmount.toFixed(2);
+        // When LKR is selected, Total Amount should equal AUD Equivalent
+        totalAmount = audAmount.toFixed(2);
+      }
+    }
+    
     setFormData({
       month: payroll.month,
       date: convertDateToInputFormat(payroll.date),
@@ -821,7 +841,7 @@ const Payroll = () => {
       invoiceNumber: payroll.invoiceNumber || "",
       amountExclGst: payroll.amountExclGst.toString(),
       gstAmount: payroll.gstAmount.toString(),
-      totalAmount: payroll.totalAmount.toString(),
+      totalAmount: totalAmount,
       currency: payroll.currency,
       paymentMethod: payroll.paymentMethod,
       paymentDate: payroll.paymentDate ? convertDateToInputFormat(payroll.paymentDate) : "",
@@ -832,7 +852,7 @@ const Payroll = () => {
       frequency: payroll.frequency || "Monthly",
       paymentCycle: payroll.paymentCycle || 45,
       exchangeRate: (payroll as any).exchangeRate || "",
-      audEquivalent: (payroll as any).audEquivalent || "",
+      audEquivalent: audEquivalent,
     });
     setReceiptFile(null);
     setIsAddDialogOpen(true);
@@ -1833,16 +1853,22 @@ const Payroll = () => {
                       </TableCell>
                       <TableCell>
                         <span className="font-medium text-foreground">
-                          {formatCurrencySimple(payroll.amountExclGst, payroll.currency || 'AUD')}
+                          {payroll.currency === 'LKR' && payroll.exchangeRate && payroll.audEquivalent !== undefined
+                            ? `AUD${parseFloat(payroll.audEquivalent.toString()).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                            : formatCurrencySimple(payroll.amountExclGst, payroll.currency || 'AUD')}
                         </span>
                       </TableCell>
                       <TableCell>
                         <span className="text-sm text-muted-foreground">
-                          {formatCurrencySimple(payroll.gstAmount, payroll.currency || 'AUD')}
+                          {payroll.currency === 'LKR' && payroll.exchangeRate && payroll.audEquivalent !== undefined && payroll.amountExclGst > 0
+                            ? `AUD${((payroll.audEquivalent * payroll.gstAmount) / payroll.amountExclGst).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                            : formatCurrencySimple(payroll.gstAmount, payroll.currency || 'AUD')}
                         </span>
                       </TableCell>
                       <TableCell className="font-bold text-green-600 dark:text-green-400">
-                        {formatCurrencySimple(payroll.totalAmount, payroll.currency || 'AUD')}
+                        {payroll.currency === 'LKR' && payroll.exchangeRate && payroll.audEquivalent !== undefined
+                          ? `AUD${parseFloat(payroll.audEquivalent.toString()).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                          : formatCurrencySimple(payroll.totalAmount, payroll.currency || 'AUD')}
                       </TableCell>
                       <TableCell>
                         <Badge variant="outline" className="text-xs">
@@ -1963,15 +1989,27 @@ const Payroll = () => {
                     <div className="space-y-2 pt-2 border-t">
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-muted-foreground">Amount (Excl. GST)</span>
-                        <span className="font-medium">{formatCurrencySimple(payroll.amountExclGst, payroll.currency || 'AUD')}</span>
+                        <span className="font-medium">
+                          {payroll.currency === 'LKR' && payroll.exchangeRate && payroll.audEquivalent !== undefined
+                            ? `AUD${parseFloat(payroll.audEquivalent.toString()).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                            : formatCurrencySimple(payroll.amountExclGst, payroll.currency || 'AUD')}
+                        </span>
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-muted-foreground">GST Amount</span>
-                        <span className="font-medium">{formatCurrencySimple(payroll.gstAmount, payroll.currency || 'AUD')}</span>
+                        <span className="font-medium">
+                          {payroll.currency === 'LKR' && payroll.exchangeRate && payroll.audEquivalent !== undefined && payroll.amountExclGst > 0
+                            ? `AUD${((payroll.audEquivalent * payroll.gstAmount) / payroll.amountExclGst).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                            : formatCurrencySimple(payroll.gstAmount, payroll.currency || 'AUD')}
+                        </span>
                       </div>
                       <div className="flex justify-between items-center pt-2 border-t">
                         <span className="font-semibold">Total Amount</span>
-                        <span className="font-bold text-lg">{formatCurrencySimple(payroll.totalAmount, payroll.currency || 'AUD')}</span>
+                        <span className="font-bold text-lg">
+                          {payroll.currency === 'LKR' && payroll.exchangeRate && payroll.audEquivalent !== undefined
+                            ? `AUD${parseFloat(payroll.audEquivalent.toString()).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                            : formatCurrencySimple(payroll.totalAmount, payroll.currency || 'AUD')}
+                        </span>
                       </div>
                     </div>
 
@@ -2597,71 +2635,73 @@ const Payroll = () => {
                               </p>
                             </div>
                             <div className="flex items-center gap-1 flex-shrink-0">
-                              {(receiptFile.type.startsWith('image/') || receiptFile.name.toLowerCase().endsWith('.pdf')) && (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 p-0"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (formData.receiptUrl) {
-                                      window.open(formData.receiptUrl, '_blank');
-                                    }
-                                  }}
-                                  title="View file"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
+                              {formData.receiptUrl && formData.receiptUrl.startsWith('blob:') && (
+                                <>
+                                  {(receiptFile.type.startsWith('image/') || receiptFile.name.toLowerCase().endsWith('.pdf')) && (
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 w-8 p-0"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        window.open(formData.receiptUrl, '_blank');
+                                      }}
+                                      title="View file"
+                                    >
+                                      <Eye className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0"
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      try {
+                                        // For blob URLs, download directly
+                                        if (formData.receiptUrl.startsWith('blob:')) {
+                                          const link = document.createElement('a');
+                                          link.href = formData.receiptUrl;
+                                          link.download = receiptFile.name;
+                                          link.target = '_blank';
+                                          document.body.appendChild(link);
+                                          link.click();
+                                          document.body.removeChild(link);
+                                        } else if (formData.receiptUrl.includes('cloudinary.com') || formData.receiptUrl.includes('res.cloudinary.com')) {
+                                          // For Cloudinary URLs, fetch and download
+                                          const response = await fetch(formData.receiptUrl);
+                                          const blob = await response.blob();
+                                          const url = window.URL.createObjectURL(blob);
+                                          const link = document.createElement('a');
+                                          link.href = url;
+                                          link.download = receiptFile.name;
+                                          document.body.appendChild(link);
+                                          link.click();
+                                          document.body.removeChild(link);
+                                          window.URL.revokeObjectURL(url);
+                                        } else {
+                                          // For other URLs
+                                          const link = document.createElement('a');
+                                          link.href = formData.receiptUrl;
+                                          link.download = receiptFile.name;
+                                          link.target = '_blank';
+                                          document.body.appendChild(link);
+                                          link.click();
+                                          document.body.removeChild(link);
+                                        }
+                                      } catch (error) {
+                                        console.error("Error downloading file:", error);
+                                        toast.error("Failed to download file. Please try again.");
+                                      }
+                                    }}
+                                    title="Download file"
+                                  >
+                                    <Download className="h-4 w-4" />
+                                  </Button>
+                                </>
                               )}
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  try {
-                                    // For blob URLs, download directly
-                                    if (formData.receiptUrl?.startsWith('blob:')) {
-                                      const link = document.createElement('a');
-                                      link.href = formData.receiptUrl;
-                                      link.download = receiptFile.name;
-                                      link.target = '_blank';
-                                      document.body.appendChild(link);
-                                      link.click();
-                                      document.body.removeChild(link);
-                                    } else if (formData.receiptUrl?.includes('cloudinary.com') || formData.receiptUrl?.includes('res.cloudinary.com')) {
-                                      // For Cloudinary URLs, fetch and download
-                                      const response = await fetch(formData.receiptUrl);
-                                      const blob = await response.blob();
-                                      const url = window.URL.createObjectURL(blob);
-                                      const link = document.createElement('a');
-                                      link.href = url;
-                                      link.download = receiptFile.name;
-                                      document.body.appendChild(link);
-                                      link.click();
-                                      document.body.removeChild(link);
-                                      window.URL.revokeObjectURL(url);
-                                    } else if (formData.receiptUrl) {
-                                      // For other URLs
-                                      const link = document.createElement('a');
-                                      link.href = formData.receiptUrl;
-                                      link.download = receiptFile.name;
-                                      link.target = '_blank';
-                                      document.body.appendChild(link);
-                                      link.click();
-                                      document.body.removeChild(link);
-                                    }
-                                  } catch (error) {
-                                    console.error("Error downloading file:", error);
-                                    toast.error("Failed to download file. Please try again.");
-                                  }
-                                }}
-                                title="Download file"
-                              >
-                                <Download className="h-4 w-4" />
-                              </Button>
                               <Button
                                 type="button"
                                 variant="ghost"

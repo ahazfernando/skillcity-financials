@@ -56,6 +56,8 @@ export interface Payroll {
   allowances?: number;
   deductions?: number;
   receiptUrl?: string;
+  exchangeRate?: number; // Exchange rate for currency conversion (e.g., LKR to AUD)
+  audEquivalent?: number; // AUD equivalent amount when currency is not AUD
   createdAt?: string;
   updatedAt?: string;
   movedToHistoryAt?: string; // Date when invoice was moved to history (ISO string)
