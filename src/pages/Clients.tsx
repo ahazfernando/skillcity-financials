@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Search, UserPlus, Loader2, Trash2, LayoutGrid, Table as TableIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -52,7 +53,7 @@ import { getAllClients, addClient, updateClient, deleteClient } from "@/lib/fire
 import { getAllEmployees, updateEmployee, deleteEmployee } from "@/lib/firebase/employees";
 import { getAllSites } from "@/lib/firebase/sites";
 import { toast } from "sonner";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronsUpDown, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Pagination,
@@ -87,6 +88,7 @@ const Clients = () => {
   const rowsPerPage = 8;
   const [viewMode, setViewMode] = useState<"table" | "card">("table");
   const [companyNamePopoverOpen, setCompanyNamePopoverOpen] = useState(false);
+  const [siteSearchValue, setSiteSearchValue] = useState("");
   const [formData, setFormData] = useState({
     name: "",
     companyName: "",
@@ -96,6 +98,7 @@ const Clients = () => {
     contactPerson: "",
     status: "active" as "active" | "inactive",
     notes: "",
+    selectedSites: [] as string[], // Array of site IDs
   });
 
   // Load clients and sites from Firebase
@@ -161,17 +164,21 @@ const Clients = () => {
       contactPerson: "",
       status: "active",
       notes: "",
+      selectedSites: [],
     });
     setEditingClientId(null);
     setEditingClientSource(null);
     setOriginalClientData(null);
     setCompanyNamePopoverOpen(false);
+    setSiteSearchValue("");
   };
 
   const handleEditClient = (client: ClientDisplay) => {
     setEditingClientId(client.id);
     setEditingClientSource(client.source);
     setOriginalClientData(client);
+    // Load sites from client.sites if available, otherwise use companyName as fallback
+    const clientSites = (client as any).sites || [];
     setFormData({
       name: client.name,
       companyName: client.companyName || "",
@@ -181,6 +188,7 @@ const Clients = () => {
       contactPerson: client.contactPerson || "",
       status: client.status,
       notes: client.notes || "",
+      selectedSites: clientSites.length > 0 ? clientSites : [],
     });
     setIsEditDialogOpen(true);
   };
@@ -229,6 +237,9 @@ const Clients = () => {
           }
           if (formData.notes !== (originalClientData.notes || "")) {
             updates.notes = formData.notes || undefined;
+          }
+          if (JSON.stringify(formData.selectedSites) !== JSON.stringify((originalClientData as any).sites || [])) {
+            updates.sites = formData.selectedSites.length > 0 ? formData.selectedSites : undefined;
           }
           
           return updates;
@@ -298,6 +309,7 @@ const Clients = () => {
           contactPerson: formData.contactPerson || undefined,
           status: formData.status,
           notes: formData.notes || undefined,
+          sites: formData.selectedSites.length > 0 ? formData.selectedSites : undefined,
         };
 
         // Add client to Firebase
@@ -711,7 +723,7 @@ const Clients = () => {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="companyName">Company Name</Label>
+                      <Label htmlFor="sites">Sites</Label>
                       <Popover open={companyNamePopoverOpen} onOpenChange={setCompanyNamePopoverOpen}>
                         <PopoverTrigger asChild>
                           <Button
@@ -720,59 +732,98 @@ const Clients = () => {
                             aria-expanded={companyNamePopoverOpen}
                             className="w-full justify-between"
                           >
-                            {formData.companyName || "Select a site..."}
+                            {formData.selectedSites.length > 0
+                              ? `${formData.selectedSites.length} site${formData.selectedSites.length > 1 ? "s" : ""} selected`
+                              : "Select sites..."}
                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-full p-0" align="start">
                           <Command>
-                            <CommandInput placeholder="Search sites..." />
+                            <CommandInput 
+                              placeholder="Search sites..." 
+                              value={siteSearchValue}
+                              onValueChange={setSiteSearchValue}
+                            />
                             <CommandList>
                               <CommandEmpty>No site found.</CommandEmpty>
                               <CommandGroup>
-                                <CommandItem
-                                  value=""
-                                  onSelect={() => {
-                                    setFormData({ ...formData, companyName: "" });
-                                    setCompanyNamePopoverOpen(false);
-                                  }}
-                                >
-                                  <Check
-                                    className={cn(
-                                      "mr-2 h-4 w-4",
-                                      !formData.companyName ? "opacity-100" : "opacity-0"
-                                    )}
-                                  />
-                                  <span className="text-muted-foreground">Clear selection</span>
-                                </CommandItem>
-                                {sites.map((site) => (
-                                  <CommandItem
-                                    key={site.id}
-                                    value={site.name}
-                                    onSelect={() => {
-                                      setFormData({ ...formData, companyName: site.name });
-                                      setCompanyNamePopoverOpen(false);
-                                    }}
-                                  >
-                                    <Check
-                                      className={cn(
-                                        "mr-2 h-4 w-4",
-                                        formData.companyName === site.name ? "opacity-100" : "opacity-0"
-                                      )}
-                                    />
-                                    <div className="flex flex-col">
-                                      <span>{site.name}</span>
-                                      {site.clientName && (
-                                        <span className="text-xs text-muted-foreground">{site.clientName}</span>
-                                      )}
-                                    </div>
+                                {sites.length === 0 ? (
+                                  <CommandItem disabled>
+                                    <span className="text-muted-foreground">No sites available. Please create sites first.</span>
                                   </CommandItem>
-                                ))}
+                                ) : (
+                                  sites
+                                    .filter((site) =>
+                                      !siteSearchValue ||
+                                      site.name.toLowerCase().includes(siteSearchValue.toLowerCase()) ||
+                                      (site.clientName && site.clientName.toLowerCase().includes(siteSearchValue.toLowerCase()))
+                                    )
+                                    .map((site) => (
+                                      <CommandItem
+                                        key={site.id}
+                                        value={site.name}
+                                        onSelect={() => {
+                                          if (formData.selectedSites.includes(site.id)) {
+                                            setFormData({
+                                              ...formData,
+                                              selectedSites: formData.selectedSites.filter((id) => id !== site.id),
+                                            });
+                                          } else {
+                                            setFormData({
+                                              ...formData,
+                                              selectedSites: [...formData.selectedSites, site.id],
+                                            });
+                                          }
+                                        }}
+                                      >
+                                        <Checkbox
+                                          checked={formData.selectedSites.includes(site.id)}
+                                          className="mr-2"
+                                          onCheckedChange={() => {}}
+                                        />
+                                        <div className="flex flex-col">
+                                          <span>{site.name}</span>
+                                          {site.clientName && (
+                                            <span className="text-xs text-muted-foreground">{site.clientName}</span>
+                                          )}
+                                        </div>
+                                      </CommandItem>
+                                    ))
+                                )}
                               </CommandGroup>
                             </CommandList>
                           </Command>
                         </PopoverContent>
                       </Popover>
+                      {formData.selectedSites.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          <p className="text-xs text-muted-foreground">
+                            Selected sites ({formData.selectedSites.length}):
+                          </p>
+                          <div className="flex flex-wrap gap-1">
+                            {formData.selectedSites.map((siteId) => {
+                              const site = sites.find((s) => s.id === siteId);
+                              return site ? (
+                                <Badge
+                                  key={siteId}
+                                  variant="secondary"
+                                  className="text-xs cursor-pointer hover:bg-destructive hover:text-destructive-foreground"
+                                  onClick={() => {
+                                    setFormData({
+                                      ...formData,
+                                      selectedSites: formData.selectedSites.filter((id) => id !== siteId),
+                                    });
+                                  }}
+                                >
+                                  {site.name}
+                                  <X className="ml-1 h-3 w-3" />
+                                </Badge>
+                              ) : null;
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -926,7 +977,7 @@ const Clients = () => {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="edit-companyName">Company Name</Label>
+                      <Label htmlFor="edit-sites">Sites</Label>
                       <Popover open={companyNamePopoverOpen} onOpenChange={setCompanyNamePopoverOpen}>
                         <PopoverTrigger asChild>
                           <Button
@@ -935,59 +986,98 @@ const Clients = () => {
                             aria-expanded={companyNamePopoverOpen}
                             className="w-full justify-between"
                           >
-                            {formData.companyName || "Select a site..."}
+                            {formData.selectedSites.length > 0
+                              ? `${formData.selectedSites.length} site${formData.selectedSites.length > 1 ? "s" : ""} selected`
+                              : "Select sites..."}
                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-full p-0" align="start">
                           <Command>
-                            <CommandInput placeholder="Search sites..." />
+                            <CommandInput 
+                              placeholder="Search sites..." 
+                              value={siteSearchValue}
+                              onValueChange={setSiteSearchValue}
+                            />
                             <CommandList>
                               <CommandEmpty>No site found.</CommandEmpty>
                               <CommandGroup>
-                                <CommandItem
-                                  value=""
-                                  onSelect={() => {
-                                    setFormData({ ...formData, companyName: "" });
-                                    setCompanyNamePopoverOpen(false);
-                                  }}
-                                >
-                                  <Check
-                                    className={cn(
-                                      "mr-2 h-4 w-4",
-                                      !formData.companyName ? "opacity-100" : "opacity-0"
-                                    )}
-                                  />
-                                  <span className="text-muted-foreground">Clear selection</span>
-                                </CommandItem>
-                                {sites.map((site) => (
-                                  <CommandItem
-                                    key={site.id}
-                                    value={site.name}
-                                    onSelect={() => {
-                                      setFormData({ ...formData, companyName: site.name });
-                                      setCompanyNamePopoverOpen(false);
-                                    }}
-                                  >
-                                    <Check
-                                      className={cn(
-                                        "mr-2 h-4 w-4",
-                                        formData.companyName === site.name ? "opacity-100" : "opacity-0"
-                                      )}
-                                    />
-                                    <div className="flex flex-col">
-                                      <span>{site.name}</span>
-                                      {site.clientName && (
-                                        <span className="text-xs text-muted-foreground">{site.clientName}</span>
-                                      )}
-                                    </div>
+                                {sites.length === 0 ? (
+                                  <CommandItem disabled>
+                                    <span className="text-muted-foreground">No sites available. Please create sites first.</span>
                                   </CommandItem>
-                                ))}
+                                ) : (
+                                  sites
+                                    .filter((site) =>
+                                      !siteSearchValue ||
+                                      site.name.toLowerCase().includes(siteSearchValue.toLowerCase()) ||
+                                      (site.clientName && site.clientName.toLowerCase().includes(siteSearchValue.toLowerCase()))
+                                    )
+                                    .map((site) => (
+                                      <CommandItem
+                                        key={site.id}
+                                        value={site.name}
+                                        onSelect={() => {
+                                          if (formData.selectedSites.includes(site.id)) {
+                                            setFormData({
+                                              ...formData,
+                                              selectedSites: formData.selectedSites.filter((id) => id !== site.id),
+                                            });
+                                          } else {
+                                            setFormData({
+                                              ...formData,
+                                              selectedSites: [...formData.selectedSites, site.id],
+                                            });
+                                          }
+                                        }}
+                                      >
+                                        <Checkbox
+                                          checked={formData.selectedSites.includes(site.id)}
+                                          className="mr-2"
+                                          onCheckedChange={() => {}}
+                                        />
+                                        <div className="flex flex-col">
+                                          <span>{site.name}</span>
+                                          {site.clientName && (
+                                            <span className="text-xs text-muted-foreground">{site.clientName}</span>
+                                          )}
+                                        </div>
+                                      </CommandItem>
+                                    ))
+                                )}
                               </CommandGroup>
                             </CommandList>
                           </Command>
                         </PopoverContent>
                       </Popover>
+                      {formData.selectedSites.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          <p className="text-xs text-muted-foreground">
+                            Selected sites ({formData.selectedSites.length}):
+                          </p>
+                          <div className="flex flex-wrap gap-1">
+                            {formData.selectedSites.map((siteId) => {
+                              const site = sites.find((s) => s.id === siteId);
+                              return site ? (
+                                <Badge
+                                  key={siteId}
+                                  variant="secondary"
+                                  className="text-xs cursor-pointer hover:bg-destructive hover:text-destructive-foreground"
+                                  onClick={() => {
+                                    setFormData({
+                                      ...formData,
+                                      selectedSites: formData.selectedSites.filter((id) => id !== siteId),
+                                    });
+                                  }}
+                                >
+                                  {site.name}
+                                  <X className="ml-1 h-3 w-3" />
+                                </Badge>
+                              ) : null;
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 

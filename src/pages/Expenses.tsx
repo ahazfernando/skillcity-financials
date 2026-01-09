@@ -38,6 +38,7 @@ import { Expense, ExpenseCategory, PaymentMethod } from "@/types/financial";
 import { getAllExpenses, addExpense, updateExpense, deleteExpense, queryExpenses } from "@/lib/firebase/expenses";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { FileUpload } from "@/components/ui/file-upload";
 import {
   Pagination,
   PaginationContent,
@@ -572,135 +573,168 @@ const Expenses = () => {
           }
         }}
       >
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editingExpenseId ? "Edit Expense" : "Add Expense"}</DialogTitle>
-            <DialogDescription>
-              {editingExpenseId ? "Update the expense details." : "Add a new expense to track."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="category">Category *</Label>
-                <Select
-                  value={formData.category}
-                  onValueChange={(value) => setFormData({ ...formData, category: value as ExpenseCategory })}
-                >
-                  <SelectTrigger id="category">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(categoryLabels).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>{label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="date">Date *</Label>
-                <Input
-                  id="date"
-                  type="date"
-                  value={formData.date}
-                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                />
+        <DialogContent className="max-w-6xl w-full p-0 gap-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] sm:rounded-lg">
+          <div className="grid md:grid-cols-2 h-[90vh] max-h-[90vh]">
+            {/* Left side - Image with Logo and Heading */}
+            <div className="relative hidden md:block overflow-hidden md:rounded-l-lg">
+              <img
+                src="/modalimages/finflow.jpg"
+                alt="Add Expense"
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 flex flex-col items-center justify-end pb-12 px-8">
+                <div className="flex flex-col items-center space-y-2 text-center">
+                  <img
+                    src="/logo/SkillCityQ 1.png"
+                    alt="Skill City Logo"
+                    className="w-32 h-20 object-contain"
+                  />
+                  <h2 className="text-2xl font-semibold text-white">
+                    {editingExpenseId ? "Edit expense" : "Add a new expense"}
+                  </h2>
+                  <p className="text-sm text-white">
+                    {editingExpenseId ? "Update the expense details below." : "Add a new expense to the system by filling in the details below."}
+                  </p>
+                </div>
               </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="description">Description *</Label>
-              <Input
-                id="description"
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                placeholder="Enter expense description"
-              />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="amount">Amount *</Label>
-                <Input
-                  id="amount"
-                  type="number"
-                  step="0.01"
-                  value={formData.amount}
-                  onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-                  placeholder="0.00"
-                />
+            
+            {/* Right side - Form */}
+            <div className="flex flex-col overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] md:rounded-r-lg bg-background">
+              <div className="p-6">
+                <DialogHeader>
+                  <DialogTitle>{editingExpenseId ? "Edit Expense" : "Add Expense"}</DialogTitle>
+                  <DialogDescription>
+                    {editingExpenseId ? "Update the expense details below." : "Fill in the expense details. All fields matching the table columns are available."}
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="category">Category *</Label>
+                      <Select
+                        value={formData.category}
+                        onValueChange={(value) => setFormData({ ...formData, category: value as ExpenseCategory })}
+                      >
+                        <SelectTrigger id="category">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(categoryLabels).map(([value, label]) => (
+                            <SelectItem key={value} value={value}>{label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="date">Date *</Label>
+                      <Input
+                        id="date"
+                        type="date"
+                        value={formData.date}
+                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="description">Description *</Label>
+                    <Input
+                      id="description"
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      placeholder="Enter expense description"
+                    />
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="amount">Amount *</Label>
+                      <Input
+                        id="amount"
+                        type="number"
+                        step="0.01"
+                        value={formData.amount}
+                        onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="paymentMethod">Payment Method</Label>
+                      <Select
+                        value={formData.paymentMethod}
+                        onValueChange={(value) => setFormData({ ...formData, paymentMethod: value as PaymentMethod })}
+                      >
+                        <SelectTrigger id="paymentMethod">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                          <SelectItem value="cash">Cash</SelectItem>
+                          <SelectItem value="cheque">Cheque</SelectItem>
+                          <SelectItem value="credit_card">Credit Card</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="vendor">Vendor</Label>
+                    <Input
+                      id="vendor"
+                      value={formData.vendor}
+                      onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
+                      placeholder="Vendor or supplier name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="receiptUrl">Receipt Image</Label>
+                    <FileUpload
+                      value={formData.receiptUrl}
+                      onChange={(url) => setFormData({ ...formData, receiptUrl: url })}
+                      enableCloudinary={true}
+                      folder="expense-receipts"
+                      accept="image/*"
+                      maxSize={10}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="notes">Notes</Label>
+                    <Textarea
+                      id="notes"
+                      value={formData.notes}
+                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                      placeholder="Additional notes..."
+                      rows={3}
+                    />
+                  </div>
+                </div>
+                <DialogFooter className="mt-4">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setIsAddDialogOpen(false);
+                      setIsEditDialogOpen(false);
+                      resetForm();
+                    }}
+                    disabled={isSaving}
+                  >
+                    Cancel
+                  </Button>
+                  <Button onClick={handleSaveExpense} disabled={isSaving}>
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Saving...
+                      </>
+                    ) : editingExpenseId ? (
+                      "Update Expense"
+                    ) : (
+                      "Add Expense"
+                    )}
+                  </Button>
+                </DialogFooter>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="paymentMethod">Payment Method</Label>
-                <Select
-                  value={formData.paymentMethod}
-                  onValueChange={(value) => setFormData({ ...formData, paymentMethod: value as PaymentMethod })}
-                >
-                  <SelectTrigger id="paymentMethod">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                    <SelectItem value="cash">Cash</SelectItem>
-                    <SelectItem value="cheque">Cheque</SelectItem>
-                    <SelectItem value="credit_card">Credit Card</SelectItem>
-                    <SelectItem value="other">Other</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="vendor">Vendor</Label>
-              <Input
-                id="vendor"
-                value={formData.vendor}
-                onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
-                placeholder="Vendor or supplier name"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="receiptUrl">Receipt URL</Label>
-              <Input
-                id="receiptUrl"
-                value={formData.receiptUrl}
-                onChange={(e) => setFormData({ ...formData, receiptUrl: e.target.value })}
-                placeholder="https://..."
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="notes">Notes</Label>
-              <Textarea
-                id="notes"
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                placeholder="Additional notes..."
-                rows={3}
-              />
             </div>
           </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setIsAddDialogOpen(false);
-                setIsEditDialogOpen(false);
-                resetForm();
-              }}
-              disabled={isSaving}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleSaveExpense} disabled={isSaving}>
-              {isSaving ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Saving...
-                </>
-              ) : editingExpenseId ? (
-                "Update Expense"
-              ) : (
-                "Add Expense"
-              )}
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
 

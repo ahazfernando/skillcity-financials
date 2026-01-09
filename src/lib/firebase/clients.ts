@@ -30,6 +30,7 @@ const docToClient = (doc: any): Client => {
     contactPerson: data.contactPerson || undefined,
     status: (data.status as "active" | "inactive") || "active",
     notes: data.notes || undefined,
+    sites: data.sites || undefined, // Array of site IDs
   };
 };
 
@@ -44,6 +45,7 @@ const clientToDoc = (client: Omit<Client, "id">): any => {
     contactPerson: client.contactPerson || null,
     status: client.status,
     notes: client.notes || null,
+    sites: client.sites || null, // Array of site IDs
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
   };

@@ -6,7 +6,6 @@ import {
   Users, 
   Wallet, 
   Building2, 
-  Calendar, 
   Bell, 
   Settings, 
   UserCog,
@@ -17,7 +16,6 @@ import {
   Receipt,
   BarChart3,
   History,
-  MessageSquare,
   Clock,
   CheckSquare,
   Sparkles,
@@ -41,7 +39,6 @@ import { useAuth } from "@/contexts/AuthContext";
 
 const menuItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Chat", url: "/chat", icon: MessageSquare },
   { title: "Invoices", url: "/invoices", icon: FileText },
   { title: "Payroll", url: "/payroll", icon: Wallet },
   { title: "Expenses", url: "/expenses", icon: Receipt },
@@ -52,13 +49,12 @@ const menuItems = [
   { title: "Sites", url: "/sites", icon: Building2 },
   { title: "Site Employee Allocations", url: "/site-employee-allocations", icon: Network },
   { title: "Clients", url: "/clients", icon: UserCircle },
-  { title: "Work Schedule", url: "/schedule", icon: Calendar },
   { title: "Tasks", url: "/tasks", icon: CheckSquare },
   { title: "Reminders", url: "/reminders", icon: Bell },
   { title: "Activity Log", url: "/activity-log", icon: History },
   { title: "Employee Timesheets", url: "/employee-timesheets", icon: Clock },
   { title: "Cleaning Tracker", url: "/cleaning-tracker", icon: Sparkles },
-  { title: "Products", url: "/products", icon: Package },
+  { title: "Equipments", url: "/products", icon: Package },
   { title: "Categories", url: "/categories", icon: FolderTree },
 ];
 

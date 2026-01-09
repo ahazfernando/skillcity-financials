@@ -482,7 +482,7 @@ export default function ProductsPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold">Products</h1>
+        <h1 className="text-3xl font-bold">Equipment</h1>
         <p className="text-muted-foreground mt-2">
           Manage your equipment inventory
         </p>
@@ -491,7 +491,7 @@ export default function ProductsPage() {
       <Card>
         <CardHeader>
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <CardTitle>All Products</CardTitle>
+            <CardTitle>All Equipment</CardTitle>
             <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
               <div className="relative flex-1 md:w-64">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />

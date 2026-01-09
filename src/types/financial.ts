@@ -146,6 +146,7 @@ export interface Client {
   contactPerson?: string;
   status: "active" | "inactive";
   notes?: string;
+  sites?: string[]; // Array of site IDs
 }
 
 export interface EmployeePayRate {

@@ -119,7 +119,7 @@ const Employees = () => {
 
   const { userData } = useAuth();
 
-  // Load employees from Firebase (excluding clients and admins)
+  // Load employees from Firebase (excluding clients only - admins who are employees are included)
   useEffect(() => {
     const loadEmployees = async () => {
       try {
@@ -130,13 +130,6 @@ const Employees = () => {
           getAllSites(),
         ]);
         setSites(fetchedSites);
-        
-        // Create a set of admin user emails for quick lookup
-        const adminEmails = new Set(
-          allUsers
-            .filter(user => user.role === "admin" || user.isAdmin)
-            .map(user => user.email.toLowerCase())
-        );
         
         // Auto-create employee record for current user if they don't have one
         if (userData && userData.approved && userData.email) {
@@ -177,15 +170,8 @@ const Employees = () => {
               const updatedEmployees = await getAllEmployees();
               const actualEmployees = updatedEmployees.filter(
                 (emp) => {
-                  // Filter out clients
+                  // Filter out clients only - include admin employees
                   if (emp.type && emp.type !== "employee") return false;
-                  // Filter out admins by role (case-insensitive, handle variations)
-                  if (emp.role) {
-                    const roleLower = emp.role.toLowerCase().trim();
-                    if (roleLower === "admin" || roleLower === "administrator") return false;
-                  }
-                  // Filter out admins by email match
-                  if (emp.email && adminEmails.has(emp.email.toLowerCase())) return false;
                   return true;
                 }
               );
@@ -222,18 +208,11 @@ const Employees = () => {
           }
         }
         
-        // Filter out clients and admins - only show actual employees
+        // Filter out clients only - include admin employees
         const actualEmployees = fetchedEmployees.filter(
           (emp) => {
-            // Filter out clients
+            // Filter out clients only - show all employees including admins
             if (emp.type && emp.type !== "employee") return false;
-            // Filter out admins by role (case-insensitive, handle variations)
-            if (emp.role) {
-              const roleLower = emp.role.toLowerCase().trim();
-              if (roleLower === "admin" || roleLower === "administrator") return false;
-            }
-            // Filter out admins by email match
-            if (emp.email && adminEmails.has(emp.email.toLowerCase())) return false;
             return true;
           }
         );

@@ -5,14 +5,12 @@ import { usePathname, useRouter } from "next/navigation";
 import { 
   LayoutDashboard, 
   Menu, 
-  MessageSquare, 
   User, 
   Settings,
   FileText, 
   Users, 
   Wallet, 
   Building2, 
-  Calendar, 
   Bell, 
   UserCog,
   UserCircle,
@@ -37,7 +35,6 @@ import { NavLink } from "@/components/NavLink";
 
 const menuItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Chat", url: "/chat", icon: MessageSquare },
   { title: "Invoices", url: "/invoices", icon: FileText },
   { title: "Payroll", url: "/payroll", icon: Wallet },
   { title: "Expenses", url: "/expenses", icon: Receipt },
@@ -48,7 +45,6 @@ const menuItems = [
   { title: "Sites", url: "/sites", icon: Building2 },
   { title: "Site Employee Allocations", url: "/site-employee-allocations", icon: Network },
   { title: "Clients", url: "/clients", icon: UserCircle },
-  { title: "Work Schedule", url: "/schedule", icon: Calendar },
   { title: "Reminders", url: "/reminders", icon: Bell },
   { title: "Activity Log", url: "/activity-log", icon: History },
   { title: "Cleaning Tracker", url: "/cleaning-tracker", icon: Sparkles },
@@ -95,12 +91,6 @@ export function MobileBottomNav() {
       path: isEmployeePortal ? "/employee/timesheet" : "/invoices",
       onClick: () => router.push(isEmployeePortal ? "/employee/timesheet" : "/invoices"),
       isLarge: true,
-    },
-    {
-      icon: MessageSquare,
-      label: "Chat",
-      path: "/chat",
-      onClick: () => router.push("/chat"),
     },
     {
       icon: User,
