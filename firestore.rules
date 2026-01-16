@@ -226,6 +226,22 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
     
+    // Site Audits collection
+    match /siteAudits/{auditId} {
+      // Cleaners can read their own submissions, admins can read all
+      allow read: if isAuthenticated() && isApproved() && 
+                     (resource.data.cleanerId == request.auth.uid || isAdmin());
+      // Cleaners can create their own submissions
+      allow create: if isAuthenticated() && isApproved() && 
+                       request.resource.data.cleanerId == request.auth.uid;
+      // Cleaners can update their own pending submissions, admins can update any
+      allow update: if isAuthenticated() && isApproved() && 
+                       ((resource.data.cleanerId == request.auth.uid && 
+                         resource.data.status == 'pending') || isAdmin());
+      // Only admins can delete audit submissions
+      allow delete: if isAdmin();
+    }
+    
     // Default deny rule for any other collections
     match /{document=**} {
       allow read, write: if false;

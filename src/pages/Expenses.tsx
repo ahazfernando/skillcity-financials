@@ -88,6 +88,7 @@ const Expenses = () => {
     vendor: "",
     receiptUrl: "",
     notes: "",
+    status: "pending" as "pending" | "paid" | "overdue",
   });
 
   // Load expenses from Firebase
@@ -118,12 +119,17 @@ const Expenses = () => {
       vendor: "",
       receiptUrl: "",
       notes: "",
+      status: "pending",
     });
     setEditingExpenseId(null);
   };
 
   const handleEditExpense = (expense: Expense) => {
     setEditingExpenseId(expense.id);
+    // Map existing statuses to the editable statuses: if approved/rejected, default to pending
+    const editableStatus = expense.status === "paid" || expense.status === "overdue" || expense.status === "pending"
+      ? expense.status
+      : "pending";
     setFormData({
       category: expense.category,
       description: expense.description,
@@ -133,6 +139,7 @@ const Expenses = () => {
       vendor: expense.vendor || "",
       receiptUrl: expense.receiptUrl || "",
       notes: expense.notes || "",
+      status: editableStatus as "pending" | "paid" | "overdue",
     });
     setIsEditDialogOpen(true);
   };
@@ -161,6 +168,7 @@ const Expenses = () => {
           vendor: formData.vendor || undefined,
           receiptUrl: formData.receiptUrl || undefined,
           notes: formData.notes || undefined,
+          status: formData.status,
         });
         toast.success("Expense updated successfully!");
         setIsEditDialogOpen(false);
@@ -459,9 +467,9 @@ const Expenses = () => {
                       <TableCell>
                         <Badge
                           className={
-                            expense.status === "approved"
+                            expense.status === "approved" || expense.status === "paid"
                               ? "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20"
-                              : expense.status === "rejected"
+                              : expense.status === "rejected" || expense.status === "overdue"
                               ? "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20"
                               : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
                           }
@@ -676,6 +684,24 @@ const Expenses = () => {
                       </Select>
                     </div>
                   </div>
+                  {editingExpenseId && (
+                    <div className="space-y-2">
+                      <Label htmlFor="status">Status</Label>
+                      <Select
+                        value={formData.status}
+                        onValueChange={(value) => setFormData({ ...formData, status: value as "pending" | "paid" | "overdue" })}
+                      >
+                        <SelectTrigger id="status">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">Pending</SelectItem>
+                          <SelectItem value="paid">Paid</SelectItem>
+                          <SelectItem value="overdue">Overdue</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <div className="space-y-2">
                     <Label htmlFor="vendor">Vendor</Label>
                     <Input

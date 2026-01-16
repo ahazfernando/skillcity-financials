@@ -192,7 +192,7 @@ export interface Expense {
   vendor?: string; // Vendor or supplier name
   receiptUrl?: string; // Receipt/document URL
   notes?: string;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "paid" | "overdue";
   approvedBy?: string; // User ID who approved
   approvedAt?: string; // Approval date
   createdAt?: string;

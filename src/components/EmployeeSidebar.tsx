@@ -8,6 +8,7 @@ import {
   UserCircle,
   CheckSquare,
   MapPin,
+  ClipboardCheck,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -25,6 +26,7 @@ import {
 const menuItems = [
   { title: "Dashboard", url: "/employee", icon: LayoutDashboard },
   { title: "Tasks", url: "/tasks", icon: CheckSquare },
+  { title: "Site Audit", url: "/audit-upload", icon: ClipboardCheck },
   { title: "Timesheet", url: "/employee/timesheet", icon: FileText },
   { title: "Work Location", url: "/employee/location", icon: MapPin },
   { title: "Bank Details", url: "/employee/bank-details", icon: Building2 },

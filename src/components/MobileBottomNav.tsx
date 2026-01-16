@@ -20,7 +20,8 @@ import {
   Receipt,
   BarChart3,
   History,
-  Sparkles
+  Sparkles,
+  ClipboardCheck
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -45,9 +46,10 @@ const menuItems = [
   { title: "Sites", url: "/sites", icon: Building2 },
   { title: "Site Employee Allocations", url: "/site-employee-allocations", icon: Network },
   { title: "Clients", url: "/clients", icon: UserCircle },
+  { title: "Cleaning Tracker", url: "/cleaning-tracker", icon: Sparkles },
+  { title: "Audit Review", url: "/audit-review", icon: ClipboardCheck },
   { title: "Reminders", url: "/reminders", icon: Bell },
   { title: "Activity Log", url: "/activity-log", icon: History },
-  { title: "Cleaning Tracker", url: "/cleaning-tracker", icon: Sparkles },
 ];
 
 const adminItems = [

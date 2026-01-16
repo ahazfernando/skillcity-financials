@@ -21,7 +21,8 @@ import {
   Sparkles,
   Package,
   FolderTree,
-  MapPin
+  MapPin,
+  ClipboardCheck
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -50,10 +51,11 @@ const menuItems = [
   { title: "Site Employee Allocations", url: "/site-employee-allocations", icon: Network },
   { title: "Clients", url: "/clients", icon: UserCircle },
   { title: "Tasks", url: "/tasks", icon: CheckSquare },
+  { title: "Cleaning Tracker", url: "/cleaning-tracker", icon: Sparkles },
+  { title: "Audit Review", url: "/audit-review", icon: ClipboardCheck },
   { title: "Reminders", url: "/reminders", icon: Bell },
   { title: "Activity Log", url: "/activity-log", icon: History },
   { title: "Employee Timesheets", url: "/employee-timesheets", icon: Clock },
-  { title: "Cleaning Tracker", url: "/cleaning-tracker", icon: Sparkles },
   { title: "Equipments", url: "/products", icon: Package },
   { title: "Categories", url: "/categories", icon: FolderTree },
 ];
