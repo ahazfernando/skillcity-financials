@@ -48,7 +48,7 @@ const menuItems = [
   { title: "Clients", url: "/clients", icon: UserCircle },
   { title: "Cleaning Tracker", url: "/cleaning-tracker", icon: Sparkles },
   { title: "Audit Review", url: "/audit-review", icon: ClipboardCheck },
-  { title: "Reminders", url: "/reminders", icon: Bell },
+  // { title: "Reminders", url: "/reminders", icon: Bell },
   { title: "Activity Log", url: "/activity-log", icon: History },
 ];
 

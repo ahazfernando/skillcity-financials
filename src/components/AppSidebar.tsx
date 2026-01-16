@@ -53,7 +53,7 @@ const menuItems = [
   { title: "Tasks", url: "/tasks", icon: CheckSquare },
   { title: "Cleaning Tracker", url: "/cleaning-tracker", icon: Sparkles },
   { title: "Audit Review", url: "/audit-review", icon: ClipboardCheck },
-  { title: "Reminders", url: "/reminders", icon: Bell },
+  // { title: "Reminders", url: "/reminders", icon: Bell },
   { title: "Activity Log", url: "/activity-log", icon: History },
   { title: "Employee Timesheets", url: "/employee-timesheets", icon: Clock },
   { title: "Equipments", url: "/products", icon: Package },
