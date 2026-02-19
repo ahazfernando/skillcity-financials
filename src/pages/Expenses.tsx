@@ -266,7 +266,7 @@ const Expenses = () => {
       expense.description.toLowerCase().includes(searchValue.toLowerCase()) ||
       (expense.vendor && expense.vendor.toLowerCase().includes(searchValue.toLowerCase())) ||
       expense.category.toLowerCase().includes(searchValue.toLowerCase());
-    
+
     const matchesStatus = statusFilter === "all" || expense.status === statusFilter;
     const matchesCategory = categoryFilter === "all" || expense.category === categoryFilter;
 
@@ -301,15 +301,15 @@ const Expenses = () => {
               Expenses
             </h2>
             <p className="text-sm sm:text-base text-muted-foreground">Track and manage business expenses efficiently</p>
-        </div>
-          <Button 
-            onClick={handleAddExpense} 
+          </div>
+          <Button
+            onClick={handleAddExpense}
             className="w-full sm:w-auto shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
             size="lg"
           >
-          <Plus className="mr-2 h-4 w-4" />
-          Add Expense
-        </Button>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Expense
+          </Button>
         </div>
       </div>
 
@@ -441,7 +441,7 @@ const Expenses = () => {
                   </TableRow>
                 ) : (
                   paginatedExpenses.map((expense) => (
-                    <TableRow 
+                    <TableRow
                       key={expense.id}
                       className="hover:bg-gradient-to-r hover:from-orange-500/5 hover:to-transparent transition-all duration-200 border-b"
                     >
@@ -470,8 +470,8 @@ const Expenses = () => {
                             expense.status === "approved" || expense.status === "paid"
                               ? "bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20"
                               : expense.status === "rejected" || expense.status === "overdue"
-                              ? "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20"
-                              : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
+                                ? "bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20"
+                                : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20"
                           }
                         >
                           {expense.status}
@@ -606,7 +606,7 @@ const Expenses = () => {
                 </div>
               </div>
             </div>
-            
+
             {/* Right side - Form */}
             <div className="flex flex-col overflow-y-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] md:rounded-r-lg bg-background">
               <div className="p-6">
@@ -712,13 +712,13 @@ const Expenses = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="receiptUrl">Receipt Image</Label>
+                    <Label htmlFor="receiptUrl">Receipt/Document</Label>
                     <FileUpload
                       value={formData.receiptUrl}
                       onChange={(url) => setFormData({ ...formData, receiptUrl: url })}
                       enableCloudinary={true}
                       folder="expense-receipts"
-                      accept="image/*"
+                      accept="image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                       maxSize={10}
                     />
                   </div>

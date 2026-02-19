@@ -4,8 +4,8 @@ import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Upload, X, Image as ImageIcon, CloudUpload } from "lucide-react";
-import { uploadImage } from "@/lib/cloudinary/upload-client";
+import { Upload, X, Image as ImageIcon, CloudUpload, FileText, Download } from "lucide-react";
+import { uploadToCloudinary } from "@/lib/cloudinary/upload-client";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -33,9 +33,29 @@ export function FileUpload({
 
   const handleFileSelect = async (file: File) => {
     // Validate file type
-    if (!file.type.startsWith("image/")) {
+    if (accept === "image/*" && !file.type.startsWith("image/")) {
       toast.error("Please select an image file");
       return;
+    }
+
+    // Validate specific file types if provided
+    if (accept !== "image/*" && accept !== "*") {
+      const allowedTypes = accept.split(",").map((t) => t.trim());
+      const fileType = file.type;
+      const fileExtension = `.${file.name.split(".").pop()?.toLowerCase()}`;
+
+      const isAllowed = allowedTypes.some((type) => {
+        if (type.endsWith("/*")) {
+          const baseType = type.split("/")[0];
+          return fileType.startsWith(`${baseType}/`);
+        }
+        return type === fileType || type === fileExtension;
+      });
+
+      if (!isAllowed) {
+        toast.error(`File type not accepted. Accepted types: ${accept}`);
+        return;
+      }
     }
 
     // Validate file size
@@ -56,9 +76,10 @@ export function FileUpload({
     if (enableCloudinary) {
       try {
         setUploading(true);
-        const result = await uploadImage(file, folder);
+        // Use uploadToCloudinary directly to handle both images and documents
+        const result = await uploadToCloudinary(file, folder);
         onChange(result.secureUrl || result.url);
-        toast.success("Image uploaded successfully");
+        toast.success("File uploaded successfully");
       } catch (error) {
         console.error("Error uploading image:", error);
         toast.error("Failed to upload image. Please try again.");
@@ -114,6 +135,34 @@ export function FileUpload({
     }
   };
 
+  const isImage = (url: string) => {
+    if (url.startsWith("data:image")) return true;
+    const extension = url.split(".").pop()?.toLowerCase();
+    return ["jpg", "jpeg", "png", "gif", "webp", "svg", "bmp"].includes(extension || "");
+  };
+
+  const isPdf = (url: string) => {
+    if (url.startsWith("data:application/pdf")) return true;
+    const extension = url.split(".").pop()?.toLowerCase();
+    return ["pdf"].includes(extension || "");
+  };
+
+  const handleDownload = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const url = preview || value || "";
+    if (!url) return;
+
+    // Check if it's a Cloudinary URL
+    if (url.includes("cloudinary.com") && url.includes("/upload/")) {
+      // Insert fl_attachment flag to force download
+      const downloadUrl = url.replace("/upload/", "/upload/fl_attachment/");
+      window.open(downloadUrl, "_blank");
+    } else {
+      // Fallback for non-Cloudinary URLs or if replacement fails
+      window.open(url, "_blank");
+    }
+  };
+
   return (
     <div className="space-y-2">
       <Input
@@ -140,13 +189,30 @@ export function FileUpload({
         onClick={!uploading ? handleClick : undefined}
       >
         {preview || value ? (
-          <div className="relative w-full h-48 rounded-lg overflow-hidden">
-            <img
-              src={preview || value || ""}
-              alt="Preview"
-              className="w-full h-full object-cover"
-            />
-            <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
+          <div className="relative w-full h-48 rounded-lg overflow-hidden bg-muted/30 border flex items-center justify-center group">
+            {(isImage(preview || value || "") || (preview && preview.startsWith("data:image"))) ? (
+              <img
+                src={preview || value || ""}
+                alt="Preview"
+                className="w-full h-full object-contain"
+              />
+            ) : (
+              <div className="flex flex-col items-center gap-2 p-4 text-center">
+                <div className="p-4 rounded-full bg-primary/10 text-primary">
+                  <FileText className="h-8 w-8" />
+                </div>
+                <p className="text-xs text-muted-foreground w-full truncate max-w-[200px] px-2">
+                  {value ? value.split("/").pop() : "Document selected"}
+                </p>
+                {/* Fallback for extension display if filename extraction fails or helps context */}
+                {!isImage(value || "") && value && (
+                  <span className="text-[10px] uppercase font-bold text-muted-foreground/70 bg-muted px-1.5 py-0.5 rounded">
+                    {value.split(".").pop()}
+                  </span>
+                )}
+              </div>
+            )}
+            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
               <div className="flex gap-2">
                 <Button
                   type="button"
@@ -174,6 +240,18 @@ export function FileUpload({
                   <X className="h-4 w-4 mr-2" />
                   Remove
                 </Button>
+                {(preview || value) && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={handleDownload}
+                    disabled={uploading}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Download
+                  </Button>
+                )}
               </div>
             </div>
             {uploading && (
@@ -211,11 +289,11 @@ export function FileUpload({
                 <div className="text-center">
                   <p className="text-sm font-medium mb-1">
                     {isDragging
-                      ? "Drop image here"
+                      ? "Drop file here"
                       : "Click to upload or drag and drop"}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    PNG, JPG, GIF up to {maxSize}MB
+                    Supported formats: {accept === "image/*" ? "Images (PNG, JPG, GIF)" : "Images & Documents"}
                   </p>
                 </div>
               </>
@@ -245,6 +323,15 @@ export function FileUpload({
             disabled={uploading}
           >
             <X className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={handleDownload}
+            disabled={uploading}
+          >
+            <Download className="h-4 w-4" />
           </Button>
         </div>
       )}
