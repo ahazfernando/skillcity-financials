@@ -7,12 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { 
-  Search, 
-  Loader2, 
-  Trash2, 
-  Edit, 
-  Plus, 
+import {
+  Search,
+  Loader2,
+  Trash2,
+  Edit,
+  Plus,
   Calendar as CalendarIcon,
   Filter,
   LayoutGrid,
@@ -93,25 +93,25 @@ const CleaningTracker = () => {
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
-  
+
   // Filters
   const [searchValue, setSearchValue] = useState("");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [selectedSite, setSelectedSite] = useState<string>("all");
   const [workedHoursRange, setWorkedHoursRange] = useState<[number, number]>([0, 10]);
   const [photosFilter, setPhotosFilter] = useState<string>("all"); // "all" | "yes" | "no"
-  
+
   // Data for dropdowns
   const [sites, setSites] = useState<Site[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
-  
+
   // Site employees for modal display
   const [selectedSiteId, setSelectedSiteId] = useState<string>("");
   const [siteEmployees, setSiteEmployees] = useState<SiteEmployeeAllocation[]>([]);
   const [isLoadingSiteEmployees, setIsLoadingSiteEmployees] = useState(false);
   // Store pay rates for each employee (key: employeeId, value: hourlyRate)
   const [employeePayRates, setEmployeePayRates] = useState<Record<string, number>>({});
-  
+
   // Form data
   const [formData, setFormData] = useState({
     month: "",
@@ -122,7 +122,7 @@ const CleaningTracker = () => {
 
   // Track selected employee IDs for each cleaner (to show which cards are selected)
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
-  
+
   // Selected date for Calendar component
   const [selectedWorkDate, setSelectedWorkDate] = useState<Date | undefined>(undefined);
 
@@ -156,7 +156,7 @@ const CleaningTracker = () => {
       // Search filter (by cleaner name or site name)
       if (searchValue) {
         const searchLower = searchValue.toLowerCase();
-        const matchesSearch = 
+        const matchesSearch =
           entry.siteName.toLowerCase().includes(searchLower) ||
           entry.cleaners.some(c => c.cleanerName.toLowerCase().includes(searchLower));
         if (!matchesSearch) return false;
@@ -276,12 +276,12 @@ const CleaningTracker = () => {
     const employeeId = siteEmployees.find(
       (alloc) => alloc.employeeName === cleanerToRemove.cleanerName
     )?.employeeId;
-    
+
     setFormData({
       ...formData,
       cleaners: formData.cleaners.filter((_, i) => i !== index),
     });
-    
+
     // Remove from selected employee IDs if found
     if (employeeId) {
       setSelectedEmployeeIds(selectedEmployeeIds.filter((id) => id !== employeeId));
@@ -293,7 +293,7 @@ const CleaningTracker = () => {
     const updatedCleaners = [...formData.cleaners];
     const cleaner = updatedCleaners[index];
     const newUpdates = { ...updates };
-    
+
     // Auto-calculate service charge when hours worked changes
     if (updates.workedHours !== undefined) {
       const cleanerName = cleaner.cleanerName;
@@ -305,7 +305,7 @@ const CleaningTracker = () => {
         newUpdates.serviceCharge = Math.round(hours * hourlyRate * 100) / 100; // Round to 2 decimal places
       }
     }
-    
+
     updatedCleaners[index] = { ...cleaner, ...newUpdates };
     setFormData({ ...formData, cleaners: updatedCleaners });
   };
@@ -315,18 +315,18 @@ const CleaningTracker = () => {
     setEditingEntryId(entry.id);
     const workDateObj = entry.workDate ? new Date(entry.workDate) : undefined;
     setSelectedWorkDate(workDateObj);
-    
+
     // Find site ID for the selected site name
     const site = sites.find((s) => s.name === entry.siteName);
     setSelectedSiteId(site?.id || "");
-    
+
     setFormData({
       month: entry.month,
       workDate: entry.workDate,
       siteName: entry.siteName,
       cleaners: entry.cleaners.map((c) => ({ ...c })),
     });
-    
+
     // Set selected employee IDs based on cleaner names
     // This will be updated when site employees load
     setIsEditDialogOpen(true);
@@ -454,7 +454,7 @@ const CleaningTracker = () => {
       setIsLoadingSiteEmployees(true);
       const allocations = await getAllocationsBySite(siteId);
       setSiteEmployees(allocations);
-      
+
       // Load pay rates for each employee at this site
       const payRatesMap: Record<string, number> = {};
       for (const allocation of allocations) {
@@ -485,7 +485,7 @@ const CleaningTracker = () => {
     setPhotosFilter("all");
   };
 
-  const hasActiveFilters = 
+  const hasActiveFilters =
     searchValue !== "" ||
     dateRange?.from ||
     dateRange?.to ||
@@ -696,7 +696,6 @@ const CleaningTracker = () => {
                 <TableHeader>
                   <TableRow className="bg-gradient-to-r from-emerald-500/20 via-teal-500/10 to-emerald-500/5 border-b-2">
                     <TableHead className="font-bold">Work ID</TableHead>
-                    <TableHead className="font-bold">Month</TableHead>
                     <TableHead className="font-bold">Work Date</TableHead>
                     <TableHead className="font-bold">Site Name</TableHead>
                     <TableHead className="font-bold">Cleaner Name</TableHead>
@@ -721,11 +720,6 @@ const CleaningTracker = () => {
                               className="font-semibold"
                             >
                               {entry.workId}
-                            </TableCell>
-                            <TableCell
-                              rowSpan={entry.cleaners.length}
-                            >
-                              {entry.month || getMonthFromDate(entry.workDate)}
                             </TableCell>
                             <TableCell
                               rowSpan={entry.cleaners.length}
@@ -834,10 +828,10 @@ const CleaningTracker = () => {
                   "from-cyan-500/10 via-cyan-500/5 to-transparent border-cyan-500/30 dark:from-cyan-500/20 dark:via-cyan-500/10 dark:to-transparent dark:border-cyan-500/50",
                 ];
                 const gradientColor = gradientColors[entryIndex % gradientColors.length];
-                
+
                 return (
-                  <Card 
-                    key={entry.id} 
+                  <Card
+                    key={entry.id}
                     className={`relative overflow-hidden border-2 bg-gradient-to-br ${gradientColor} shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02]`}
                   >
                     <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-white/10 to-transparent rounded-bl-full"></div>
@@ -847,9 +841,6 @@ const CleaningTracker = () => {
                           <div className="flex items-center gap-2 mb-2">
                             <Badge variant="secondary" className="font-mono font-bold text-xs">
                               ID: {entry.workId}
-                            </Badge>
-                            <Badge variant="outline" className="text-xs">
-                              {entry.month || getMonthFromDate(entry.workDate)}
                             </Badge>
                           </div>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -882,7 +873,7 @@ const CleaningTracker = () => {
                         <Building2 className="h-4 w-4 text-primary" />
                         <span className="font-semibold text-sm">{entry.siteName}</span>
                       </div>
-                      
+
                       <div className="space-y-2">
                         <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                           Cleaners ({entry.cleaners.length})
@@ -893,7 +884,7 @@ const CleaningTracker = () => {
                             "from-gray-500/10 via-gray-500/5 to-transparent border-gray-500/20",
                           ];
                           const cleanerGradient = cleanerGradientColors[cleanerIndex % cleanerGradientColors.length];
-                          
+
                           return (
                             <div
                               key={cleanerIndex}
@@ -1005,8 +996,8 @@ const CleaningTracker = () => {
                 <FileText className="h-4 w-4 text-primary" />
                 <Label className="text-base font-semibold">Basic Information</Label>
               </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="workDate">
                     Work Date <span className="text-destructive">*</span>
@@ -1056,18 +1047,6 @@ const CleaningTracker = () => {
                   </Popover>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="month">Month</Label>
-                  <Input
-                    id="month"
-                    value={formData.month}
-                    onChange={(e) => setFormData({ ...formData, month: e.target.value })}
-                    placeholder="November"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Auto-filled from work date, or enter manually
-                  </p>
-                </div>
-                <div className="space-y-2">
                   <Label htmlFor="siteName">
                     Site Name <span className="text-destructive">*</span>
                   </Label>
@@ -1076,7 +1055,7 @@ const CleaningTracker = () => {
                     onValueChange={(value) => {
                       const site = sites.find((s) => s.name === value);
                       const newSiteId = site?.id || "";
-                      
+
                       // If site changed, clear cleaners and selected employees
                       if (selectedSiteId && selectedSiteId !== newSiteId && formData.cleaners.length > 0) {
                         setFormData({ ...formData, siteName: value, cleaners: [] });
@@ -1084,7 +1063,7 @@ const CleaningTracker = () => {
                       } else {
                         setFormData({ ...formData, siteName: value });
                       }
-                      
+
                       setSelectedSiteId(newSiteId);
                     }}
                   >
@@ -1101,7 +1080,7 @@ const CleaningTracker = () => {
                   </Select>
                 </div>
               </div>
-              
+
               {/* Display employees at selected site - Full width second row */}
               {selectedSiteId && (
                 <div className="space-y-3 mt-4">
@@ -1118,130 +1097,127 @@ const CleaningTracker = () => {
                       </Label>
                       <div className="flex gap-3 overflow-x-auto pb-3 -mx-1 px-1 pt-2 scrollbar-thin scrollbar-thumb-primary/20 scrollbar-track-transparent hover:scrollbar-thumb-primary/30">
                         {siteEmployees.map((allocation, index) => {
-                              const gradientColors = [
-                                "from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/30 dark:from-blue-500/20 dark:via-blue-500/10 dark:to-transparent dark:border-blue-500/50",
-                                "from-purple-500/10 via-purple-500/5 to-transparent border-purple-500/30 dark:from-purple-500/20 dark:via-purple-500/10 dark:to-transparent dark:border-purple-500/50",
-                                "from-green-500/10 via-green-500/5 to-transparent border-green-500/30 dark:from-green-500/20 dark:via-green-500/10 dark:to-transparent dark:border-green-500/50",
-                                "from-orange-500/10 via-orange-500/5 to-transparent border-orange-500/30 dark:from-orange-500/20 dark:via-orange-500/10 dark:to-transparent dark:border-orange-500/50",
-                                "from-pink-500/10 via-pink-500/5 to-transparent border-pink-500/30 dark:from-pink-500/20 dark:via-pink-500/10 dark:to-transparent dark:border-pink-500/50",
-                                "from-indigo-500/10 via-indigo-500/5 to-transparent border-indigo-500/30 dark:from-indigo-500/20 dark:via-indigo-500/10 dark:to-transparent dark:border-indigo-500/50",
-                              ];
-                              const gradientColor = gradientColors[index % gradientColors.length];
-                              
-                              // Get employee details
-                              const employee = employees.find((e) => e.id === allocation.employeeId);
-                              const role = employee?.role || "Employee";
-                              
-                              // Get role icon
-                              const getRoleIcon = () => {
-                                const roleLower = role.toLowerCase();
-                                if (roleLower.includes("manager") || roleLower.includes("supervisor")) {
-                                  return <Shield className="h-3.5 w-3.5" />;
-                                } else if (roleLower.includes("lead") || roleLower.includes("senior")) {
-                                  return <Award className="h-3.5 w-3.5" />;
-                                } else if (roleLower.includes("specialist") || roleLower.includes("expert")) {
-                                  return <Star className="h-3.5 w-3.5" />;
-                                } else if (roleLower.includes("cleaner") || roleLower.includes("professional")) {
-                                  return <Sparkles className="h-3.5 w-3.5" />;
-                                } else if (roleLower.includes("assistant") || roleLower.includes("junior")) {
-                                  return <Zap className="h-3.5 w-3.5" />;
-                                } else {
-                                  return <Briefcase className="h-3.5 w-3.5" />;
+                          const gradientColors = [
+                            "from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/30 dark:from-blue-500/20 dark:via-blue-500/10 dark:to-transparent dark:border-blue-500/50",
+                            "from-purple-500/10 via-purple-500/5 to-transparent border-purple-500/30 dark:from-purple-500/20 dark:via-purple-500/10 dark:to-transparent dark:border-purple-500/50",
+                            "from-green-500/10 via-green-500/5 to-transparent border-green-500/30 dark:from-green-500/20 dark:via-green-500/10 dark:to-transparent dark:border-green-500/50",
+                            "from-orange-500/10 via-orange-500/5 to-transparent border-orange-500/30 dark:from-orange-500/20 dark:via-orange-500/10 dark:to-transparent dark:border-orange-500/50",
+                            "from-pink-500/10 via-pink-500/5 to-transparent border-pink-500/30 dark:from-pink-500/20 dark:via-pink-500/10 dark:to-transparent dark:border-pink-500/50",
+                            "from-indigo-500/10 via-indigo-500/5 to-transparent border-indigo-500/30 dark:from-indigo-500/20 dark:via-indigo-500/10 dark:to-transparent dark:border-indigo-500/50",
+                          ];
+                          const gradientColor = gradientColors[index % gradientColors.length];
+
+                          // Get employee details
+                          const employee = employees.find((e) => e.id === allocation.employeeId);
+                          const role = employee?.role || "Employee";
+
+                          // Get role icon
+                          const getRoleIcon = () => {
+                            const roleLower = role.toLowerCase();
+                            if (roleLower.includes("manager") || roleLower.includes("supervisor")) {
+                              return <Shield className="h-3.5 w-3.5" />;
+                            } else if (roleLower.includes("lead") || roleLower.includes("senior")) {
+                              return <Award className="h-3.5 w-3.5" />;
+                            } else if (roleLower.includes("specialist") || roleLower.includes("expert")) {
+                              return <Star className="h-3.5 w-3.5" />;
+                            } else if (roleLower.includes("cleaner") || roleLower.includes("professional")) {
+                              return <Sparkles className="h-3.5 w-3.5" />;
+                            } else if (roleLower.includes("assistant") || roleLower.includes("junior")) {
+                              return <Zap className="h-3.5 w-3.5" />;
+                            } else {
+                              return <Briefcase className="h-3.5 w-3.5" />;
+                            }
+                          };
+
+                          const isSelected = selectedEmployeeIds.includes(allocation.employeeId);
+
+                          return (
+                            <Card
+                              key={allocation.id}
+                              onClick={() => {
+                                if (!isSelected) {
+                                  addCleanerFromEmployee(allocation.employeeId, allocation.employeeName);
                                 }
-                              };
-                              
-                              const isSelected = selectedEmployeeIds.includes(allocation.employeeId);
-                              
-                              return (
-                                <Card
-                                  key={allocation.id}
-                                  onClick={() => {
-                                    if (!isSelected) {
-                                      addCleanerFromEmployee(allocation.employeeId, allocation.employeeName);
-                                    }
-                                  }}
-                                  className={`relative overflow-hidden border-2 bg-gradient-to-br ${gradientColor} shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] flex-shrink-0 min-w-[200px] ${
-                                    isSelected 
-                                      ? "ring-2 ring-primary ring-offset-2 cursor-pointer border-primary" 
-                                      : "cursor-pointer hover:border-primary/50"
-                                  }`}
-                                >
-                                  <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-white/10 to-transparent rounded-bl-full"></div>
-                                  {isSelected && (
-                                    <div className="absolute top-2 right-2 z-10">
-                                      <CheckCircle2 className="h-5 w-5 text-primary fill-primary bg-background rounded-full" />
+                              }}
+                              className={`relative overflow-hidden border-2 bg-gradient-to-br ${gradientColor} shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-[1.02] flex-shrink-0 min-w-[200px] ${isSelected
+                                  ? "ring-2 ring-primary ring-offset-2 cursor-pointer border-primary"
+                                  : "cursor-pointer hover:border-primary/50"
+                                }`}
+                            >
+                              <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-white/10 to-transparent rounded-bl-full"></div>
+                              {isSelected && (
+                                <div className="absolute top-2 right-2 z-10">
+                                  <CheckCircle2 className="h-5 w-5 text-primary fill-primary bg-background rounded-full" />
+                                </div>
+                              )}
+                              <CardContent className="p-4 relative">
+                                <div className="flex items-center gap-3">
+                                  <Avatar className={`h-10 w-10 border-2 shadow-md flex-shrink-0 ${isSelected ? "border-primary" : "border-background"
+                                    }`}>
+                                    <AvatarFallback className={`bg-gradient-to-br ${gradientColor.includes("blue")
+                                        ? "from-blue-500 to-blue-600"
+                                        : gradientColor.includes("purple")
+                                          ? "from-purple-500 to-purple-600"
+                                          : gradientColor.includes("green")
+                                            ? "from-green-500 to-green-600"
+                                            : gradientColor.includes("orange")
+                                              ? "from-orange-500 to-orange-600"
+                                              : gradientColor.includes("pink")
+                                                ? "from-pink-500 to-pink-600"
+                                                : "from-indigo-500 to-indigo-600"
+                                      } text-white text-sm font-semibold`}>
+                                      {allocation.employeeName
+                                        .split(" ")
+                                        .map((n) => n[0])
+                                        .join("")
+                                        .toUpperCase()
+                                        .slice(0, 2)}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-bold truncate">
+                                      {allocation.employeeName}
+                                    </p>
+                                    <div className="flex items-center gap-1.5 mt-1">
+                                      <span className="text-primary">
+                                        {getRoleIcon()}
+                                      </span>
+                                      <p className="text-xs text-muted-foreground truncate font-medium">
+                                        {role}
+                                      </p>
                                     </div>
-                                  )}
-                                  <CardContent className="p-4 relative">
-                                    <div className="flex items-center gap-3">
-                                      <Avatar className={`h-10 w-10 border-2 shadow-md flex-shrink-0 ${
-                                        isSelected ? "border-primary" : "border-background"
-                                      }`}>
-                                        <AvatarFallback className={`bg-gradient-to-br ${
-                                          gradientColor.includes("blue") 
-                                            ? "from-blue-500 to-blue-600" 
-                                            : gradientColor.includes("purple") 
-                                            ? "from-purple-500 to-purple-600" 
-                                            : gradientColor.includes("green") 
-                                            ? "from-green-500 to-green-600" 
-                                            : gradientColor.includes("orange") 
-                                            ? "from-orange-500 to-orange-600" 
-                                            : gradientColor.includes("pink") 
-                                            ? "from-pink-500 to-pink-600" 
-                                            : "from-indigo-500 to-indigo-600"
-                                        } text-white text-sm font-semibold`}>
-                                          {allocation.employeeName
-                                            .split(" ")
-                                            .map((n) => n[0])
-                                            .join("")
-                                            .toUpperCase()
-                                            .slice(0, 2)}
-                                        </AvatarFallback>
-                                      </Avatar>
-                                      <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-bold truncate">
-                                          {allocation.employeeName}
-                                        </p>
-                                        <div className="flex items-center gap-1.5 mt-1">
-                                          <span className="text-primary">
-                                            {getRoleIcon()}
-                                          </span>
-                                          <p className="text-xs text-muted-foreground truncate font-medium">
-                                            {role}
-                                          </p>
-                                        </div>
-                                        {allocation.actualWorkingTime && (
-                                          <div className="flex items-center gap-1 mt-1.5 text-xs text-muted-foreground">
-                                            <Clock className="h-3 w-3" />
-                                            <span>{allocation.actualWorkingTime}</span>
-                                          </div>
-                                        )}
-                                        {employeePayRates[allocation.employeeId] && (
-                                          <div className="flex items-center gap-1 mt-1.5 text-xs font-semibold text-green-600 dark:text-green-400">
-                                            <DollarSign className="h-3 w-3" />
-                                            <span>${employeePayRates[allocation.employeeId].toFixed(2)}/hr</span>
-                                          </div>
-                                        )}
+                                    {allocation.actualWorkingTime && (
+                                      <div className="flex items-center gap-1 mt-1.5 text-xs text-muted-foreground">
+                                        <Clock className="h-3 w-3" />
+                                        <span>{allocation.actualWorkingTime}</span>
                                       </div>
-                                    </div>
-                                  </CardContent>
-                                </Card>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-sm text-muted-foreground p-3 rounded-lg bg-muted/30 border border-dashed">
-                          No employees assigned to this site
-                        </div>
-                      )}
+                                    )}
+                                    {employeePayRates[allocation.employeeId] && (
+                                      <div className="flex items-center gap-1 mt-1.5 text-xs font-semibold text-green-600 dark:text-green-400">
+                                        <DollarSign className="h-3 w-3" />
+                                        <span>${employeePayRates[allocation.employeeId].toFixed(2)}/hr</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground p-3 rounded-lg bg-muted/30 border border-dashed">
+                      No employees assigned to this site
                     </div>
                   )}
-              </div>
+                </div>
+              )}
+            </div>
 
             {/* Cleaners Section */}
             <div className="space-y-4">
-                <div className="flex items-center justify-between pb-2 border-b">
+              <div className="flex items-center justify-between pb-2 border-b">
                 <div className="flex items-center gap-2">
                   <User className="h-4 w-4 text-primary" />
                   <Label className="text-base font-semibold">
@@ -1255,7 +1231,7 @@ const CleaningTracker = () => {
                   </Button>
                 )}
               </div>
-              
+
               {selectedSiteId && siteEmployees.length > 0 && (
                 <div className="mb-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800">
                   <p className="text-sm text-blue-900 dark:text-blue-100 flex items-center gap-2">
@@ -1294,7 +1270,7 @@ const CleaningTracker = () => {
                           )}
                         </div>
                       </div>
-                      
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {/* Cleaner Name - Show selected employee or allow manual entry if no site selected */}
                         <div className="space-y-2">
