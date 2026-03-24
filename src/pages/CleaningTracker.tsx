@@ -31,7 +31,9 @@ import {
   Star,
   Zap,
   Shield,
-  Target
+  Target,
+  ChevronsUpDown,
+  Check,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -65,6 +67,22 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Slider } from "@/components/ui/slider";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { CleaningTrackerEntry, CleaningTrackerCleaner, Site, SiteEmployeeAllocation } from "@/types/financial";
 import {
   getAllCleaningTrackerEntries,
@@ -80,6 +98,32 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
+
+const TABLE_ROWS_PER_PAGE = 10;
+
+/** Split entries into pages so each page has at most `maxRows` table rows (one row per cleaner); entries are never split. */
+function chunkCleaningEntriesByTableRows(
+  list: CleaningTrackerEntry[],
+  maxRows: number
+): CleaningTrackerEntry[][] {
+  const pages: CleaningTrackerEntry[][] = [];
+  let current: CleaningTrackerEntry[] = [];
+  let rowsOnPage = 0;
+
+  for (const entry of list) {
+    const entryRows = Math.max(1, entry.cleaners.length);
+
+    if (rowsOnPage + entryRows > maxRows && current.length > 0) {
+      pages.push(current);
+      current = [];
+      rowsOnPage = 0;
+    }
+    current.push(entry);
+    rowsOnPage += entryRows;
+  }
+  if (current.length > 0) pages.push(current);
+  return pages;
+}
 
 type ViewMode = "table" | "card";
 
@@ -100,6 +144,9 @@ const CleaningTracker = () => {
   const [selectedSite, setSelectedSite] = useState<string>("all");
   const [workedHoursRange, setWorkedHoursRange] = useState<[number, number]>([0, 10]);
   const [photosFilter, setPhotosFilter] = useState<string>("all"); // "all" | "yes" | "no"
+  const [currentPage, setCurrentPage] = useState(1);
+  const [siteNamePopoverOpen, setSiteNamePopoverOpen] = useState(false);
+  const [siteNameSearch, setSiteNameSearch] = useState("");
 
   // Data for dropdowns
   const [sites, setSites] = useState<Site[]>([]);
@@ -198,6 +245,31 @@ const CleaningTracker = () => {
       return true;
     });
   }, [entries, searchValue, dateRange, selectedSite, workedHoursRange, photosFilter]);
+
+  const entryPages = useMemo(
+    () => chunkCleaningEntriesByTableRows(filteredEntries, TABLE_ROWS_PER_PAGE),
+    [filteredEntries]
+  );
+  const totalPages = entryPages.length;
+  const paginatedEntries = entryPages[currentPage - 1] ?? [];
+
+  const pageEntryOffset = useMemo(() => {
+    let offset = 0;
+    for (let p = 0; p < currentPage - 1 && p < entryPages.length; p++) {
+      offset += entryPages[p].length;
+    }
+    return offset;
+  }, [entryPages, currentPage]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchValue, dateRange, selectedSite, workedHoursRange, photosFilter]);
+
+  useEffect(() => {
+    if (totalPages > 0 && currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [totalPages, currentPage]);
 
   // Reset form
   const resetForm = () => {
@@ -690,7 +762,9 @@ const CleaningTracker = () => {
               <FileText className="h-12 w-12 mx-auto mb-4 opacity-20" />
               <p>No entries found</p>
             </div>
-          ) : viewMode === "table" ? (
+          ) : (
+            <>
+              {viewMode === "table" ? (
             <div className="rounded-xl border-2 overflow-x-auto shadow-lg">
               <Table>
                 <TableHeader>
@@ -707,7 +781,7 @@ const CleaningTracker = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredEntries.map((entry) =>
+                  {paginatedEntries.map((entry) =>
                     entry.cleaners.map((cleaner, cleanerIndex) => (
                       <TableRow
                         key={`${entry.id}-${cleanerIndex}`}
@@ -814,9 +888,9 @@ const CleaningTracker = () => {
                 </TableBody>
               </Table>
             </div>
-          ) : (
+              ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredEntries.map((entry, entryIndex) => {
+              {paginatedEntries.map((entry, entryIndex) => {
                 const gradientColors = [
                   "from-blue-500/10 via-blue-500/5 to-transparent border-blue-500/30 dark:from-blue-500/20 dark:via-blue-500/10 dark:to-transparent dark:border-blue-500/50",
                   "from-purple-500/10 via-purple-500/5 to-transparent border-purple-500/30 dark:from-purple-500/20 dark:via-purple-500/10 dark:to-transparent dark:border-purple-500/50",
@@ -827,7 +901,7 @@ const CleaningTracker = () => {
                   "from-teal-500/10 via-teal-500/5 to-transparent border-teal-500/30 dark:from-teal-500/20 dark:via-teal-500/10 dark:to-transparent dark:border-teal-500/50",
                   "from-cyan-500/10 via-cyan-500/5 to-transparent border-cyan-500/30 dark:from-cyan-500/20 dark:via-cyan-500/10 dark:to-transparent dark:border-cyan-500/50",
                 ];
-                const gradientColor = gradientColors[entryIndex % gradientColors.length];
+                const gradientColor = gradientColors[(pageEntryOffset + entryIndex) % gradientColors.length];
 
                 return (
                   <Card
@@ -948,6 +1022,56 @@ const CleaningTracker = () => {
                 );
               })}
             </div>
+              )}
+              {totalPages > 1 && (
+                <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <p className="text-sm text-muted-foreground text-center sm:text-left">
+                    Page {currentPage} of {totalPages}
+                  </p>
+                  <Pagination className="mx-0 w-full sm:w-auto justify-center sm:justify-end">
+                    <PaginationContent>
+                      <PaginationItem>
+                        <PaginationPrevious
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (currentPage > 1) setCurrentPage(currentPage - 1);
+                          }}
+                          className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                        />
+                      </PaginationItem>
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                        <PaginationItem key={page}>
+                          <PaginationLink
+                            href="#"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setCurrentPage(page);
+                            }}
+                            isActive={currentPage === page}
+                            className="cursor-pointer"
+                          >
+                            {page}
+                          </PaginationLink>
+                        </PaginationItem>
+                      ))}
+                      <PaginationItem>
+                        <PaginationNext
+                          href="#"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            if (currentPage < totalPages) setCurrentPage(currentPage + 1);
+                          }}
+                          className={
+                            currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"
+                          }
+                        />
+                      </PaginationItem>
+                    </PaginationContent>
+                  </Pagination>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>
@@ -1050,34 +1174,99 @@ const CleaningTracker = () => {
                   <Label htmlFor="siteName">
                     Site Name <span className="text-destructive">*</span>
                   </Label>
-                  <Select
-                    value={formData.siteName}
-                    onValueChange={(value) => {
-                      const site = sites.find((s) => s.name === value);
-                      const newSiteId = site?.id || "";
-
-                      // If site changed, clear cleaners and selected employees
-                      if (selectedSiteId && selectedSiteId !== newSiteId && formData.cleaners.length > 0) {
-                        setFormData({ ...formData, siteName: value, cleaners: [] });
-                        setSelectedEmployeeIds([]);
-                      } else {
-                        setFormData({ ...formData, siteName: value });
-                      }
-
-                      setSelectedSiteId(newSiteId);
+                  <Popover
+                    open={siteNamePopoverOpen}
+                    onOpenChange={(open) => {
+                      setSiteNamePopoverOpen(open);
+                      if (!open) setSiteNameSearch("");
                     }}
                   >
-                    <SelectTrigger id="siteName">
-                      <SelectValue placeholder="Select site" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {sites.map((site) => (
-                        <SelectItem key={site.id} value={site.name}>
-                          {site.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    <PopoverTrigger asChild>
+                      <Button
+                        id="siteName"
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={siteNamePopoverOpen}
+                        className={cn(
+                          "w-full justify-between font-normal",
+                          !formData.siteName && "text-muted-foreground"
+                        )}
+                      >
+                        {formData.siteName || "Select site"}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                      <Command>
+                        <CommandInput
+                          placeholder="Search sites..."
+                          value={siteNameSearch}
+                          onValueChange={setSiteNameSearch}
+                        />
+                        <CommandList>
+                          <CommandEmpty>No site found.</CommandEmpty>
+                          <CommandGroup>
+                            {sites.length === 0 ? (
+                              <CommandItem disabled>
+                                <span className="text-muted-foreground">No sites available.</span>
+                              </CommandItem>
+                            ) : (
+                              sites
+                                .filter((site) => {
+                                  const q = siteNameSearch.trim().toLowerCase();
+                                  if (!q) return true;
+                                  return (
+                                    site.name.toLowerCase().includes(q) ||
+                                    (site.clientName && site.clientName.toLowerCase().includes(q))
+                                  );
+                                })
+                                .map((site) => (
+                                  <CommandItem
+                                    key={site.id}
+                                    value={site.name}
+                                    onSelect={() => {
+                                      const newSiteId = site.id;
+                                      if (
+                                        selectedSiteId &&
+                                        selectedSiteId !== newSiteId &&
+                                        formData.cleaners.length > 0
+                                      ) {
+                                        setFormData({
+                                          ...formData,
+                                          siteName: site.name,
+                                          cleaners: [],
+                                        });
+                                        setSelectedEmployeeIds([]);
+                                      } else {
+                                        setFormData({ ...formData, siteName: site.name });
+                                      }
+                                      setSelectedSiteId(newSiteId);
+                                      setSiteNamePopoverOpen(false);
+                                      setSiteNameSearch("");
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4",
+                                        formData.siteName === site.name ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    <div className="flex flex-col gap-0.5 min-w-0">
+                                      <span className="truncate">{site.name}</span>
+                                      {site.clientName ? (
+                                        <span className="text-xs text-muted-foreground truncate">
+                                          {site.clientName}
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                  </CommandItem>
+                                ))
+                            )}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
                 </div>
               </div>
 

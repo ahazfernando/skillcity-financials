@@ -72,6 +72,52 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 
 const SiteEmployeeAllocations = () => {
+  const clampTimeParts = (hours: number, minutes: number) => {
+    const safeHours = Number.isFinite(hours) ? Math.max(0, Math.floor(hours)) : 0;
+    const safeMinutes = Number.isFinite(minutes) ? Math.min(59, Math.max(0, Math.floor(minutes))) : 0;
+    return { hours: safeHours, minutes: safeMinutes };
+  };
+
+  const formatWorkingTime = (hours: number, minutes: number) => {
+    const safe = clampTimeParts(hours, minutes);
+    return `${safe.hours}h ${safe.minutes}m`;
+  };
+
+  const parseWorkingTime = (value: string) => {
+    const input = (value || "").trim().toLowerCase();
+    if (!input) return { hours: 0, minutes: 0 };
+
+    const hoursMatch = input.match(/(\d+(?:\.\d+)?)\s*(h|hour|hours)/);
+    const minutesMatch = input.match(/(\d+)\s*(m|min|mins|minute|minutes)/);
+
+    let totalMinutes = 0;
+
+    if (hoursMatch) {
+      const hourValue = parseFloat(hoursMatch[1]);
+      if (!Number.isNaN(hourValue)) {
+        totalMinutes += Math.round(hourValue * 60);
+      }
+    }
+
+    if (minutesMatch) {
+      const minuteValue = parseInt(minutesMatch[1], 10);
+      if (!Number.isNaN(minuteValue)) {
+        totalMinutes += minuteValue;
+      }
+    }
+
+    if (!hoursMatch && !minutesMatch) {
+      const numericValue = parseFloat(input);
+      if (!Number.isNaN(numericValue)) {
+        totalMinutes = Math.round(numericValue * 60);
+      }
+    }
+
+    const parsedHours = Math.floor(totalMinutes / 60);
+    const parsedMinutes = totalMinutes % 60;
+    return clampTimeParts(parsedHours, parsedMinutes);
+  };
+
   const [allocations, setAllocations] = useState<SiteEmployeeAllocation[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -89,7 +135,8 @@ const SiteEmployeeAllocations = () => {
     siteId: "",
     employeeId: "",
     employeeNumber: 1,
-    actualWorkingTime: "",
+    workingHours: 0,
+    workingMinutes: 0,
     hasExtraTime: false,
     extraTime: "",
     extraTimeDay: "",
@@ -159,7 +206,7 @@ const SiteEmployeeAllocations = () => {
         employeeId: formData.employeeId,
         employeeName: selectedEmployee.name,
         employeeNumber: formData.employeeNumber,
-        actualWorkingTime: formData.actualWorkingTime,
+        actualWorkingTime: formatWorkingTime(formData.workingHours, formData.workingMinutes),
         hasExtraTime: formData.hasExtraTime,
         extraTime: formData.extraTime || undefined,
         extraTimeDay: formData.extraTimeDay || undefined,
@@ -191,7 +238,7 @@ const SiteEmployeeAllocations = () => {
 
       await updateAllocation(editingAllocationId, {
         employeeNumber: formData.employeeNumber,
-        actualWorkingTime: formData.actualWorkingTime,
+        actualWorkingTime: formatWorkingTime(formData.workingHours, formData.workingMinutes),
         hasExtraTime: formData.hasExtraTime,
         extraTime: formData.extraTime || undefined,
         extraTimeDay: formData.extraTimeDay || undefined,
@@ -231,7 +278,8 @@ const SiteEmployeeAllocations = () => {
       siteId: "",
       employeeId: "",
       employeeNumber: 1,
-      actualWorkingTime: "",
+      workingHours: 0,
+      workingMinutes: 0,
       hasExtraTime: false,
       extraTime: "",
       extraTimeDay: "",
@@ -240,12 +288,14 @@ const SiteEmployeeAllocations = () => {
   };
 
   const openEditDialog = (allocation: SiteEmployeeAllocation) => {
+    const parsedWorkingTime = parseWorkingTime(allocation.actualWorkingTime);
     setEditingAllocationId(allocation.id);
     setFormData({
       siteId: allocation.siteId,
       employeeId: allocation.employeeId,
       employeeNumber: allocation.employeeNumber,
-      actualWorkingTime: allocation.actualWorkingTime,
+      workingHours: parsedWorkingTime.hours,
+      workingMinutes: parsedWorkingTime.minutes,
       hasExtraTime: allocation.hasExtraTime,
       extraTime: allocation.extraTime || "",
       extraTimeDay: allocation.extraTimeDay || "",
@@ -737,15 +787,40 @@ const SiteEmployeeAllocations = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="workingTime" className="text-sm font-medium">
+                <Label className="text-sm font-medium">
                   Working Time
                 </Label>
-                <Input
-                  id="workingTime"
-                  placeholder="e.g., 3 Hours, 3.5 Hours"
-                  value={formData.actualWorkingTime}
-                  onChange={(e) => setFormData({ ...formData, actualWorkingTime: e.target.value })}
-                />
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    id="workingHours"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={formData.workingHours}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        workingHours: Math.max(0, parseInt(e.target.value || "0", 10) || 0),
+                      })
+                    }
+                    placeholder="Hours"
+                  />
+                  <Input
+                    id="workingMinutes"
+                    type="number"
+                    min="0"
+                    max="59"
+                    step="1"
+                    value={formData.workingMinutes}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        workingMinutes: Math.min(59, Math.max(0, parseInt(e.target.value || "0", 10) || 0)),
+                      })
+                    }
+                    placeholder="Minutes"
+                  />
+                </div>
               </div>
             </div>
 
@@ -889,15 +964,40 @@ const SiteEmployeeAllocations = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="editWorkingTime" className="text-sm font-medium">
+                <Label className="text-sm font-medium">
                   Working Time
                 </Label>
-                <Input
-                  id="editWorkingTime"
-                  placeholder="e.g., 3 Hours, 3.5 Hours"
-                  value={formData.actualWorkingTime}
-                  onChange={(e) => setFormData({ ...formData, actualWorkingTime: e.target.value })}
-                />
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    id="editWorkingHours"
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={formData.workingHours}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        workingHours: Math.max(0, parseInt(e.target.value || "0", 10) || 0),
+                      })
+                    }
+                    placeholder="Hours"
+                  />
+                  <Input
+                    id="editWorkingMinutes"
+                    type="number"
+                    min="0"
+                    max="59"
+                    step="1"
+                    value={formData.workingMinutes}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        workingMinutes: Math.min(59, Math.max(0, parseInt(e.target.value || "0", 10) || 0)),
+                      })
+                    }
+                    placeholder="Minutes"
+                  />
+                </div>
               </div>
             </div>
 
