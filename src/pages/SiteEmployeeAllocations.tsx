@@ -83,6 +83,18 @@ const SiteEmployeeAllocations = () => {
     return `${safe.hours}h ${safe.minutes}m`;
   };
 
+  const parseHoursInput = (value: string) => {
+    const parsed = parseInt(value, 10);
+    if (Number.isNaN(parsed)) return 0;
+    return Math.max(0, parsed);
+  };
+
+  const parseMinutesInput = (value: string) => {
+    const parsed = parseInt(value, 10);
+    if (Number.isNaN(parsed)) return 0;
+    return Math.min(59, Math.max(0, parsed));
+  };
+
   const parseWorkingTime = (value: string) => {
     const input = (value || "").trim().toLowerCase();
     if (!input) return { hours: 0, minutes: 0 };
@@ -135,8 +147,8 @@ const SiteEmployeeAllocations = () => {
     siteId: "",
     employeeId: "",
     employeeNumber: 1,
-    workingHours: 0,
-    workingMinutes: 0,
+    workingHours: "",
+    workingMinutes: "",
     hasExtraTime: false,
     extraTime: "",
     extraTimeDay: "",
@@ -206,7 +218,10 @@ const SiteEmployeeAllocations = () => {
         employeeId: formData.employeeId,
         employeeName: selectedEmployee.name,
         employeeNumber: formData.employeeNumber,
-        actualWorkingTime: formatWorkingTime(formData.workingHours, formData.workingMinutes),
+        actualWorkingTime: formatWorkingTime(
+          parseHoursInput(formData.workingHours),
+          parseMinutesInput(formData.workingMinutes)
+        ),
         hasExtraTime: formData.hasExtraTime,
         extraTime: formData.extraTime || undefined,
         extraTimeDay: formData.extraTimeDay || undefined,
@@ -238,7 +253,10 @@ const SiteEmployeeAllocations = () => {
 
       await updateAllocation(editingAllocationId, {
         employeeNumber: formData.employeeNumber,
-        actualWorkingTime: formatWorkingTime(formData.workingHours, formData.workingMinutes),
+        actualWorkingTime: formatWorkingTime(
+          parseHoursInput(formData.workingHours),
+          parseMinutesInput(formData.workingMinutes)
+        ),
         hasExtraTime: formData.hasExtraTime,
         extraTime: formData.extraTime || undefined,
         extraTimeDay: formData.extraTimeDay || undefined,
@@ -278,8 +296,8 @@ const SiteEmployeeAllocations = () => {
       siteId: "",
       employeeId: "",
       employeeNumber: 1,
-      workingHours: 0,
-      workingMinutes: 0,
+      workingHours: "",
+      workingMinutes: "",
       hasExtraTime: false,
       extraTime: "",
       extraTimeDay: "",
@@ -294,8 +312,8 @@ const SiteEmployeeAllocations = () => {
       siteId: allocation.siteId,
       employeeId: allocation.employeeId,
       employeeNumber: allocation.employeeNumber,
-      workingHours: parsedWorkingTime.hours,
-      workingMinutes: parsedWorkingTime.minutes,
+      workingHours: String(parsedWorkingTime.hours),
+      workingMinutes: String(parsedWorkingTime.minutes),
       hasExtraTime: allocation.hasExtraTime,
       extraTime: allocation.extraTime || "",
       extraTimeDay: allocation.extraTimeDay || "",
@@ -791,35 +809,45 @@ const SiteEmployeeAllocations = () => {
                   Working Time
                 </Label>
                 <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    id="workingHours"
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={formData.workingHours}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        workingHours: Math.max(0, parseInt(e.target.value || "0", 10) || 0),
-                      })
-                    }
-                    placeholder="Hours"
-                  />
-                  <Input
-                    id="workingMinutes"
-                    type="number"
-                    min="0"
-                    max="59"
-                    step="1"
-                    value={formData.workingMinutes}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        workingMinutes: Math.min(59, Math.max(0, parseInt(e.target.value || "0", 10) || 0)),
-                      })
-                    }
-                    placeholder="Minutes"
-                  />
+                  <div className="space-y-1">
+                    <Label htmlFor="workingHours" className="text-xs text-muted-foreground">
+                      Hours
+                    </Label>
+                    <Input
+                      id="workingHours"
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={formData.workingHours}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          workingHours: e.target.value,
+                        })
+                      }
+                      placeholder="Hours"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="workingMinutes" className="text-xs text-muted-foreground">
+                      Minutes
+                    </Label>
+                    <Input
+                      id="workingMinutes"
+                      type="number"
+                      min="0"
+                      max="59"
+                      step="1"
+                      value={formData.workingMinutes}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          workingMinutes: e.target.value,
+                        })
+                      }
+                      placeholder="Minutes"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -968,35 +996,45 @@ const SiteEmployeeAllocations = () => {
                   Working Time
                 </Label>
                 <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    id="editWorkingHours"
-                    type="number"
-                    min="0"
-                    step="1"
-                    value={formData.workingHours}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        workingHours: Math.max(0, parseInt(e.target.value || "0", 10) || 0),
-                      })
-                    }
-                    placeholder="Hours"
-                  />
-                  <Input
-                    id="editWorkingMinutes"
-                    type="number"
-                    min="0"
-                    max="59"
-                    step="1"
-                    value={formData.workingMinutes}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        workingMinutes: Math.min(59, Math.max(0, parseInt(e.target.value || "0", 10) || 0)),
-                      })
-                    }
-                    placeholder="Minutes"
-                  />
+                  <div className="space-y-1">
+                    <Label htmlFor="editWorkingHours" className="text-xs text-muted-foreground">
+                      Hours
+                    </Label>
+                    <Input
+                      id="editWorkingHours"
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={formData.workingHours}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          workingHours: e.target.value,
+                        })
+                      }
+                      placeholder="Hours"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="editWorkingMinutes" className="text-xs text-muted-foreground">
+                      Minutes
+                    </Label>
+                    <Input
+                      id="editWorkingMinutes"
+                      type="number"
+                      min="0"
+                      max="59"
+                      step="1"
+                      value={formData.workingMinutes}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          workingMinutes: e.target.value,
+                        })
+                      }
+                      placeholder="Minutes"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
