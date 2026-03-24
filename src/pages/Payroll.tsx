@@ -73,6 +73,20 @@ import { uploadToCloudinary } from "@/lib/cloudinary/upload-client";
 import { toast } from "sonner";
 import { calculatePaymentDate } from "@/lib/paymentCycle";
 
+const isoDateStringToLocalDate = (iso: string): Date | undefined => {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return undefined;
+  const [y, m, d] = iso.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+};
+
+const localDateToIsoString = (date: Date): string => {
+  const y = date.getFullYear();
+  const mo = String(date.getMonth() + 1).padStart(2, "0");
+  const da = String(date.getDate()).padStart(2, "0");
+  return `${y}-${mo}-${da}`;
+};
+
 const Payroll = () => {
   const [searchValue, setSearchValue] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -97,10 +111,14 @@ const Payroll = () => {
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
   const [employeePopoverOpen, setEmployeePopoverOpen] = useState(false);
   const [employeeSearchValue, setEmployeeSearchValue] = useState("");
+  const [sitePopoverOpen, setSitePopoverOpen] = useState(false);
+  const [siteSearchValue, setSiteSearchValue] = useState("");
   const [isAddingEmployee, setIsAddingEmployee] = useState(false);
   const [isAddingClient, setIsAddingClient] = useState(false);
   const [monthPopoverOpen, setMonthPopoverOpen] = useState(false);
   const [formMonthPopoverOpen, setFormMonthPopoverOpen] = useState(false);
+  const [formDatePopoverOpen, setFormDatePopoverOpen] = useState(false);
+  const [formPaymentDatePopoverOpen, setFormPaymentDatePopoverOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"card" | "table">("table");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [payrollToDelete, setPayrollToDelete] = useState<Payroll | null>(null);
@@ -2224,7 +2242,7 @@ const Payroll = () => {
                   </DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="month">Month *</Label>
                       <Popover open={formMonthPopoverOpen} onOpenChange={setFormMonthPopoverOpen}>
@@ -2271,27 +2289,37 @@ const Payroll = () => {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="date">Date *</Label>
-                      <Input
-                        id="date"
-                        type="date"
-                        value={formData.date}
-                        onChange={(e) => handleInputChange("date", e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="modeOfCashFlow">Mode of Cash Flow *</Label>
-                      <Select
-                        value={formData.modeOfCashFlow}
-                        onValueChange={(value) => handleInputChange("modeOfCashFlow", value as CashFlowMode)}
-                      >
-                        <SelectTrigger id="modeOfCashFlow">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="inflow">Inflow</SelectItem>
-                          <SelectItem value="outflow">Outflow</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Popover open={formDatePopoverOpen} onOpenChange={setFormDatePopoverOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            id="date"
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !formData.date && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                            {(() => {
+                              const d = isoDateStringToLocalDate(formData.date);
+                              return d ? format(d, "PPP") : "Pick a date";
+                            })()}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={isoDateStringToLocalDate(formData.date)}
+                            onSelect={(date) => {
+                              if (date) {
+                                handleInputChange("date", localDateToIsoString(date));
+                                setFormDatePopoverOpen(false);
+                              }
+                            }}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </div>
 
@@ -2346,7 +2374,22 @@ const Payroll = () => {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="modeOfCashFlow">Mode of Cash Flow *</Label>
+                      <Select
+                        value={formData.modeOfCashFlow}
+                        onValueChange={(value) => handleInputChange("modeOfCashFlow", value as CashFlowMode)}
+                      >
+                        <SelectTrigger id="modeOfCashFlow">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="inflow">Inflow</SelectItem>
+                          <SelectItem value="outflow">Outflow</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <div className="space-y-2">
                       <Label htmlFor="name">
                         Name * 
@@ -2485,21 +2528,75 @@ const Payroll = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="siteOfWork">Site of Work</Label>
-                      <Select
-                        value={formData.siteOfWork}
-                        onValueChange={(value) => handleInputChange("siteOfWork", value)}
+                      <Popover
+                        open={sitePopoverOpen}
+                        onOpenChange={(open) => {
+                          setSitePopoverOpen(open);
+                          if (!open) setSiteSearchValue("");
+                        }}
                       >
-                        <SelectTrigger id="siteOfWork">
-                          <SelectValue placeholder="Select site" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {sites.map((site) => (
-                            <SelectItem key={site.id} value={site.name}>
-                              {site.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        <PopoverTrigger asChild>
+                          <Button
+                            id="siteOfWork"
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={sitePopoverOpen}
+                            className="w-full justify-between"
+                          >
+                            {formData.siteOfWork || "Select site"}
+                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[350px] p-0" align="start">
+                          <Command>
+                            <CommandInput
+                              placeholder="Search site..."
+                              value={siteSearchValue}
+                              onValueChange={setSiteSearchValue}
+                            />
+                            <CommandList>
+                              <CommandEmpty>No site found.</CommandEmpty>
+                              <CommandGroup>
+                                {sites
+                                  .filter((site) => {
+                                    if (!siteSearchValue) return true;
+                                    const q = siteSearchValue.toLowerCase();
+                                    return (
+                                      site.name?.toLowerCase().includes(q) ||
+                                      site.clientName?.toLowerCase().includes(q)
+                                    );
+                                  })
+                                  .map((site) => (
+                                    <CommandItem
+                                      key={site.id}
+                                      value={site.name}
+                                      onSelect={() => {
+                                        handleInputChange("siteOfWork", site.name);
+                                        setSitePopoverOpen(false);
+                                        setSiteSearchValue("");
+                                      }}
+                                    >
+                                      <Check
+                                        className={cn(
+                                          "mr-2 h-4 w-4",
+                                          formData.siteOfWork === site.name ? "opacity-100" : "opacity-0"
+                                        )}
+                                      />
+                                      <div className="flex flex-col min-w-0">
+                                        <span className="truncate">{site.name}</span>
+                                        {site.clientName && (
+                                          <span className="text-xs text-muted-foreground truncate">
+                                            {site.clientName}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </CommandItem>
+                                  ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="invoiceNumber">Invoice Number</Label>
@@ -2550,7 +2647,7 @@ const Payroll = () => {
                     </p>
                   </div>
 
-                  <div className="grid grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="amountExclGst">Amount (Excl. GST) *</Label>
                       <Input
@@ -2682,12 +2779,37 @@ const Payroll = () => {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="paymentDate">Payment Date</Label>
-                      <Input
-                        id="paymentDate"
-                        type="date"
-                        value={formData.paymentDate}
-                        onChange={(e) => handleInputChange("paymentDate", e.target.value)}
-                      />
+                      <Popover open={formPaymentDatePopoverOpen} onOpenChange={setFormPaymentDatePopoverOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            id="paymentDate"
+                            variant="outline"
+                            className={cn(
+                              "w-full justify-start text-left font-normal",
+                              !formData.paymentDate && "text-muted-foreground"
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                            {(() => {
+                              const d = isoDateStringToLocalDate(formData.paymentDate);
+                              return d ? format(d, "PPP") : "Pick payment date";
+                            })()}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={isoDateStringToLocalDate(formData.paymentDate)}
+                            onSelect={(date) => {
+                              if (date) {
+                                handleInputChange("paymentDate", localDateToIsoString(date));
+                                setFormPaymentDatePopoverOpen(false);
+                              }
+                            }}
+                            initialFocus
+                          />
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </div>
 

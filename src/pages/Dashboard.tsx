@@ -16,24 +16,39 @@ import {
 } from "@/components/ui/chart";
 import { getAllInvoices } from "@/lib/firebase/invoices";
 import { getAllPayrolls } from "@/lib/firebase/payroll";
-import { Invoice, Payroll } from "@/types/financial";
+import { getAllExpenses } from "@/lib/firebase/expenses";
+import { Expense, Invoice, Payroll } from "@/types/financial";
 import { formatCurrency } from "@/lib/utils";
 
 const Dashboard = () => {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [payrolls, setPayrolls] = useState<Payroll[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const parseDateValue = (value?: string) => {
+    if (!value) return null;
+    if (value.includes(".")) {
+      const [day, month, year] = value.split(".");
+      const parsed = new Date(Number(year), Number(month) - 1, Number(day));
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
 
   useEffect(() => {
     const loadData = async () => {
       try {
         setIsLoading(true);
-        const [fetchedInvoices, fetchedPayrolls] = await Promise.all([
+        const [fetchedInvoices, fetchedPayrolls, fetchedExpenses] = await Promise.all([
           getAllInvoices(),
           getAllPayrolls(),
+          getAllExpenses(),
         ]);
         setInvoices(fetchedInvoices);
         setPayrolls(fetchedPayrolls);
+        setExpenses(fetchedExpenses);
       } catch (error) {
         console.error("Error loading dashboard data:", error);
       } finally {
@@ -44,49 +59,65 @@ const Dashboard = () => {
     loadData();
   }, []);
 
-  // Calculate revenue from invoices (inflow)
-  const totalRevenue = invoices
-    .filter(inv => inv.status === "received")
-    .reduce((sum, inv) => sum + inv.totalAmount, 0);
-
-  const pendingRevenue = invoices
-    .filter(inv => inv.status === "pending")
-    .reduce((sum, inv) => sum + inv.totalAmount, 0);
-
-  // Calculate expenses from payroll (outflow)
-  const totalExpenses = payrolls
-    .filter(pay => pay.modeOfCashFlow === "outflow" && pay.status === "received")
+  // Per request:
+  // 1) Dashboard "Total Revenue" uses Payroll net cash flow.
+  // 2) Dashboard expenses come from Expenses page data.
+  // 3) Net Profit = Total Revenue - Total Expenses.
+  const payrollInflowTotal = payrolls
+    .filter((pay) => pay.modeOfCashFlow === "inflow")
     .reduce((sum, pay) => sum + pay.totalAmount, 0);
 
-  const pendingExpenses = payrolls
-    .filter(pay => pay.modeOfCashFlow === "outflow" && pay.status === "pending")
+  const payrollOutflowTotal = payrolls
+    .filter((pay) => pay.modeOfCashFlow === "outflow")
     .reduce((sum, pay) => sum + pay.totalAmount, 0);
+
+  const totalRevenue = payrollInflowTotal - payrollOutflowTotal;
+
+  const pendingRevenue = payrolls
+    .filter((pay) => pay.modeOfCashFlow === "inflow" && (pay.status === "pending" || pay.status === "overdue" || pay.status === "late"))
+    .reduce((sum, pay) => sum + pay.totalAmount, 0);
+
+  const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+
+  const pendingExpenses = expenses
+    .filter((exp) => exp.status === "pending" || exp.status === "overdue")
+    .reduce((sum, exp) => sum + exp.amount, 0);
 
   const profit = totalRevenue - totalExpenses;
 
-  // Group by month for chart
-  const monthlyData = invoices.reduce((acc, inv) => {
-    const month = new Date(inv.issueDate).toLocaleString('default', { month: 'short' });
+  // Group by month for chart (Payroll inflow/outflow + direct Expenses outflow)
+  const monthlyData = payrolls.reduce((acc, pay) => {
+    const parsedDate = parseDateValue(pay.date);
+    if (!parsedDate) return acc;
+    const month = parsedDate.toLocaleString("default", { month: "short", year: "2-digit" });
     if (!acc[month]) {
-      acc[month] = { month, revenue: 0, expenses: 0 };
+      acc[month] = { month, revenue: 0, expenses: 0, sortKey: parsedDate.getTime() };
     }
-    if (inv.status === "received") {
-      acc[month].revenue += inv.totalAmount;
+    if (pay.modeOfCashFlow === "inflow" && (pay.status === "received" || pay.status === "paid")) {
+      acc[month].revenue += pay.totalAmount;
+    }
+    if (pay.modeOfCashFlow === "outflow" && (pay.status === "received" || pay.status === "paid")) {
+      acc[month].expenses += pay.totalAmount;
     }
     return acc;
-  }, {} as Record<string, { month: string; revenue: number; expenses: number }>);
+  }, {} as Record<string, { month: string; revenue: number; expenses: number; sortKey: number }>);
 
-  payrolls.forEach(pay => {
-    if (pay.modeOfCashFlow === "outflow" && pay.status === "received") {
-      const month = new Date(pay.date.split('.').reverse().join('-')).toLocaleString('default', { month: 'short' });
+  expenses.forEach(exp => {
+    if (exp.status === "approved" || exp.status === "paid") {
+      const parsedDate = parseDateValue(exp.date);
+      if (!parsedDate) return;
+      const month = parsedDate.toLocaleString("default", { month: "short", year: "2-digit" });
       if (!monthlyData[month]) {
-        monthlyData[month] = { month, revenue: 0, expenses: 0 };
+        monthlyData[month] = { month, revenue: 0, expenses: 0, sortKey: parsedDate.getTime() };
       }
-      monthlyData[month].expenses += pay.totalAmount;
+      monthlyData[month].expenses += exp.amount;
     }
   });
 
-  const monthlyDataArray = Object.values(monthlyData).slice(0, 6); // Last 6 months
+  const monthlyDataArray = Object.values(monthlyData)
+    .sort((a, b) => a.sortKey - b.sortKey)
+    .slice(-6)
+    .map(({ month, revenue, expenses }) => ({ month, revenue, expenses }));
 
   const statusData = [
     { status: "received", count: invoices.filter(i => i.status === "received").length, fill: "var(--color-received)" },
@@ -140,13 +171,13 @@ const Dashboard = () => {
         {isLoading ? (
           <>
             {[1, 2, 3, 4].map((i) => (
-              <Card key={i} className="relative overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100/50 dark:from-slate-950/30 dark:to-slate-900/20 border-2 border-slate-200 dark:border-slate-900/50 shadow-xl p-0 rounded-2xl">
+              <Card key={i} className="relative overflow-hidden bg-gradient-to-br from-slate-50 to-slate-100/50 dark:from-slate-950/30 dark:to-slate-900/20 border-2 border-slate-200 dark:border-slate-900/50 shadow-xl p-0 rounded-[24px]">
                 <CardHeader className="relative px-6 pt-6">
                   <Skeleton className="h-16 w-16 rounded-xl mb-4" />
                   <Skeleton className="h-4 w-32 mb-2" />
                   <Skeleton className="h-8 w-40" />
                 </CardHeader>
-                <CardContent className="bg-slate-50/50 dark:bg-slate-950/20 rounded-b-2xl px-6 py-4 border-t border-slate-200 dark:border-slate-900/50">
+                <CardContent className="bg-slate-50/50 dark:bg-slate-950/20 rounded-b-[24px] px-6 py-4 border-t border-slate-200 dark:border-slate-900/50">
                   <Skeleton className="h-3 w-24" />
                 </CardContent>
               </Card>
@@ -154,7 +185,7 @@ const Dashboard = () => {
           </>
         ) : (
           <>
-            <Card className="relative overflow-hidden bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950/30 dark:to-green-900/20 border-2 border-green-200 dark:border-green-900/50 shadow-xl hover:shadow-2xl transition-all duration-300 p-0 rounded-2xl group">
+            <Card className="relative overflow-hidden bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950/30 dark:to-green-900/20 border-2 border-green-200 dark:border-green-900/50 shadow-xl hover:shadow-2xl transition-all duration-300 p-0 rounded-[24px] group">
               <div className="absolute top-0 right-0 w-32 h-32 bg-green-400/20 rounded-full -mr-16 -mt-16 group-hover:bg-green-400/30 transition-colors"></div>
               <CardHeader className="relative px-6 pt-6">
                 <div className="flex items-start justify-between">
@@ -167,14 +198,14 @@ const Dashboard = () => {
                   {formatCurrency(totalRevenue)}
                 </div>
               </CardHeader>
-              <CardContent className="bg-green-50/50 dark:bg-green-950/20 rounded-b-2xl px-6 py-4 border-t border-green-200 dark:border-green-900/50">
+              <CardContent className="bg-green-50/50 dark:bg-green-950/20 rounded-b-[24px] px-6 py-4 border-t border-green-200 dark:border-green-900/50">
                 <p className="text-xs text-muted-foreground font-medium">
                   {formatCurrency(pendingRevenue)} pending
                 </p>
               </CardContent>
             </Card>
 
-            <Card className="relative overflow-hidden bg-gradient-to-br from-red-50 to-red-100/50 dark:from-red-950/30 dark:to-red-900/20 border-2 border-red-200 dark:border-red-900/50 shadow-xl hover:shadow-2xl transition-all duration-300 p-0 rounded-2xl group">
+            <Card className="relative overflow-hidden bg-gradient-to-br from-red-50 to-red-100/50 dark:from-red-950/30 dark:to-red-900/20 border-2 border-red-200 dark:border-red-900/50 shadow-xl hover:shadow-2xl transition-all duration-300 p-0 rounded-[24px] group">
               <div className="absolute top-0 right-0 w-32 h-32 bg-red-400/20 rounded-full -mr-16 -mt-16 group-hover:bg-red-400/30 transition-colors"></div>
               <CardHeader className="relative px-6 pt-6">
                 <div className="flex items-start justify-between">
@@ -187,14 +218,14 @@ const Dashboard = () => {
                   {formatCurrency(totalExpenses)}
                 </div>
               </CardHeader>
-              <CardContent className="bg-red-50/50 dark:bg-red-950/20 rounded-b-2xl px-6 py-4 border-t border-red-200 dark:border-red-900/50">
+              <CardContent className="bg-red-50/50 dark:bg-red-950/20 rounded-b-[24px] px-6 py-4 border-t border-red-200 dark:border-red-900/50">
                 <p className="text-xs text-muted-foreground font-medium">
                   {formatCurrency(pendingExpenses)} pending
                 </p>
               </CardContent>
             </Card>
 
-            <Card className={`relative overflow-hidden bg-gradient-to-br ${profit >= 0 ? 'from-green-50 to-emerald-100/50 dark:from-green-950/30 dark:to-emerald-900/20 border-2 border-green-200 dark:border-green-900/50' : 'from-red-50 to-rose-100/50 dark:from-red-950/30 dark:to-rose-900/20 border-2 border-red-200 dark:border-red-900/50'} shadow-xl hover:shadow-2xl transition-all duration-300 p-0 rounded-2xl group`}>
+            <Card className={`relative overflow-hidden bg-gradient-to-br ${profit >= 0 ? 'from-green-50 to-emerald-100/50 dark:from-green-950/30 dark:to-emerald-900/20 border-2 border-green-200 dark:border-green-900/50' : 'from-red-50 to-rose-100/50 dark:from-red-950/30 dark:to-rose-900/20 border-2 border-red-200 dark:border-red-900/50'} shadow-xl hover:shadow-2xl transition-all duration-300 p-0 rounded-[24px] group`}>
               <div className={`absolute top-0 right-0 w-32 h-32 ${profit >= 0 ? 'bg-green-400/20 group-hover:bg-green-400/30' : 'bg-red-400/20 group-hover:bg-red-400/30'} rounded-full -mr-16 -mt-16 transition-colors`}></div>
               <CardHeader className="relative px-6 pt-6">
                 <div className="flex items-start justify-between">
@@ -207,12 +238,12 @@ const Dashboard = () => {
                   {formatCurrency(profit)}
                 </div>
               </CardHeader>
-              <CardContent className={`${profit >= 0 ? 'bg-green-50/50 dark:bg-green-950/20 border-t border-green-200 dark:border-green-900/50' : 'bg-red-50/50 dark:bg-red-950/20 border-t border-red-200 dark:border-red-900/50'} rounded-b-2xl px-6 py-4`}>
+              <CardContent className={`${profit >= 0 ? 'bg-green-50/50 dark:bg-green-950/20 border-t border-green-200 dark:border-green-900/50' : 'bg-red-50/50 dark:bg-red-950/20 border-t border-red-200 dark:border-red-900/50'} rounded-b-[24px] px-6 py-4`}>
                 <p className="text-xs text-muted-foreground font-medium">Cash flow method</p>
               </CardContent>
             </Card>
 
-            <Card className="relative overflow-hidden bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20 border-2 border-blue-200 dark:border-blue-900/50 shadow-xl hover:shadow-2xl transition-all duration-300 p-0 rounded-2xl group">
+            <Card className="relative overflow-hidden bg-gradient-to-br from-blue-50 to-blue-100/50 dark:from-blue-950/30 dark:to-blue-900/20 border-2 border-blue-200 dark:border-blue-900/50 shadow-xl hover:shadow-2xl transition-all duration-300 p-0 rounded-[24px] group">
               <div className="absolute top-0 right-0 w-32 h-32 bg-blue-400/20 rounded-full -mr-16 -mt-16 group-hover:bg-blue-400/30 transition-colors"></div>
               <CardHeader className="relative px-6 pt-6">
                 <div className="flex items-start justify-between">
@@ -222,11 +253,12 @@ const Dashboard = () => {
                 </div>
                 <CardTitle className="text-sm font-semibold mt-4 text-muted-foreground uppercase tracking-wide">Pending Items</CardTitle>
                 <div className="text-3xl font-bold text-blue-700 dark:text-blue-400 mt-2">
-                  {invoices.filter(i => i.status === "pending").length + 
-                   payrolls.filter(p => p.status === "pending").length}
+                  {invoices.filter(i => i.status === "pending").length +
+                   payrolls.filter(p => p.status === "pending" || p.status === "overdue" || p.status === "late").length +
+                   expenses.filter(e => e.status === "pending" || e.status === "overdue").length}
                 </div>
               </CardHeader>
-              <CardContent className="bg-blue-50/50 dark:bg-blue-950/20 rounded-b-2xl px-6 py-4 border-t border-blue-200 dark:border-blue-900/50">
+              <CardContent className="bg-blue-50/50 dark:bg-blue-950/20 rounded-b-[24px] px-6 py-4 border-t border-blue-200 dark:border-blue-900/50">
                 <p className="text-xs text-muted-foreground font-medium">Requires attention</p>
               </CardContent>
             </Card>
