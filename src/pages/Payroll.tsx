@@ -72,6 +72,17 @@ import { addExpense } from "@/lib/firebase/expenses";
 import { uploadToCloudinary } from "@/lib/cloudinary/upload-client";
 import { toast } from "sonner";
 import { calculatePaymentDate } from "@/lib/paymentCycle";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  PaginationEllipsis,
+} from "@/components/ui/pagination";
+
+const PAYROLL_LIST_PAGE_SIZE = 10;
 
 const isoDateStringToLocalDate = (iso: string): Date | undefined => {
   if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return undefined;
@@ -120,6 +131,7 @@ const Payroll = () => {
   const [formDatePopoverOpen, setFormDatePopoverOpen] = useState(false);
   const [formPaymentDatePopoverOpen, setFormPaymentDatePopoverOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"card" | "table">("table");
+  const [payrollListPage, setPayrollListPage] = useState(1);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [payrollToDelete, setPayrollToDelete] = useState<Payroll | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -1175,6 +1187,25 @@ const Payroll = () => {
     return null;
   };
 
+  /** Latest-first list ordering: primary date, then createdAt, then payment date, then id. */
+  const getPayrollListSortTime = (p: Payroll): number => {
+    const main = parseDate(p.date);
+    if (main) return main.getTime();
+    if (p.date && /^\d{4}-\d{2}-\d{2}/.test(p.date)) {
+      const t = new Date(p.date).getTime();
+      if (!Number.isNaN(t)) return t;
+    }
+    if (p.createdAt) {
+      const t = new Date(p.createdAt).getTime();
+      if (!Number.isNaN(t)) return t;
+    }
+    if (p.paymentDate) {
+      const pd = parseDate(p.paymentDate);
+      if (pd) return pd.getTime();
+    }
+    return 0;
+  };
+
   // Convert invoices to payroll-like format for display
   const invoicesAsPayrolls: Payroll[] = invoices
     .filter(inv => inv.status === "pending" || inv.status === "overdue")
@@ -1215,40 +1246,83 @@ const Payroll = () => {
   // Get unique months for filters
   const uniqueMonths = Array.from(new Set(allPayrollRecords.map(p => p.month))).sort();
 
-  const filteredPayrolls = allPayrollRecords.filter(payroll => {
-    const matchesSearch = payroll.name.toLowerCase().includes(searchValue.toLowerCase()) ||
-      payroll.siteOfWork?.toLowerCase().includes(searchValue.toLowerCase()) ||
-      payroll.invoiceNumber?.toLowerCase().includes(searchValue.toLowerCase());
-    const matchesStatus = statusFilter === "all" || payroll.status === statusFilter;
-    const matchesMode = modeFilter === "all" || payroll.modeOfCashFlow === modeFilter;
+  const payrollMatchesPeriod = (payroll: Payroll): boolean => {
     const matchesMonth = monthFilter === "all" || payroll.month === monthFilter;
-    
-    // Date range filtering
     let matchesDate = true;
     if (dateRange?.from || dateRange?.to) {
       const payrollDate = parseDate(payroll.date);
       if (payrollDate) {
         if (dateRange.from && dateRange.to) {
-          // Both dates selected - check if payroll date is within range
           matchesDate = payrollDate >= dateRange.from && payrollDate <= dateRange.to;
         } else if (dateRange.from) {
-          // Only from date selected
           matchesDate = payrollDate >= dateRange.from;
         } else if (dateRange.to) {
-          // Only to date selected
           matchesDate = payrollDate <= dateRange.to;
         }
       } else {
         matchesDate = false;
       }
     }
-    
-    return matchesSearch && matchesStatus && matchesMode && matchesMonth && matchesDate;
-  });
+    return matchesMonth && matchesDate;
+  };
 
-  // Calculate chart data
+  const payrollsForDashboard = allPayrollRecords.filter(payrollMatchesPeriod);
+
+  const periodSummaryLabel =
+    monthFilter === "all" && !dateRange?.from && !dateRange?.to
+      ? "All time"
+      : [
+          monthFilter !== "all" ? monthFilter : null,
+          dateRange?.from
+            ? dateRange.to
+              ? `${format(dateRange.from, "dd.MM.yyyy")}–${format(dateRange.to, "dd.MM.yyyy")}`
+              : `From ${format(dateRange.from, "dd.MM.yyyy")}`
+            : dateRange?.to
+              ? `Until ${format(dateRange.to, "dd.MM.yyyy")}`
+              : null,
+        ]
+          .filter(Boolean)
+          .join(" · ");
+
+  const filteredPayrolls = payrollsForDashboard.filter(payroll => {
+    const matchesSearch = payroll.name.toLowerCase().includes(searchValue.toLowerCase()) ||
+      payroll.siteOfWork?.toLowerCase().includes(searchValue.toLowerCase()) ||
+      payroll.invoiceNumber?.toLowerCase().includes(searchValue.toLowerCase());
+    const matchesStatus = statusFilter === "all" || payroll.status === statusFilter;
+    const matchesMode = modeFilter === "all" || payroll.modeOfCashFlow === modeFilter;
+    return matchesSearch && matchesStatus && matchesMode;
+  })
+    .sort((a, b) => {
+      const tb = getPayrollListSortTime(b);
+      const ta = getPayrollListSortTime(a);
+      if (tb !== ta) return tb - ta;
+      return String(b.id).localeCompare(String(a.id));
+    });
+
+  const payrollListTotalPages = Math.max(1, Math.ceil(filteredPayrolls.length / PAYROLL_LIST_PAGE_SIZE));
+  const payrollListStartIndex = (payrollListPage - 1) * PAYROLL_LIST_PAGE_SIZE;
+  const payrollListEndIndex = Math.min(
+    payrollListStartIndex + PAYROLL_LIST_PAGE_SIZE,
+    filteredPayrolls.length
+  );
+  const paginatedPayrolls = filteredPayrolls.slice(
+    payrollListStartIndex,
+    payrollListStartIndex + PAYROLL_LIST_PAGE_SIZE
+  );
+
+  useEffect(() => {
+    setPayrollListPage(1);
+  }, [searchValue, statusFilter, modeFilter, monthFilter, dateRange?.from, dateRange?.to]);
+
+  useEffect(() => {
+    if (payrollListPage > payrollListTotalPages) {
+      setPayrollListPage(payrollListTotalPages);
+    }
+  }, [payrollListPage, payrollListTotalPages]);
+
+  // Calculate chart data (scoped to selected month / date range)
   // Area Chart: Monthly inflow and outflow totals
-  const monthlyData = allPayrollRecords.reduce((acc, payroll) => {
+  const monthlyData = payrollsForDashboard.reduce((acc, payroll) => {
     const month = payroll.month;
     if (!acc[month]) {
       acc[month] = { month, inflow: 0, outflow: 0 };
@@ -1273,10 +1347,10 @@ const Payroll = () => {
     }));
 
   // Pie Chart: Total inflow vs outflow
-  const totalInflow = allPayrollRecords
+  const totalInflow = payrollsForDashboard
     .filter(p => p.modeOfCashFlow === "inflow")
     .reduce((sum, p) => sum + p.totalAmount, 0);
-  const totalOutflow = allPayrollRecords
+  const totalOutflow = payrollsForDashboard
     .filter(p => p.modeOfCashFlow === "outflow")
     .reduce((sum, p) => sum + p.totalAmount, 0);
 
@@ -1348,6 +1422,94 @@ const Payroll = () => {
     }
   };
 
+  const payrollListPaginationControls =
+    !isLoading && filteredPayrolls.length > 0 ? (
+      <div className="flex flex-col sm:flex-row items-center justify-between mt-4 sm:mt-6 gap-4">
+        <div className="text-sm text-muted-foreground">
+          Showing {payrollListStartIndex + 1} to {payrollListEndIndex} of {filteredPayrolls.length} records
+        </div>
+        <Pagination>
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (payrollListPage > 1) setPayrollListPage(payrollListPage - 1);
+                }}
+                className={
+                  payrollListPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"
+                }
+              />
+            </PaginationItem>
+            {(() => {
+              const pages: (number | "ellipsis")[] = [];
+              const totalPages = payrollListTotalPages;
+              const currentPage = payrollListPage;
+              if (totalPages <= 7) {
+                for (let i = 1; i <= totalPages; i++) pages.push(i);
+              } else {
+                pages.push(1);
+                if (currentPage <= 3) {
+                  for (let i = 2; i <= 4; i++) pages.push(i);
+                  pages.push("ellipsis");
+                  pages.push(totalPages);
+                } else if (currentPage >= totalPages - 2) {
+                  pages.push("ellipsis");
+                  for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+                } else {
+                  pages.push("ellipsis");
+                  for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
+                  pages.push("ellipsis");
+                  pages.push(totalPages);
+                }
+              }
+              return pages.map((page, index) => {
+                if (page === "ellipsis") {
+                  return (
+                    <PaginationItem key={`ellipsis-${index}`}>
+                      <PaginationEllipsis />
+                    </PaginationItem>
+                  );
+                }
+                return (
+                  <PaginationItem key={page}>
+                    <PaginationLink
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setPayrollListPage(page);
+                      }}
+                      isActive={payrollListPage === page}
+                      className="cursor-pointer"
+                    >
+                      {page}
+                    </PaginationLink>
+                  </PaginationItem>
+                );
+              });
+            })()}
+            <PaginationItem>
+              <PaginationNext
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (payrollListPage < payrollListTotalPages) {
+                    setPayrollListPage(payrollListPage + 1);
+                  }
+                }}
+                className={
+                  payrollListPage === payrollListTotalPages
+                    ? "pointer-events-none opacity-50"
+                    : "cursor-pointer"
+                }
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      </div>
+    ) : null;
+
   return (
     <div className="space-y-6 sm:space-y-8">
       {/* Modern Header Section */}
@@ -1392,6 +1554,126 @@ const Payroll = () => {
         </div>
       </div>
 
+      {/* Period filters: drives summary cards, charts, and payroll list */}
+      <Card className="border-2 shadow-lg">
+        <CardContent className="pt-6 pb-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Summary period</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Totals and charts reflect this period. The list below adds search and status filters.
+              </p>
+              <p className="text-xs font-medium text-primary mt-2">{periodSummaryLabel}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3">
+              <Popover open={monthPopoverOpen} onOpenChange={setMonthPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={monthPopoverOpen}
+                    className="w-[min(100%,220px)] justify-between"
+                  >
+                    {monthFilter === "all" ? "All months" : monthFilter}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[260px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search month..." />
+                    <CommandList>
+                      <CommandEmpty>No month found.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          value="all"
+                          onSelect={() => {
+                            setMonthFilter("all");
+                            setMonthPopoverOpen(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              monthFilter === "all" ? "opacity-100" : "opacity-0"
+                            )}
+                          />
+                          All months
+                        </CommandItem>
+                        {uniqueMonths.map((month) => (
+                          <CommandItem
+                            key={month}
+                            value={month}
+                            onSelect={() => {
+                              setMonthFilter(month);
+                              setMonthPopoverOpen(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                monthFilter === month ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            {month}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-[min(100%,280px)] justify-start text-left font-normal"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                    {dateRange?.from ? (
+                      dateRange.to ? (
+                        <>
+                          {format(dateRange.from, "dd.MM.yyyy")} –{" "}
+                          {format(dateRange.to, "dd.MM.yyyy")}
+                        </>
+                      ) : (
+                        format(dateRange.from, "dd.MM.yyyy")
+                      )
+                    ) : (
+                      <span>Pick a date range</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={dateRange?.from}
+                    selected={dateRange}
+                    onSelect={setDateRange}
+                    numberOfMonths={2}
+                  />
+                </PopoverContent>
+              </Popover>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="shrink-0"
+                onClick={() => {
+                  setMonthFilter("all");
+                  setDateRange(undefined);
+                }}
+                disabled={
+                  monthFilter === "all" && !dateRange?.from && !dateRange?.to
+                }
+              >
+                Clear period
+              </Button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Enhanced Statistical Summary Cards */}
       <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
         <Card className="relative overflow-hidden bg-gradient-to-br from-green-50 to-green-100/50 dark:from-green-950/30 dark:to-green-900/20 border-2 border-green-200 dark:border-green-900/50 shadow-xl hover:shadow-2xl transition-all duration-300 p-0 rounded-2xl group">
@@ -1409,7 +1691,7 @@ const Payroll = () => {
           </CardHeader>
           <CardContent className="bg-green-50/50 dark:bg-green-950/20 rounded-b-2xl px-6 py-4 border-t border-green-200 dark:border-green-900/50">
             <p className="text-xs text-muted-foreground font-medium">
-              {filteredPayrolls.filter(p => p.modeOfCashFlow === "inflow").length} inflow entries
+              {payrollsForDashboard.filter(p => p.modeOfCashFlow === "inflow").length} inflow entries
             </p>
           </CardContent>
         </Card>
@@ -1429,7 +1711,7 @@ const Payroll = () => {
           </CardHeader>
           <CardContent className="bg-red-50/50 dark:bg-red-950/20 rounded-b-2xl px-6 py-4 border-t border-red-200 dark:border-red-900/50">
             <p className="text-xs text-muted-foreground font-medium">
-              {filteredPayrolls.filter(p => p.modeOfCashFlow === "outflow").length} outflow entries
+              {payrollsForDashboard.filter(p => p.modeOfCashFlow === "outflow").length} outflow entries
             </p>
           </CardContent>
         </Card>
@@ -1466,7 +1748,7 @@ const Payroll = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="px-1 pr-2">
-            {!isLoading && payrolls.length > 0 && areaChartData.length > 0 ? (
+            {!isLoading && payrollsForDashboard.length > 0 && areaChartData.length > 0 ? (
               <ChartContainer config={areaChartConfig} className="h-[300px] w-full -mx-1">
                 <AreaChart
                   accessibilityLayer
@@ -1559,7 +1841,7 @@ const Payroll = () => {
             <CardDescription className="text-xs">Inflow vs Outflow</CardDescription>
           </CardHeader>
           <CardContent className="flex-1 pb-0">
-            {!isLoading && payrolls.length > 0 && pieChartData.length > 0 && pieChartData.some(d => d.amount > 0) ? (
+            {!isLoading && payrollsForDashboard.length > 0 && pieChartData.length > 0 && pieChartData.some(d => d.amount > 0) ? (
               <ChartContainer
                 config={pieChartConfig}
                 className="mx-auto aspect-square h-[300px]"
@@ -1612,7 +1894,7 @@ const Payroll = () => {
             </CardDescription>
           </CardHeader>
           <CardContent className="px-1 pr-2">
-            {!isLoading && payrolls.length > 0 && barChartData.length > 0 ? (
+            {!isLoading && payrollsForDashboard.length > 0 && barChartData.length > 0 ? (
               <ChartContainer config={barChartConfig} className="h-[300px] w-full -mx-1">
                 <BarChart
                   accessibilityLayer
@@ -1721,94 +2003,6 @@ const Payroll = () => {
                   className="pl-9"
                 />
               </div>
-              <Popover open={monthPopoverOpen} onOpenChange={setMonthPopoverOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={monthPopoverOpen}
-                    className="w-[150px] justify-between"
-                  >
-                    {monthFilter === "all" ? "All Months" : monthFilter}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[200px] p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="Search month..." />
-                    <CommandList>
-                      <CommandEmpty>No month found.</CommandEmpty>
-                      <CommandGroup>
-                        <CommandItem
-                          value="all"
-                          onSelect={() => {
-                            setMonthFilter("all");
-                            setMonthPopoverOpen(false);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              monthFilter === "all" ? "opacity-100" : "opacity-0"
-                            )}
-                          />
-                          All Months
-                        </CommandItem>
-                        {uniqueMonths.map((month) => (
-                          <CommandItem
-                            key={month}
-                            value={month}
-                            onSelect={() => {
-                              setMonthFilter(month);
-                              setMonthPopoverOpen(false);
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                monthFilter === month ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            {month}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="w-[280px] justify-start text-left font-normal"
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dateRange?.from ? (
-                      dateRange.to ? (
-                        <>
-                          {format(dateRange.from, "dd.MM.yyyy")} -{" "}
-                          {format(dateRange.to, "dd.MM.yyyy")}
-                        </>
-                      ) : (
-                        format(dateRange.from, "dd.MM.yyyy")
-                      )
-                    ) : (
-                      <span>Pick a date range</span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    initialFocus
-                    mode="range"
-                    defaultMonth={dateRange?.from}
-                    selected={dateRange}
-                    onSelect={setDateRange}
-                    numberOfMonths={2}
-                  />
-                </PopoverContent>
-              </Popover>
               <Select value={modeFilter} onValueChange={(value) => setModeFilter(value as "all" | "inflow" | "outflow")}>
                 <SelectTrigger className="w-[150px]">
                   <SelectValue placeholder="All Modes" />
@@ -1838,6 +2032,7 @@ const Payroll = () => {
               No payroll records found
             </div>
           ) : viewMode === "table" ? (
+          <>
           <div className="rounded-xl border-2 overflow-x-auto shadow-lg">
             <Table>
               <TableHeader>
@@ -1923,12 +2118,13 @@ const Payroll = () => {
                     </TableRow>
                   ))
                 ) : (
-                  filteredPayrolls.map((payroll, index) => (
+                  paginatedPayrolls.map((payroll, index) => (
                     <TableRow 
                       key={payroll.id}
-                      className="hover:bg-gradient-to-r hover:from-blue-500/5 hover:to-transparent transition-all duration-200 border-b"
+                      className="hover:bg-gradient-to-r hover:from-blue-500/5 hover:to-transparent transition-all duration-200 border-b cursor-pointer"
+                      onClick={() => handleEditPayroll(payroll)}
                     >
-                      <TableCell className="font-semibold">{index + 1}</TableCell>
+                      <TableCell className="font-semibold">{payrollListStartIndex + index + 1}</TableCell>
                       <TableCell>
                         <Badge 
                           variant={payroll.modeOfCashFlow === "inflow" ? "default" : "destructive"}
@@ -2031,7 +2227,10 @@ const Payroll = () => {
                       <TableCell className="max-w-[200px] truncate text-sm text-muted-foreground">
                         {payroll.notes || "-"}
                       </TableCell>
-                      <TableCell>
+                      <TableCell
+                        className="w-[100px]"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         <div className="flex items-center gap-1">
                         <Button
                           variant="ghost"
@@ -2057,15 +2256,22 @@ const Payroll = () => {
               </TableBody>
             </Table>
           </div>
+          {payrollListPaginationControls}
+          </>
           ) : (
+            <>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {filteredPayrolls.map((payroll, index) => (
-                <Card key={payroll.id} className="relative flex flex-col h-[600px]">
+              {paginatedPayrolls.map((payroll, index) => (
+                <Card
+                  key={payroll.id}
+                  className="relative flex flex-col h-[600px] cursor-pointer transition-shadow hover:shadow-md"
+                  onClick={() => handleEditPayroll(payroll)}
+                >
                   <CardHeader className="pb-3 flex-shrink-0">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
-                          <Badge variant="outline" className="font-mono">#{index + 1}</Badge>
+                          <Badge variant="outline" className="font-mono">#{payrollListStartIndex + index + 1}</Badge>
                           <Badge variant={payroll.modeOfCashFlow === "inflow" ? "default" : "destructive"}>
                             {payroll.modeOfCashFlow === "inflow" ? "Inflow" : "Outflow"}
                           </Badge>
@@ -2078,7 +2284,10 @@ const Payroll = () => {
                            "Cleaner Payroll"}
                         </p>
                       </div>
-                      <div className="flex items-center gap-1">
+                      <div
+                        className="flex items-center gap-1"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                       <Button
                         variant="ghost"
                         size="icon"
@@ -2191,6 +2400,8 @@ const Payroll = () => {
                 </Card>
               ))}
             </div>
+          {payrollListPaginationControls}
+            </>
           )}
         </CardContent>
       </Card>
