@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Search, UserRound, Wallet, Clock3, Building2, Calendar, MapPin } from "lucide-react";
+import { Search, UserRound, Wallet, Clock3, Calendar, MapPin } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -155,10 +155,6 @@ const EmployeeCompensationSearch = () => {
     () => employeeWorkHours.reduce((total, work) => total + (Number(work.hoursWorked) || 0), 0),
     [employeeWorkHours],
   );
-  const uniqueSitesWorked = useMemo(
-    () => new Set(employeeWorkHours.map((work) => work.siteName)).size,
-    [employeeWorkHours],
-  );
   const allocatedSiteNames = useMemo(() => {
     const names = Array.from(
       new Set(
@@ -236,7 +232,7 @@ const EmployeeCompensationSearch = () => {
         </Card>
       ) : (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <Card className="rounded-[24px]">
               <CardHeader className="pb-2">
                 <CardDescription className="flex items-center gap-2">
@@ -286,17 +282,6 @@ const EmployeeCompensationSearch = () => {
                 <CardTitle className="text-base">{totalHours.toFixed(2)} hrs</CardTitle>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground">{employeeWorkHours.length} work entries</CardContent>
-            </Card>
-
-            <Card className="rounded-[24px]">
-              <CardHeader className="pb-2">
-                <CardDescription className="flex items-center gap-2">
-                  <Building2 className="h-4 w-4" />
-                  Sites Covered
-                </CardDescription>
-                <CardTitle className="text-base">{uniqueSitesWorked}</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm text-muted-foreground">{employeeAllocations.length} active allocations</CardContent>
             </Card>
           </div>
 
