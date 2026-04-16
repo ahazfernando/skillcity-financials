@@ -1290,7 +1290,8 @@ const Payroll = () => {
 
   const payrollMatchesPeriod = (payroll: Payroll): boolean => {
     if (!dateRange?.from && !dateRange?.to) return true;
-    const payrollDate = parseDate(payroll.date);
+    const paymentDateForFilter = payroll.paymentDate || payroll.date;
+    const payrollDate = parseDate(paymentDateForFilter);
     if (!payrollDate) return false;
     if (dateRange.from && dateRange.to) {
       return payrollDate >= dateRange.from && payrollDate <= dateRange.to;
