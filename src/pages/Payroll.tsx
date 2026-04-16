@@ -103,6 +103,7 @@ const Payroll = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [modeFilter, setModeFilter] = useState<"all" | "inflow" | "outflow">("all");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [sortOrder, setSortOrder] = useState<"latest_first" | "oldest_first">("latest_first");
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingPayrollId, setEditingPayrollId] = useState<string | null>(null);
   const [receiptFiles, setReceiptFiles] = useState<File[]>([]);
@@ -133,6 +134,7 @@ const Payroll = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [payrollToDelete, setPayrollToDelete] = useState<Payroll | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [invoiceNumberTouched, setInvoiceNumberTouched] = useState(false);
   const [formData, setFormData] = useState({
     month: new Date().toLocaleString('default', { month: 'long' }),
     date: new Date().toISOString().split('T')[0],
@@ -178,6 +180,35 @@ const Payroll = () => {
     }
     
     return Array.from(seenByName.values());
+  };
+
+  const getNextFormattedInvoiceNumber = (dateValue: string): string => {
+    if (!dateValue) return "";
+
+    const targetDate = new Date(`${dateValue}T00:00:00`);
+    if (Number.isNaN(targetDate.getTime())) return "";
+
+    const monthCode = String(targetDate.getMonth() + 1).padStart(2, "0");
+    const yearCode = String(targetDate.getFullYear()).slice(-2);
+    const invoicePattern = /^#?(\d{2})(\d{2})\s*-\s*(\d{4})\s*INV$/i;
+
+    const allInvoiceNumbers = [
+      ...payrolls.map((p) => p.invoiceNumber).filter(Boolean),
+      ...invoices.map((inv) => inv.invoiceNumber).filter(Boolean),
+    ] as string[];
+
+    let maxSequence = 0;
+    allInvoiceNumbers.forEach((invoiceNumber) => {
+      const match = invoiceNumber.trim().match(invoicePattern);
+      if (!match) return;
+      const [, mm, yy, seq] = match;
+      if (mm === monthCode && yy === yearCode) {
+        maxSequence = Math.max(maxSequence, parseInt(seq, 10) || 0);
+      }
+    });
+
+    const nextSequence = String(maxSequence + 1).padStart(4, "0");
+    return `#${monthCode}${yearCode} - ${nextSequence} INV`;
   };
 
   // Load data from Firebase
@@ -298,6 +329,11 @@ const Payroll = () => {
   const handleInputChange = (field: string, value: string | boolean | number) => {
     setFormData((prev) => {
       const updated = { ...prev, [field]: value };
+
+      if (field === "invoiceNumber") {
+        const typed = String(value ?? "").trim();
+        setInvoiceNumberTouched(typed.length > 0);
+      }
       
       // Calculate AUD equivalent when LKR is selected and exchange rate/amount changes
       if (field === "amountExclGst" || field === "exchangeRate" || field === "currency") {
@@ -434,6 +470,13 @@ const Payroll = () => {
               console.error("Error calculating payment date:", error);
             }
           }
+        }
+      }
+
+      if (field === "date" && !editingPayrollId && !invoiceNumberTouched) {
+        const generatedInvoice = getNextFormattedInvoiceNumber(String(value));
+        if (generatedInvoice) {
+          updated.invoiceNumber = generatedInvoice;
         }
       }
       
@@ -884,9 +927,11 @@ const Payroll = () => {
       URL.revokeObjectURL(formData.receiptUrl);
     }
     
+    const todayIso = new Date().toISOString().split('T')[0];
+
     setFormData({
       month: new Date().toLocaleString('default', { month: 'long' }),
-      date: new Date().toISOString().split('T')[0],
+      date: todayIso,
       modeOfCashFlow: "outflow",
       typeOfCashFlow: "cleaner_payroll",
       name: "",
@@ -894,7 +939,7 @@ const Payroll = () => {
       abnRegistered: false,
       gstRegistered: false,
       calculateGst: true,
-      invoiceNumber: "",
+      invoiceNumber: getNextFormattedInvoiceNumber(todayIso),
       amountExclGst: "",
       gstAmount: "",
       totalAmount: "",
@@ -911,11 +956,13 @@ const Payroll = () => {
       exchangeRate: "",
       audEquivalent: "",
     });
+    setInvoiceNumberTouched(false);
     setEditingPayrollId(null);
   };
 
   const handleEditPayroll = (payroll: Payroll) => {
     setEditingPayrollId(payroll.id);
+    setInvoiceNumberTouched(true);
     
     // Determine calculateGst based on whether GST was actually calculated
     // If gstAmount > 0 and gstRegistered is true, then calculateGst was likely true
@@ -1275,10 +1322,14 @@ const Payroll = () => {
     return matchesSearch && matchesStatus && matchesMode;
   })
     .sort((a, b) => {
-      const tb = getPayrollListSortTime(b);
       const ta = getPayrollListSortTime(a);
-      if (tb !== ta) return tb - ta;
-      return String(b.id).localeCompare(String(a.id));
+      const tb = getPayrollListSortTime(b);
+      if (ta !== tb) {
+        return sortOrder === "latest_first" ? tb - ta : ta - tb;
+      }
+      return sortOrder === "latest_first"
+        ? String(b.id).localeCompare(String(a.id))
+        : String(a.id).localeCompare(String(b.id));
     });
 
   const payrollListTotalPages = Math.max(1, Math.ceil(filteredPayrolls.length / PAYROLL_LIST_PAGE_SIZE));
@@ -1294,7 +1345,7 @@ const Payroll = () => {
 
   useEffect(() => {
     setPayrollListPage(1);
-  }, [searchValue, statusFilter, modeFilter, dateRange?.from, dateRange?.to]);
+  }, [searchValue, statusFilter, modeFilter, sortOrder, dateRange?.from, dateRange?.to]);
 
   useEffect(() => {
     if (payrollListPage > payrollListTotalPages) {
@@ -1506,7 +1557,10 @@ const Payroll = () => {
         </div>
         <div className="flex gap-2 w-full sm:w-auto flex-wrap">
             <Button 
-              onClick={() => setIsAddDialogOpen(true)} 
+              onClick={() => {
+                resetForm();
+                setIsAddDialogOpen(true);
+              }} 
               className="w-full sm:w-auto shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
               size="lg"
             >
@@ -1945,6 +1999,55 @@ const Payroll = () => {
                   <SelectItem value="paid">Paid</SelectItem>
                 </SelectContent>
               </Select>
+              <Select
+                value={sortOrder}
+                onValueChange={(value) => setSortOrder(value as "latest_first" | "oldest_first")}
+              >
+                <SelectTrigger className="w-[220px]">
+                  <SelectValue placeholder="Sort by date" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="latest_first">Latest invoice first</SelectItem>
+                  <SelectItem value="oldest_first">Latest invoice last</SelectItem>
+                </SelectContent>
+              </Select>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-[220px] justify-start text-left font-normal">
+                    <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                    {dateRange?.from ? (
+                      dateRange.to ? (
+                        <>
+                          {format(dateRange.from, "dd.MM.yyyy")} – {format(dateRange.to, "dd.MM.yyyy")}
+                        </>
+                      ) : (
+                        format(dateRange.from, "dd.MM.yyyy")
+                      )
+                    ) : (
+                      <span>Date range</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={dateRange?.from}
+                    selected={dateRange}
+                    onSelect={setDateRange}
+                    numberOfMonths={2}
+                  />
+                </PopoverContent>
+              </Popover>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setDateRange(undefined)}
+                disabled={!dateRange?.from && !dateRange?.to}
+              >
+                Clear dates
+              </Button>
             </div>
           </div>
 
@@ -1958,7 +2061,6 @@ const Payroll = () => {
             <Table>
               <TableHeader>
                 <TableRow className="bg-gradient-to-r from-blue-500/20 via-indigo-500/10 to-blue-500/5 border-b-2">
-                  <TableHead className="w-[50px] font-bold text-foreground">ID</TableHead>
                   <TableHead className="font-bold text-foreground">Mode</TableHead>
                   <TableHead className="font-bold text-foreground">Type</TableHead>
                   <TableHead className="font-bold text-foreground">Date</TableHead>
@@ -1982,9 +2084,6 @@ const Payroll = () => {
                 {isLoading ? (
                   Array.from({ length: 5 }).map((_, index) => (
                     <TableRow key={`skeleton-${index}`}>
-                      <TableCell>
-                        <Skeleton className="h-4 w-8" />
-                      </TableCell>
                       <TableCell>
                         <Skeleton className="h-5 w-16 rounded-full" />
                       </TableCell>
@@ -2039,13 +2138,12 @@ const Payroll = () => {
                     </TableRow>
                   ))
                 ) : (
-                  paginatedPayrolls.map((payroll, index) => (
+                  paginatedPayrolls.map((payroll) => (
                     <TableRow 
                       key={payroll.id}
                       className="hover:bg-gradient-to-r hover:from-blue-500/5 hover:to-transparent transition-all duration-200 border-b cursor-pointer"
                       onClick={() => handleEditPayroll(payroll)}
                     >
-                      <TableCell className="font-semibold">{payrollListStartIndex + index + 1}</TableCell>
                       <TableCell>
                         <Badge 
                           variant={payroll.modeOfCashFlow === "inflow" ? "default" : "destructive"}
@@ -2736,8 +2834,11 @@ const Payroll = () => {
                         id="invoiceNumber"
                         value={formData.invoiceNumber}
                         onChange={(e) => handleInputChange("invoiceNumber", e.target.value)}
-                        placeholder="N/A for outflows"
+                        placeholder="#MMYY - XXXX INV"
                       />
+                      <p className="text-xs text-muted-foreground">
+                        Auto format: #MMYY - XXXX INV (example: #0326 - 0012 INV)
+                      </p>
                     </div>
                   </div>
 
