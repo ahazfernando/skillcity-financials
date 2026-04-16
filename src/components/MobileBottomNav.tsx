@@ -21,7 +21,8 @@ import {
   BarChart3,
   History,
   Sparkles,
-  ClipboardCheck
+  ClipboardCheck,
+  Search
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -41,6 +42,7 @@ const menuItems = [
   { title: "Expenses", url: "/expenses", icon: Receipt },
   { title: "Reports & Analytics", url: "/reports", icon: BarChart3 },
   { title: "Employees", url: "/employees", icon: Users },
+  { title: "Employee Search", url: "/employee-compensation-search", icon: Search },
   { title: "Employee Pay Rates", url: "/employee-pay-rates", icon: DollarSign },
   { title: "Salary Calculator", url: "/salary-calculator", icon: Calculator },
   { title: "Sites", url: "/sites", icon: Building2 },

@@ -102,7 +102,6 @@ const Payroll = () => {
   const [searchValue, setSearchValue] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [modeFilter, setModeFilter] = useState<"all" | "inflow" | "outflow">("all");
-  const [monthFilter, setMonthFilter] = useState("all");
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingPayrollId, setEditingPayrollId] = useState<string | null>(null);
@@ -126,7 +125,6 @@ const Payroll = () => {
   const [siteSearchValue, setSiteSearchValue] = useState("");
   const [isAddingEmployee, setIsAddingEmployee] = useState(false);
   const [isAddingClient, setIsAddingClient] = useState(false);
-  const [monthPopoverOpen, setMonthPopoverOpen] = useState(false);
   const [formMonthPopoverOpen, setFormMonthPopoverOpen] = useState(false);
   const [formDatePopoverOpen, setFormDatePopoverOpen] = useState(false);
   const [formPaymentDatePopoverOpen, setFormPaymentDatePopoverOpen] = useState(false);
@@ -1243,46 +1241,30 @@ const Payroll = () => {
     }
   });
 
-  // Get unique months for filters
-  const uniqueMonths = Array.from(new Set(allPayrollRecords.map(p => p.month))).sort();
-
   const payrollMatchesPeriod = (payroll: Payroll): boolean => {
-    const matchesMonth = monthFilter === "all" || payroll.month === monthFilter;
-    let matchesDate = true;
-    if (dateRange?.from || dateRange?.to) {
-      const payrollDate = parseDate(payroll.date);
-      if (payrollDate) {
-        if (dateRange.from && dateRange.to) {
-          matchesDate = payrollDate >= dateRange.from && payrollDate <= dateRange.to;
-        } else if (dateRange.from) {
-          matchesDate = payrollDate >= dateRange.from;
-        } else if (dateRange.to) {
-          matchesDate = payrollDate <= dateRange.to;
-        }
-      } else {
-        matchesDate = false;
-      }
+    if (!dateRange?.from && !dateRange?.to) return true;
+    const payrollDate = parseDate(payroll.date);
+    if (!payrollDate) return false;
+    if (dateRange.from && dateRange.to) {
+      return payrollDate >= dateRange.from && payrollDate <= dateRange.to;
     }
-    return matchesMonth && matchesDate;
+    if (dateRange.from) return payrollDate >= dateRange.from;
+    if (dateRange.to) return payrollDate <= dateRange.to;
+    return true;
   };
 
   const payrollsForDashboard = allPayrollRecords.filter(payrollMatchesPeriod);
 
   const periodSummaryLabel =
-    monthFilter === "all" && !dateRange?.from && !dateRange?.to
+    !dateRange?.from && !dateRange?.to
       ? "All time"
-      : [
-          monthFilter !== "all" ? monthFilter : null,
-          dateRange?.from
-            ? dateRange.to
-              ? `${format(dateRange.from, "dd.MM.yyyy")}–${format(dateRange.to, "dd.MM.yyyy")}`
-              : `From ${format(dateRange.from, "dd.MM.yyyy")}`
-            : dateRange?.to
-              ? `Until ${format(dateRange.to, "dd.MM.yyyy")}`
-              : null,
-        ]
-          .filter(Boolean)
-          .join(" · ");
+      : dateRange?.from
+        ? dateRange.to
+          ? `${format(dateRange.from, "dd.MM.yyyy")}–${format(dateRange.to, "dd.MM.yyyy")}`
+          : `From ${format(dateRange.from, "dd.MM.yyyy")}`
+        : dateRange?.to
+          ? `Until ${format(dateRange.to, "dd.MM.yyyy")}`
+          : "All time";
 
   const filteredPayrolls = payrollsForDashboard.filter(payroll => {
     const matchesSearch = payroll.name.toLowerCase().includes(searchValue.toLowerCase()) ||
@@ -1312,7 +1294,7 @@ const Payroll = () => {
 
   useEffect(() => {
     setPayrollListPage(1);
-  }, [searchValue, statusFilter, modeFilter, monthFilter, dateRange?.from, dateRange?.to]);
+  }, [searchValue, statusFilter, modeFilter, dateRange?.from, dateRange?.to]);
 
   useEffect(() => {
     if (payrollListPage > payrollListTotalPages) {
@@ -1320,7 +1302,7 @@ const Payroll = () => {
     }
   }, [payrollListPage, payrollListTotalPages]);
 
-  // Calculate chart data (scoped to selected month / date range)
+  // Calculate chart data (scoped to selected date range)
   // Area Chart: Monthly inflow and outflow totals
   const monthlyData = payrollsForDashboard.reduce((acc, payroll) => {
     const month = payroll.month;
@@ -1566,62 +1548,6 @@ const Payroll = () => {
               <p className="text-xs font-medium text-primary mt-2">{periodSummaryLabel}</p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <Popover open={monthPopoverOpen} onOpenChange={setMonthPopoverOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={monthPopoverOpen}
-                    className="w-[min(100%,220px)] justify-between"
-                  >
-                    {monthFilter === "all" ? "All months" : monthFilter}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[260px] p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="Search month..." />
-                    <CommandList>
-                      <CommandEmpty>No month found.</CommandEmpty>
-                      <CommandGroup>
-                        <CommandItem
-                          value="all"
-                          onSelect={() => {
-                            setMonthFilter("all");
-                            setMonthPopoverOpen(false);
-                          }}
-                        >
-                          <Check
-                            className={cn(
-                              "mr-2 h-4 w-4",
-                              monthFilter === "all" ? "opacity-100" : "opacity-0"
-                            )}
-                          />
-                          All months
-                        </CommandItem>
-                        {uniqueMonths.map((month) => (
-                          <CommandItem
-                            key={month}
-                            value={month}
-                            onSelect={() => {
-                              setMonthFilter(month);
-                              setMonthPopoverOpen(false);
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                monthFilter === month ? "opacity-100" : "opacity-0"
-                              )}
-                            />
-                            {month}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -1659,13 +1585,8 @@ const Payroll = () => {
                 variant="ghost"
                 size="sm"
                 className="shrink-0"
-                onClick={() => {
-                  setMonthFilter("all");
-                  setDateRange(undefined);
-                }}
-                disabled={
-                  monthFilter === "all" && !dateRange?.from && !dateRange?.to
-                }
+                onClick={() => setDateRange(undefined)}
+                disabled={!dateRange?.from && !dateRange?.to}
               >
                 Clear period
               </Button>
