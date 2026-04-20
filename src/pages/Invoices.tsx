@@ -1245,7 +1245,7 @@ const Invoices = () => {
                   </PopoverContent>
                 </Popover>
               </div>
-              <div className="space-y-2">
+              <div className="min-w-0 space-y-2">
                 <Label htmlFor="edit-siteOfWork">Site of Work</Label>
                 <Popover open={sitePopoverOpen} onOpenChange={setSitePopoverOpen}>
                   <PopoverTrigger asChild>
@@ -1253,10 +1253,12 @@ const Invoices = () => {
                       variant="outline"
                       role="combobox"
                       aria-expanded={sitePopoverOpen}
-                      className="w-full justify-between"
+                      className="w-full min-w-0 justify-between gap-2"
                     >
-                      {formData.siteOfWork || "Select site..."}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      <span className="min-w-0 flex-1 truncate text-left font-normal">
+                        {formData.siteOfWork || "Select site..."}
+                      </span>
+                      <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[350px] p-0" align="start">

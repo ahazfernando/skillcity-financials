@@ -777,11 +777,6 @@ const Payroll = () => {
           : formData.paymentDate;
       }
 
-      // Calculate status based on payment cycle if date is provided, otherwise use 'pending'
-      const calculatedStatus = formData.date 
-        ? calculatePaymentStatus(formData.date, formData.paymentCycle)
-        : "pending";
-      
       // Upload receipt files to Cloudinary if new files were selected
       const receiptUrl = formData.receiptUrl;
       const uploadedFiles: Array<{ url: string; filename: string }> = [];
@@ -846,7 +841,7 @@ const Payroll = () => {
         paymentMethod: formData.paymentMethod,
         paymentDate: formattedPaymentDate,
         paymentReceiptNumber: formData.paymentReceiptNumber || undefined,
-        status: calculatedStatus,
+        status: formData.status,
         notes: formData.notes || undefined,
         frequency: formData.frequency,
         paymentCycle: formData.paymentCycle,
@@ -2757,7 +2752,7 @@ const Payroll = () => {
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
+                    <div className="min-w-0 space-y-2">
                       <Label htmlFor="siteOfWork">Site of Work</Label>
                       <Popover
                         open={sitePopoverOpen}
@@ -2772,10 +2767,12 @@ const Payroll = () => {
                             variant="outline"
                             role="combobox"
                             aria-expanded={sitePopoverOpen}
-                            className="w-full justify-between"
+                            className="w-full min-w-0 justify-between gap-2"
                           >
-                            {formData.siteOfWork || "Select site"}
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            <span className="min-w-0 flex-1 truncate text-left font-normal">
+                              {formData.siteOfWork || "Select site"}
+                            </span>
+                            <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
                           </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-[350px] p-0" align="start">
@@ -3075,9 +3072,9 @@ const Payroll = () => {
                         </SelectContent>
                       </Select>
                       <p className="text-xs text-muted-foreground">
-                        {editingPayrollId 
+                        {editingPayrollId
                           ? "You can manually change the status when editing"
-                          : "Status is auto-calculated based on payment cycle"}
+                          : "Changing the date updates the suggested status from the payment cycle; the saved payroll uses the status you select above."}
                       </p>
                     </div>
                   </div>
