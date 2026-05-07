@@ -1539,6 +1539,11 @@ const Payroll = () => {
       </div>
     ) : null;
 
+  const hasSavedPayrollReceipts = Boolean(
+    formData.receiptUrl || (formData.attachedFiles && formData.attachedFiles.length > 0),
+  );
+  const hasPendingPayrollReceipts = receiptFiles.length > 0;
+
   return (
     <div className="space-y-6 sm:space-y-8">
       {/* Modern Header Section */}
@@ -3103,7 +3108,7 @@ const Payroll = () => {
                       className={`
                         relative border-2 border-dashed rounded-lg p-8 text-center transition-colors
                         ${isDragging ? 'border-primary bg-primary/5' : 'border-muted-foreground/25'}
-                        ${receiptFiles.length > 0 ? 'border-primary/50' : ''}
+                        ${hasPendingPayrollReceipts ? 'border-primary/50' : ''}
                         cursor-pointer hover:border-primary/50
                       `}
                     >
@@ -3116,396 +3121,7 @@ const Payroll = () => {
                         multiple
                         onChange={handleFileInputChange}
                       />
-                      {receiptFiles.length > 0 ? (
-                        <div className="space-y-3">
-                          <div className="space-y-2">
-                            {receiptFiles.map((file, index) => (
-                              <div key={index} className="flex items-center justify-center gap-3 p-3 bg-muted/50 rounded-lg">
-                                <FileText className="h-8 w-8 text-primary flex-shrink-0" />
-                                <div className="flex flex-col items-start flex-1 min-w-0">
-                                  <p className="text-sm font-medium truncate w-full">{receiptFileNames[index] || file.name}</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    {(file.size / 1024 / 1024).toFixed(2)} MB
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-1 flex-shrink-0">
-                                  {receiptFileUrls[index] && receiptFileUrls[index].startsWith('blob:') && (
-                                    <>
-                                      {(file.type.startsWith('image/') || (receiptFileNames[index] || file.name).toLowerCase().endsWith('.pdf')) && (
-                                        <Button
-                                          type="button"
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-8 w-8 p-0"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            window.open(receiptFileUrls[index], '_blank');
-                                          }}
-                                          title="View file"
-                                        >
-                                          <Eye className="h-4 w-4" />
-                                        </Button>
-                                      )}
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-8 w-8 p-0"
-                                        onClick={async (e) => {
-                                          e.stopPropagation();
-                                          try {
-                                            // Use stored file name to preserve original name
-                                            const fileName = receiptFileNames[index] || file.name;
-                                            // For blob URLs, download directly
-                                            if (receiptFileUrls[index].startsWith('blob:')) {
-                                              const link = document.createElement('a');
-                                              link.href = receiptFileUrls[index];
-                                              link.download = fileName;
-                                              link.target = '_blank';
-                                              document.body.appendChild(link);
-                                              link.click();
-                                              document.body.removeChild(link);
-                                            }
-                                          } catch (error) {
-                                            console.error("Error downloading file:", error);
-                                            toast.error("Failed to download file. Please try again.");
-                                          }
-                                        }}
-                                        title="Download file"
-                                      >
-                                        <Download className="h-4 w-4" />
-                                      </Button>
-                                    </>
-                                  )}
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="flex-shrink-0 h-8 w-8 p-0 text-destructive hover:text-destructive"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleRemoveFile(index);
-                                    }}
-                                    title="Remove file"
-                                  >
-                                    <X className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="flex-1"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                fileInputRef.current?.click();
-                              }}
-                            >
-                              Add More Files
-                            </Button>
-                            {receiptFiles.length > 0 && (
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="flex-1 text-destructive hover:text-destructive"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleRemoveAllFiles();
-                                }}
-                              >
-                                Remove All
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      ) : (formData.receiptUrl || (formData.attachedFiles && formData.attachedFiles.length > 0)) ? (
-                        <div className="space-y-3">
-                          <p className="text-sm text-muted-foreground">Existing receipt(s) - Add more files above</p>
-                          {formData.receiptUrl && (
-                            <div className="flex items-center justify-center gap-3 p-3 bg-muted/50 rounded-lg">
-                              <FileText className="h-8 w-8 text-primary flex-shrink-0" />
-                              <div className="flex flex-col items-start flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate">Existing receipt</p>
-                                <p className="text-xs text-muted-foreground truncate w-full">
-                                  {formData.receiptUrl.split('/').pop()?.split('?')[0] || 'Receipt file'}
-                                </p>
-                              </div>
-                              <div className="flex items-center gap-1 flex-shrink-0">
-                                {(formData.receiptUrl.includes('.jpg') || formData.receiptUrl.includes('.jpeg') || 
-                                  formData.receiptUrl.includes('.png') || formData.receiptUrl.includes('.pdf') ||
-                                  formData.receiptUrl.includes('.gif') || formData.receiptUrl.includes('.webp')) && (
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      window.open(formData.receiptUrl, '_blank');
-                                    }}
-                                    title="View receipt"
-                                  >
-                                    <Eye className="h-4 w-4" />
-                                  </Button>
-                                )}
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 p-0"
-                                  onClick={async (e) => {
-                                    e.stopPropagation();
-                                    try {
-                                      const fileName = formData.receiptUrl.split('/').pop()?.split('?')[0] || 'receipt';
-                                      if (formData.receiptUrl.includes('cloudinary.com') || formData.receiptUrl.includes('res.cloudinary.com')) {
-                                        const response = await fetch(formData.receiptUrl);
-                                        const blob = await response.blob();
-                                        const url = window.URL.createObjectURL(blob);
-                                        const link = document.createElement('a');
-                                        link.href = url;
-                                        link.download = fileName;
-                                        document.body.appendChild(link);
-                                        link.click();
-                                        document.body.removeChild(link);
-                                        window.URL.revokeObjectURL(url);
-                                      } else {
-                                        const link = document.createElement('a');
-                                        link.href = formData.receiptUrl;
-                                        link.download = fileName;
-                                        link.target = '_blank';
-                                        document.body.appendChild(link);
-                                        link.click();
-                                        document.body.removeChild(link);
-                                      }
-                                    } catch (error) {
-                                      console.error("Error downloading file:", error);
-                                      toast.error("Failed to download file. Please try again.");
-                                    }
-                                  }}
-                                  title="Download receipt"
-                                >
-                                  <Download className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleRemoveReceiptUrl();
-                                  }}
-                                  title="Remove receipt"
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-                          {formData.attachedFiles && formData.attachedFiles.length > 0 && formData.attachedFiles.map((item, index) => {
-                            // Handle both legacy string format and new object format
-                            const itemValue = item as string | { url: string; filename: string };
-                            const fileItem = typeof itemValue === 'string' 
-                              ? { url: itemValue, filename: itemValue.split('/').pop()?.split('?')[0] || `Receipt ${index + 1}` }
-                              : itemValue;
-                            const fileUrl = typeof itemValue === 'string' ? itemValue : itemValue.url;
-                            const fileName = typeof itemValue === 'string' 
-                              ? itemValue.split('/').pop()?.split('?')[0] || `Receipt ${index + 1}`
-                              : itemValue.filename;
-                            
-                            return (
-                              <div key={index} className="flex items-center justify-center gap-3 p-3 bg-muted/50 rounded-lg">
-                                <FileText className="h-8 w-8 text-primary flex-shrink-0" />
-                                <div className="flex flex-col items-start flex-1 min-w-0">
-                                  <p className="text-sm font-medium truncate">{fileName}</p>
-                                </div>
-                                <div className="flex items-center gap-1 flex-shrink-0">
-                                  {(fileUrl.includes('.jpg') || fileUrl.includes('.jpeg') || 
-                                    fileUrl.includes('.png') || fileUrl.includes('.pdf') ||
-                                    fileUrl.includes('.gif') || fileUrl.includes('.webp')) && (
-                                    <Button
-                                      type="button"
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-8 w-8 p-0"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        window.open(fileUrl, '_blank');
-                                      }}
-                                      title="View receipt"
-                                    >
-                                      <Eye className="h-4 w-4" />
-                                    </Button>
-                                  )}
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0"
-                                    onClick={async (e) => {
-                                      e.stopPropagation();
-                                      try {
-                                        if (fileUrl.includes('cloudinary.com') || fileUrl.includes('res.cloudinary.com')) {
-                                          const response = await fetch(fileUrl);
-                                          const blob = await response.blob();
-                                          const downloadUrl = window.URL.createObjectURL(blob);
-                                          const link = document.createElement('a');
-                                          link.href = downloadUrl;
-                                          link.download = fileName; // Use preserved filename
-                                          document.body.appendChild(link);
-                                          link.click();
-                                          document.body.removeChild(link);
-                                          window.URL.revokeObjectURL(downloadUrl);
-                                        } else {
-                                          const link = document.createElement('a');
-                                          link.href = fileUrl;
-                                          link.download = fileName; // Use preserved filename
-                                          link.target = '_blank';
-                                          document.body.appendChild(link);
-                                          link.click();
-                                          document.body.removeChild(link);
-                                        }
-                                      } catch (error) {
-                                        console.error("Error downloading file:", error);
-                                        toast.error("Failed to download file. Please try again.");
-                                      }
-                                    }}
-                                    title="Download receipt"
-                                  >
-                                    <Download className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleRemoveAttachedFile(index);
-                                    }}
-                                    title="Remove file"
-                                  >
-                                    <X className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="w-full"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              fileInputRef.current?.click();
-                            }}
-                          >
-                            Add More Files
-                          </Button>
-                        </div>
-                      ) : formData.receiptUrl ? (
-                        <div className="space-y-3">
-                          <div className="flex items-center justify-center gap-3">
-                            <FileText className="h-10 w-10 text-primary flex-shrink-0" />
-                            <div className="flex flex-col items-start flex-1 min-w-0">
-                              <p className="text-sm font-medium truncate">Existing receipt</p>
-                              <p className="text-xs text-muted-foreground truncate w-full">
-                                {formData.receiptUrl.split('/').pop()?.split('?')[0] || 'Receipt file'}
-                              </p>
-                            </div>
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                              {(formData.receiptUrl.includes('.jpg') || formData.receiptUrl.includes('.jpeg') || 
-                                formData.receiptUrl.includes('.png') || formData.receiptUrl.includes('.pdf') ||
-                                formData.receiptUrl.includes('.gif') || formData.receiptUrl.includes('.webp')) && (
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 w-8 p-0"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    window.open(formData.receiptUrl, '_blank');
-                                  }}
-                                  title="View receipt"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                              )}
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0"
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  try {
-                                    const fileName = formData.receiptUrl.split('/').pop()?.split('?')[0] || 'receipt';
-                                    // For Cloudinary URLs, fetch and download
-                                    if (formData.receiptUrl.includes('cloudinary.com') || formData.receiptUrl.includes('res.cloudinary.com')) {
-                                      const response = await fetch(formData.receiptUrl);
-                                      const blob = await response.blob();
-                                      const url = window.URL.createObjectURL(blob);
-                                      const link = document.createElement('a');
-                                      link.href = url;
-                                      link.download = fileName;
-                                      document.body.appendChild(link);
-                                      link.click();
-                                      document.body.removeChild(link);
-                                      window.URL.revokeObjectURL(url);
-                                    } else {
-                                      // For other URLs
-                                      const link = document.createElement('a');
-                                      link.href = formData.receiptUrl;
-                                      link.download = fileName;
-                                      link.target = '_blank';
-                                      document.body.appendChild(link);
-                                      link.click();
-                                      document.body.removeChild(link);
-                                    }
-                                  } catch (error) {
-                                    console.error("Error downloading file:", error);
-                                    toast.error("Failed to download file. Please try again.");
-                                  }
-                                }}
-                                title="Download receipt"
-                              >
-                                <Download className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleRemoveReceiptUrl();
-                                }}
-                                title="Remove receipt"
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            className="w-full"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              fileInputRef.current?.click();
-                            }}
-                          >
-                            Replace Receipt
-                          </Button>
-                        </div>
-                      ) : (
+                      {!hasSavedPayrollReceipts && !hasPendingPayrollReceipts ? (
                         <div className="space-y-4">
                           <div className="flex justify-center">
                             <Upload className="h-12 w-12 text-muted-foreground" />
@@ -3527,6 +3143,291 @@ const Payroll = () => {
                           >
                             Browse files
                           </Button>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {hasSavedPayrollReceipts && (
+                            <>
+                              <p className="text-sm text-muted-foreground">Saved receipt(s)</p>
+                              {formData.receiptUrl && (
+                                <div className="flex items-center justify-center gap-3 p-3 bg-muted/50 rounded-lg">
+                                  <FileText className="h-8 w-8 text-primary flex-shrink-0" />
+                                  <div className="flex flex-col items-start flex-1 min-w-0">
+                                    <p className="text-sm font-medium truncate">Existing receipt</p>
+                                    <p className="text-xs text-muted-foreground truncate w-full">
+                                      {formData.receiptUrl.split('/').pop()?.split('?')[0] || 'Receipt file'}
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-1 flex-shrink-0">
+                                    {(formData.receiptUrl.includes('.jpg') || formData.receiptUrl.includes('.jpeg') ||
+                                      formData.receiptUrl.includes('.png') || formData.receiptUrl.includes('.pdf') ||
+                                      formData.receiptUrl.includes('.gif') || formData.receiptUrl.includes('.webp')) && (
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 w-8 p-0"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          window.open(formData.receiptUrl, '_blank');
+                                        }}
+                                        title="View receipt"
+                                      >
+                                        <Eye className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 w-8 p-0"
+                                      onClick={async (e) => {
+                                        e.stopPropagation();
+                                        try {
+                                          const fileName = formData.receiptUrl.split('/').pop()?.split('?')[0] || 'receipt';
+                                          if (formData.receiptUrl.includes('cloudinary.com') || formData.receiptUrl.includes('res.cloudinary.com')) {
+                                            const response = await fetch(formData.receiptUrl);
+                                            const blob = await response.blob();
+                                            const url = window.URL.createObjectURL(blob);
+                                            const link = document.createElement('a');
+                                            link.href = url;
+                                            link.download = fileName;
+                                            document.body.appendChild(link);
+                                            link.click();
+                                            document.body.removeChild(link);
+                                            window.URL.revokeObjectURL(url);
+                                          } else {
+                                            const link = document.createElement('a');
+                                            link.href = formData.receiptUrl;
+                                            link.download = fileName;
+                                            link.target = '_blank';
+                                            document.body.appendChild(link);
+                                            link.click();
+                                            document.body.removeChild(link);
+                                          }
+                                        } catch (error) {
+                                          console.error("Error downloading file:", error);
+                                          toast.error("Failed to download file. Please try again.");
+                                        }
+                                      }}
+                                      title="Download receipt"
+                                    >
+                                      <Download className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleRemoveReceiptUrl();
+                                      }}
+                                      title="Remove receipt"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
+                              {formData.attachedFiles && formData.attachedFiles.length > 0 && formData.attachedFiles.map((item, index) => {
+                                const itemValue = item as string | { url: string; filename: string };
+                                const fileUrl = typeof itemValue === 'string' ? itemValue : itemValue.url;
+                                const fileName = typeof itemValue === 'string'
+                                  ? itemValue.split('/').pop()?.split('?')[0] || `Receipt ${index + 1}`
+                                  : itemValue.filename;
+
+                                return (
+                                  <div key={`saved-${fileUrl}-${index}`} className="flex items-center justify-center gap-3 p-3 bg-muted/50 rounded-lg">
+                                    <FileText className="h-8 w-8 text-primary flex-shrink-0" />
+                                    <div className="flex flex-col items-start flex-1 min-w-0">
+                                      <p className="text-sm font-medium truncate">{fileName}</p>
+                                    </div>
+                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                      {(fileUrl.includes('.jpg') || fileUrl.includes('.jpeg') ||
+                                        fileUrl.includes('.png') || fileUrl.includes('.pdf') ||
+                                        fileUrl.includes('.gif') || fileUrl.includes('.webp')) && (
+                                        <Button
+                                          type="button"
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-8 w-8 p-0"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            window.open(fileUrl, '_blank');
+                                          }}
+                                          title="View receipt"
+                                        >
+                                          <Eye className="h-4 w-4" />
+                                        </Button>
+                                      )}
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 w-8 p-0"
+                                        onClick={async (e) => {
+                                          e.stopPropagation();
+                                          try {
+                                            if (fileUrl.includes('cloudinary.com') || fileUrl.includes('res.cloudinary.com')) {
+                                              const response = await fetch(fileUrl);
+                                              const blob = await response.blob();
+                                              const downloadUrl = window.URL.createObjectURL(blob);
+                                              const link = document.createElement('a');
+                                              link.href = downloadUrl;
+                                              link.download = fileName;
+                                              document.body.appendChild(link);
+                                              link.click();
+                                              document.body.removeChild(link);
+                                              window.URL.revokeObjectURL(downloadUrl);
+                                            } else {
+                                              const link = document.createElement('a');
+                                              link.href = fileUrl;
+                                              link.download = fileName;
+                                              link.target = '_blank';
+                                              document.body.appendChild(link);
+                                              link.click();
+                                              document.body.removeChild(link);
+                                            }
+                                          } catch (error) {
+                                            console.error("Error downloading file:", error);
+                                            toast.error("Failed to download file. Please try again.");
+                                          }
+                                        }}
+                                        title="Download receipt"
+                                      >
+                                        <Download className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleRemoveAttachedFile(index);
+                                        }}
+                                        title="Remove file"
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </>
+                          )}
+                          {hasPendingPayrollReceipts && (
+                            <>
+                              {hasSavedPayrollReceipts && (
+                                <p className="text-sm text-muted-foreground">
+                                  New files (upload when you save)
+                                </p>
+                              )}
+                              <div className="space-y-2">
+                                {receiptFiles.map((file, index) => (
+                                  <div key={`pending-${receiptFileNames[index] || file.name}-${index}`} className="flex items-center justify-center gap-3 p-3 bg-muted/50 rounded-lg">
+                                    <FileText className="h-8 w-8 text-primary flex-shrink-0" />
+                                    <div className="flex flex-col items-start flex-1 min-w-0">
+                                      <p className="text-sm font-medium truncate w-full">{receiptFileNames[index] || file.name}</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {(file.size / 1024 / 1024).toFixed(2)} MB
+                                      </p>
+                                    </div>
+                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                      {receiptFileUrls[index] && receiptFileUrls[index].startsWith('blob:') && (
+                                        <>
+                                          {(file.type.startsWith('image/') || (receiptFileNames[index] || file.name).toLowerCase().endsWith('.pdf')) && (
+                                            <Button
+                                              type="button"
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-8 w-8 p-0"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                window.open(receiptFileUrls[index], '_blank');
+                                              }}
+                                              title="View file"
+                                            >
+                                              <Eye className="h-4 w-4" />
+                                            </Button>
+                                          )}
+                                          <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-8 w-8 p-0"
+                                            onClick={async (e) => {
+                                              e.stopPropagation();
+                                              try {
+                                                const fileName = receiptFileNames[index] || file.name;
+                                                if (receiptFileUrls[index].startsWith('blob:')) {
+                                                  const link = document.createElement('a');
+                                                  link.href = receiptFileUrls[index];
+                                                  link.download = fileName;
+                                                  link.target = '_blank';
+                                                  document.body.appendChild(link);
+                                                  link.click();
+                                                  document.body.removeChild(link);
+                                                }
+                                              } catch (error) {
+                                                console.error("Error downloading file:", error);
+                                                toast.error("Failed to download file. Please try again.");
+                                              }
+                                            }}
+                                            title="Download file"
+                                          >
+                                            <Download className="h-4 w-4" />
+                                          </Button>
+                                        </>
+                                      )}
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="flex-shrink-0 h-8 w-8 p-0 text-destructive hover:text-destructive"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleRemoveFile(index);
+                                        }}
+                                        title="Remove file"
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </>
+                          )}
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="flex-1"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                fileInputRef.current?.click();
+                              }}
+                            >
+                              Add More Files
+                            </Button>
+                            {hasPendingPayrollReceipts && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="flex-1 text-destructive hover:text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRemoveAllFiles();
+                                }}
+                              >
+                                Remove All
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
