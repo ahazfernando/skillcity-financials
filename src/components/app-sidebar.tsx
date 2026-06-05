@@ -63,6 +63,7 @@ const mainNavItems: NavItem[] = [
   { title: "Activity Log", url: "/activity-log", icon: <History /> },
   { title: "Equipments", url: "/products", icon: <Package /> },
   { title: "Categories", url: "/categories", icon: <FolderTree /> },
+  {title: "Quote Templates", url: "/quote-template", icon: <FileText />},
 ];
 
 const adminNavItems: NavItem[] = [
