@@ -101,6 +101,25 @@ import { cn } from "@/lib/utils";
 
 const TABLE_ROWS_PER_PAGE = 10;
 
+const isoDateStringToLocalDate = (iso: string): Date | undefined => {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return undefined;
+  const [y, m, d] = iso.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+};
+
+const localDateToIsoString = (date: Date): string => {
+  const y = date.getFullYear();
+  const mo = String(date.getMonth() + 1).padStart(2, "0");
+  const da = String(date.getDate()).padStart(2, "0");
+  return `${y}-${mo}-${da}`;
+};
+
+const formatWorkDate = (dateString: string, dateFormat: string): string => {
+  const date = isoDateStringToLocalDate(dateString);
+  return date ? format(date, dateFormat) : dateString;
+};
+
 /** Split entries into pages so each page has at most `maxRows` table rows (one row per cleaner); entries are never split. */
 function chunkCleaningEntriesByTableRows(
   list: CleaningTrackerEntry[],
@@ -211,7 +230,8 @@ const CleaningTracker = () => {
 
       // Date range filter
       if (dateRange?.from || dateRange?.to) {
-        const entryDate = new Date(entry.workDate);
+        const entryDate = isoDateStringToLocalDate(entry.workDate);
+        if (!entryDate) return false;
         if (dateRange.from && entryDate < dateRange.from) return false;
         if (dateRange.to) {
           const toDate = new Date(dateRange.to);
@@ -385,8 +405,7 @@ const CleaningTracker = () => {
   // Handle edit
   const handleEdit = (entry: CleaningTrackerEntry) => {
     setEditingEntryId(entry.id);
-    const workDateObj = entry.workDate ? new Date(entry.workDate) : undefined;
-    setSelectedWorkDate(workDateObj);
+    setSelectedWorkDate(isoDateStringToLocalDate(entry.workDate));
 
     // Find site ID for the selected site name
     const site = sites.find((s) => s.name === entry.siteName);
@@ -484,8 +503,8 @@ const CleaningTracker = () => {
 
   // Get month name from date
   const getMonthFromDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return format(date, "MMMM");
+    const date = isoDateStringToLocalDate(dateString);
+    return date ? format(date, "MMMM") : "";
   };
 
   // Load site employees when site is selected
@@ -798,7 +817,7 @@ const CleaningTracker = () => {
                             <TableCell
                               rowSpan={entry.cleaners.length}
                             >
-                              {format(new Date(entry.workDate), "dd/MM/yyyy")}
+                              {formatWorkDate(entry.workDate, "dd/MM/yyyy")}
                             </TableCell>
                             <TableCell
                               rowSpan={entry.cleaners.length}
@@ -919,7 +938,7 @@ const CleaningTracker = () => {
                           </div>
                           <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <CalendarIcon className="h-3.5 w-3.5" />
-                            <span>{format(new Date(entry.workDate), "dd MMM yyyy")}</span>
+                            <span>{formatWorkDate(entry.workDate, "dd MMM yyyy")}</span>
                           </div>
                         </div>
                         <div className="flex gap-1">
@@ -1151,7 +1170,7 @@ const CleaningTracker = () => {
                         onSelect={(date) => {
                           setSelectedWorkDate(date);
                           if (date) {
-                            const dateString = date.toISOString().split("T")[0];
+                            const dateString = localDateToIsoString(date);
                             setFormData({
                               ...formData,
                               workDate: dateString,
