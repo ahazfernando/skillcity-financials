@@ -11,6 +11,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import {
     Trash, HomeIcon, Building, Warehouse, Download, Loader2,
     ChevronRight, Sparkles, User, MapPin, Hash, Tag,
@@ -18,6 +19,8 @@ import {
 } from "lucide-react";
 
 type CleaningType = "apartment" | "endOfLeasing" | "house" | "townhouse";
+type DocumentType = "quotation" | "invoice";
+
 interface PriceIncrement { max: number; increments: number[]; }
 interface ServiceData {
     name: string; basePrice: number;
@@ -91,6 +94,14 @@ const serviceConfig: { [key in CleaningType]: { icon: React.ReactNode; desc: str
     endOfLeasing: { icon: <Trash className="h-6 w-6" />, desc: "Bond clean" },
 };
 
+// Default bank details
+const DEFAULT_BANK_DETAILS = {
+    bankName: "ANZ Bank",
+    accountName: "Skill City PTY LTD",
+    accountNumber: "169246778",
+    bsbNumber: "013-547",
+};
+
 // Helper: build the base service description line
 function buildBaseDescription(
     cleaningType: CleaningType,
@@ -133,6 +144,15 @@ const QuoteTemplate: FC = () => {
     const [clientEmail, setClientEmail] = useState("");
     const [clientAddress, setClientAddress] = useState("");
     const [invoiceNumber, setInvoiceNumber] = useState("");
+    const [documentType, setDocumentType] = useState<DocumentType>("quotation");
+    const [isPaid, setIsPaid] = useState<boolean>(false);
+
+    // Bank details state
+    const [bankName, setBankName] = useState(DEFAULT_BANK_DETAILS.bankName);
+    const [accountName, setAccountName] = useState(DEFAULT_BANK_DETAILS.accountName);
+    const [accountNumber, setAccountNumber] = useState(DEFAULT_BANK_DETAILS.accountNumber);
+    const [bsbNumber, setBsbNumber] = useState(DEFAULT_BANK_DETAILS.bsbNumber);
+
     const [activeSection, setActiveSection] = useState<string>("service");
 
     const invoiceRef = useRef<HTMLDivElement>(null);
@@ -179,10 +199,10 @@ const QuoteTemplate: FC = () => {
             }
         });
 
-        const gst = subtotal * 0.1;
-        const preDiscountTotal = subtotal + gst;
-        const discountAmount = preDiscountTotal * (discount / 100);
-        const total = preDiscountTotal - discountAmount;
+        const discountAmount = subtotal * (discount / 100);
+        const preDiscountTotal = subtotal - discountAmount;
+        const gst = preDiscountTotal * 0.1;
+        const total = preDiscountTotal + gst;
         setQuote({ breakdown: newBreakdown, subtotal, gst, discountAmount, total });
     }, [cleaningType, bedrooms, bathrooms, powderRooms, stories, extras, discount]);
 
@@ -209,7 +229,9 @@ const QuoteTemplate: FC = () => {
             const imgHeight = (canvas.height * imgWidth) / canvas.width;
             const pdf = new jsPDF("p", "mm", [pdfWidth, imgHeight + 2 * margin]);
             pdf.addImage(imgData, "JPEG", margin, margin, imgWidth, imgHeight);
-            pdf.save(`#${invoiceNumber} QT.pdf`);
+
+            const suffix = documentType === "invoice" ? "INV" : "QT";
+            pdf.save(`#${invoiceNumber || "0001"} ${suffix}.pdf`);
         } catch (error) { console.error("Failed to generate PDF:", error); }
         finally { setIsDownloading(false); }
     };
@@ -217,8 +239,21 @@ const QuoteTemplate: FC = () => {
     const clearServiceSection = () => setCleaningType("house");
     const clearPropertySection = () => { setBedrooms(1); setBathrooms(1); setPowderRooms(0); setStories(1); };
     const clearExtrasSection = () => setExtras({});
-    const clearClientSection = () => { setClientName(""); setClientPhone(""); setClientEmail(""); setClientAddress(""); setInvoiceNumber(""); setDiscount(0); };
-    const clearAll = () => { clearServiceSection(); clearPropertySection(); clearExtrasSection(); clearClientSection(); setActiveSection("service"); };
+    const clearClientSection = () => {
+        setClientName(""); setClientPhone(""); setClientEmail(""); setClientAddress("");
+        setInvoiceNumber(""); setDiscount(0);
+    };
+    const clearAll = () => {
+        clearServiceSection(); clearPropertySection(); clearExtrasSection();
+        clearClientSection();
+        setDocumentType("quotation");
+        setBankName(DEFAULT_BANK_DETAILS.bankName);
+        setAccountName(DEFAULT_BANK_DETAILS.accountName);
+        setAccountNumber(DEFAULT_BANK_DETAILS.accountNumber);
+        setBsbNumber(DEFAULT_BANK_DETAILS.bsbNumber);
+        setActiveSection("service");
+        setIsPaid(false);
+    };
 
     const renderOptions = (max: number, start = 1) =>
         Array.from({ length: max - start + 1 }, (_, i) => (
@@ -270,6 +305,7 @@ const QuoteTemplate: FC = () => {
                 {`
     @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap');
     @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@300;400;500;600;700;800&display=swap');
 `}
             </style>
 
@@ -472,7 +508,36 @@ const QuoteTemplate: FC = () => {
 
                             {activeSection === "client" && (
                                 <div className="bg-background/10 border border-foreground/10 backdrop-blur-xl rounded-2xl p-6 space-y-5">
-                                    <SectionHeader title="Client Information" step="Step 4 of 4" onClear={clearClientSection} />
+                                    <SectionHeader title="Client & Document Information" step="Step 4 of 4" onClear={clearClientSection} />
+
+                                    {/* Document Type Selector */}
+                                    <div className="bg-background/10 border border-foreground/10 rounded-xl p-5">
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <Tag className="h-4 w-4 text-green-600" />
+                                            <span className="text-foreground text-[0.72rem] uppercase tracking-widest font-medium">Document Type</span>
+                                        </div>
+                                        <div className="flex gap-3">
+                                            <button
+                                                onClick={() => setDocumentType("quotation")}
+                                                className={`flex-1 py-3 rounded-xl text-sm font-semibold border transition-all
+                                                    ${documentType === "quotation"
+                                                        ? "bg-green-500/20 border-green-500 text-foreground"
+                                                        : "border-foreground/20 hover:border-green-500/30"}`}
+                                            >
+                                                Quotation
+                                            </button>
+                                            <button
+                                                onClick={() => setDocumentType("invoice")}
+                                                className={`flex-1 py-3 rounded-xl text-sm font-semibold border transition-all
+                                                    ${documentType === "invoice"
+                                                        ? "bg-green-500/20 border-green-500 text-foreground"
+                                                        : "border-foreground/20 hover:border-green-500/30"}`}
+                                            >
+                                                Invoice
+                                            </button>
+                                        </div>
+                                    </div>
+
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                         {[
                                             { label: "Client Name", id: "client-name", value: clientName, setter: setClientName, placeholder: "Full name", icon: <User className="h-4 w-4" />, col: 2 },
@@ -499,7 +564,7 @@ const QuoteTemplate: FC = () => {
                                             <div>
                                                 <div className="flex items-center gap-2 mb-2">
                                                     <Hash className="h-4 w-4 text-green-500" />
-                                                    <label className="text-foreground text-[0.72rem] uppercase tracking-widest font-medium">Quote Number</label>
+                                                    <label className="text-foreground text-[0.72rem] uppercase tracking-widest font-medium">Number</label>
                                                 </div>
                                                 <Input
                                                     value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)}
@@ -521,11 +586,66 @@ const QuoteTemplate: FC = () => {
                                             </div>
                                         </div>
                                     </div>
+
+                                    {documentType === "invoice" && (
+                                        <div className="border-t border-green-500/20 pt-5">
+                                            <h3 className="font-bold text-sm text-foreground mb-4 font-[Poppins,sans-serif]">Bank Details</h3>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="text-foreground text-[0.72rem] uppercase tracking-widest font-medium block mb-2">Bank Name</label>
+                                                    <Input
+                                                        value={bankName}
+                                                        onChange={e => setBankName(e.target.value)}
+                                                        className="h-11 rounded-xl text-foreground"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-foreground text-[0.72rem] uppercase tracking-widest font-medium block mb-2">Account Name</label>
+                                                    <Input
+                                                        value={accountName}
+                                                        onChange={e => setAccountName(e.target.value)}
+                                                        className="h-11 rounded-xl text-foreground"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-foreground text-[0.72rem] uppercase tracking-widest font-medium block mb-2">Account Number</label>
+                                                    <Input
+                                                        value={accountNumber}
+                                                        onChange={e => setAccountNumber(e.target.value)}
+                                                        className="h-11 rounded-xl text-foreground"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="text-foreground text-[0.72rem] uppercase tracking-widest font-medium block mb-2">BSB Number</label>
+                                                    <Input
+                                                        value={bsbNumber}
+                                                        onChange={e => setBsbNumber(e.target.value)}
+                                                        className="h-11 rounded-xl text-foreground"
+                                                    />
+                                                </div>
+                                                <div className="border-t border-green-500/20 pt-5 flex items-center justify-between">
+                                                    <div>
+                                                        <h3 className="font-bold text-sm text-foreground">Invoice Status</h3>
+                                                        <p className="text-sm text-foreground/70">Mark this invoice as paid</p>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <span className={`text-sm font-medium ${isPaid ? 'text-green-500' : 'text-foreground/60'}`}>
+                                                            {isPaid ? "PAID" : "UNPAID"}
+                                                        </span>
+                                                        <Switch
+                                                            checked={isPaid}
+                                                            onCheckedChange={setIsPaid}
+                                                            className="data-[state=checked]:bg-green-600"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
 
-                        {/* Live Quote Panel */}
                         <div className="lg:col-span-5">
                             <div className="sticky top-6 space-y-4">
                                 <div className="bg-background/10 border border-foreground/10 backdrop-blur-xl rounded-2xl overflow-hidden shadow-[0_0_30px_rgba(34,197,94,0.15),0_0_60px_rgba(34,197,94,0.05)]">
@@ -576,12 +696,12 @@ const QuoteTemplate: FC = () => {
                                             <span className="text-[1rem] font-semibold text-foreground">${quote.subtotal.toFixed(2)}</span>
                                         </div>
                                         <div className="flex justify-between items-center px-1">
-                                            <span className="text-[0.8rem] text-foreground/80">GST (10%)</span>
-                                            <span className="text-[1rem] font-semibold text-foreground">${quote.gst.toFixed(2)}</span>
-                                        </div>
-                                        <div className="flex justify-between items-center px-1">
                                             <span className="text-[0.8rem] text-foreground/80">Discount ({discount}%)</span>
                                             <span className="text-[1rem] font-semibold text-red-500">-${quote.discountAmount.toFixed(2)}</span>
+                                        </div>
+                                        <div className="flex justify-between items-center px-1">
+                                            <span className="text-[0.8rem] text-foreground/80">GST (10%)</span>
+                                            <span className="text-[1rem] font-semibold text-foreground">${quote.gst.toFixed(2)}</span>
                                         </div>
                                         <div className="flex justify-between items-center px-4 py-3 mt-3 rounded-xl bg-gradient-to-r from-green-700 to-green-800">
                                             <span className="font-bold text-white text-base font-[Poppins,sans-serif]">TOTAL</span>
@@ -604,26 +724,15 @@ const QuoteTemplate: FC = () => {
                                     {isDownloading ? (
                                         <><Loader2 className="h-5 w-5 animate-spin" /> Generating PDF...</>
                                     ) : (
-                                        <><Download className="h-5 w-5" /> Download Quote as PDF</>
+                                        <><Download className="h-5 w-5" /> Download {documentType === "invoice" ? "Invoice" : "Quote"} as PDF</>
                                     )}
                                 </button>
-
-                                <div className="flex gap-3 bg-background/10 border border-foreground/10 rounded-xl p-4">
-                                    <div className="w-8 h-8 rounded-lg bg-green-500/10 flex items-center justify-center flex-shrink-0">
-                                        <Sparkles className="h-4 w-4 text-green-500" />
-                                    </div>
-                                    <div>
-                                        <p className="text-[0.78rem] text-foreground font-bold">Professional PDF Quote</p>
-                                        <p className="text-[0.72rem] text-foreground/80 mt-0.5">Includes branded letterhead with ABN, banking details & T&Cs</p>
-                                    </div>
-                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
             </main>
 
-            {/* ─── HIDDEN PDF INVOICE TEMPLATE ─── */}
             <div
                 ref={invoiceRef}
                 style={{
@@ -633,10 +742,13 @@ const QuoteTemplate: FC = () => {
                     width: "794px",
                     minHeight: "1123px",
                     backgroundColor: "#ffffff",
-                    fontFamily: "'DM Sans', Poppins, sans-serif",
-                    borderTop: "10px solid #008D1F",
+                    fontFamily: "Red Hat Display, sans-serif",
+                    borderTop: "20px solid #008D1F",
                     borderBottom: "10px solid #008D1F",
-                    padding: "40px",
+                    paddingTop: "40px",
+                    paddingBottom: "40px",
+                    paddingLeft: "80px",
+                    paddingRight: "80px",
                     boxSizing: "border-box",
                     color: "#111827",
                     display: "flex",
@@ -659,22 +771,22 @@ const QuoteTemplate: FC = () => {
                         <div className="pt-10">
                             <h1
                                 style={{
-                                    fontSize: "40px",
-                                    fontWeight: 700,
+                                    fontSize: "36px",
+                                    fontWeight: 800,
                                     color: "#008D1F",
                                     margin: 0,
                                     lineHeight: 1,
-                                    fontFamily: "Poppins, sans-serif",
+                                    fontFamily: "Red Hat Display, sans-serif",
                                     letterSpacing: "-0.02em",
                                 }}
                             >
-                                QUOTE
+                                {documentType === "invoice" ? "INVOICE" : "QUOTE"}
                             </h1>
                         </div>
                     </div>
 
                     <div className="flex items-start">
-                        <div className="flex-1 mt-5 flex items-center">
+                        <div className="flex-1 mt-2 flex items-center">
                             <div
                                 style={{
                                     width: "40px",
@@ -686,13 +798,13 @@ const QuoteTemplate: FC = () => {
                             <div
                                 style={{
                                     flex: 1,
-                                    height: "2px",
-                                    background: "#E5E7EB"
+                                    height: "1px",
+                                    background: "#a6a6a6"
                                 }}
                             />
                         </div>
 
-                        <div className="text-right items-start ml-2 pt-3">
+                        <div className="text-right items-start ml-2 pt-1">
                             <p style={{
                                 fontSize: "13.5px",
                                 fontWeight: 800,
@@ -707,7 +819,7 @@ const QuoteTemplate: FC = () => {
                                 color: "#111827",
                                 marginBottom: "2px",
                             }}>
-                                #{invoiceNumber || "0001"} QT
+                                #{invoiceNumber || "0001"} {documentType === "invoice" ? "INV" : "QT"}
                             </p>
                             <p style={{
                                 fontSize: "12.5px",
@@ -725,17 +837,16 @@ const QuoteTemplate: FC = () => {
                                 fontSize: 10,
                                 color: "#001122",
                                 fontWeight: 700,
-                                textTransform: "uppercase",
                                 margin: 0,
                             }}>
-                                Quote to :
+                                {documentType === "invoice" ? "Invoice to :" : "Quote to :"}
                             </p>
                             <p style={{
-                                fontSize: 22,
+                                fontSize: 20,
                                 fontWeight: 800,
-                                color: "#111827",
-                                margin: "6px 0 0",
-                                fontFamily: "Poppins, sans-serif",
+                                color: "#000000",
+                                margin: "4px 0 0",
+                                fontFamily: "Red Hat Display, sans-serif",
                                 lineHeight: 1.2,
                             }}>
                                 {clientName || "Client Name"}
@@ -751,17 +862,16 @@ const QuoteTemplate: FC = () => {
                                 </p>
                             )}
                         </div>
-
                     </div>
 
                     <div style={{ marginTop: 24 }}>
                         <div style={{
                             background: "#008D1F",
-                            padding: "11px 14px",
+                            padding: "6px 14px",
                             display: "grid",
                             gridTemplateColumns: "44px 1fr 110px",
                             gap: 4,
-                            font: "14px 'Poppins', sans-serif",
+                            font: "14px 'Red Hat Display', sans-serif",
                         }}>
                             <span style={{ color: "white", fontSize: 14, fontWeight: 800 }}>#</span>
                             <span style={{ color: "white", fontSize: 14, fontWeight: 800 }}>Service & Description</span>
@@ -776,7 +886,7 @@ const QuoteTemplate: FC = () => {
                                     gridTemplateColumns: "44px 1fr 110px",
                                     gap: 4,
                                     padding: "14px 14px",
-                                    borderBottom: "1px solid #e5e7eb",
+                                    borderBottom: "1px solid #001122",
                                     background: idx % 2 === 0 ? "#ffffff" : "#ffffff",
                                     alignItems: "start",
                                 }}
@@ -789,7 +899,7 @@ const QuoteTemplate: FC = () => {
                                     <p style={{
                                         fontSize: 12,
                                         fontWeight: 700,
-                                        color: "#111827",
+                                        color: "#000000",
                                         margin: 0,
                                         lineHeight: 1.4,
                                     }}>
@@ -818,11 +928,10 @@ const QuoteTemplate: FC = () => {
                                     ))}
                                 </div>
 
-
                                 <p style={{
                                     fontSize: 12,
                                     fontWeight: 600,
-                                    color: "#111827",
+                                    color: "#001122",
                                     textAlign: "right",
                                     margin: 0,
                                     paddingTop: 2,
@@ -833,36 +942,44 @@ const QuoteTemplate: FC = () => {
                         ))}
                     </div>
 
-                    <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 24 }}>
+                    <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 12 }}>
                         <div style={{ minWidth: 260 }}>
                             {[
                                 { label: "Sub Total :", value: `$${quote.subtotal.toFixed(2)}` },
-                                { label: "GST 10% :", value: `$${quote.gst.toFixed(2)}` },
                                 ...(discount > 0
                                     ? [{ label: `Discount ${discount}% :`, value: `-$${quote.discountAmount.toFixed(2)}` }]
                                     : []),
+                                { label: "GST 10% :", value: `$${quote.gst.toFixed(2)}` },
                             ].map(row => (
                                 <div key={row.label} style={{
                                     display: "flex",
                                     justifyContent: "space-between",
-                                    padding: "5px 14px",
+                                    padding: "1px 14px",
                                 }}>
-                                    <span style={{ fontSize: 12, color: "#1f2937", textAlign: "right", fontWeight: 700 }}>{row.label}</span>
-                                    <span style={{ fontSize: 12, fontWeight: 700, color: "#1f2937" }}>{row.value}</span>
+                                    <span style={{ fontSize: 12, color: "#000000", textAlign: "right", fontWeight: 800 }}>{row.label}</span>
+                                    <span style={{ fontSize: 12, fontWeight: 700, color: "#001122" }}>{row.value}</span>
                                 </div>
                             ))}
+
+                            <div style={{
+                                width: "100%",
+                                height: 1,
+                                background: "#001122",
+                                marginTop: 12,
+                            }} />
+
                             <div style={{
                                 display: "flex",
                                 justifyContent: "space-between",
                                 background: "#008D1F",
-                                padding: "12px 14px",
-                                marginTop: 14,
+                                padding: "6px 14px",
+                                marginTop: 8,
                             }}>
                                 <span style={{
                                     fontSize: 14,
                                     fontWeight: 800,
                                     color: "white",
-                                    fontFamily: "Poppins, sans-serif",
+                                    fontFamily: "Red Hat Display, sans-serif",
                                     letterSpacing: "0.02em",
                                 }}>
                                     GRAND TOTAL :
@@ -871,13 +988,86 @@ const QuoteTemplate: FC = () => {
                                     fontSize: 14,
                                     fontWeight: 800,
                                     color: "white",
-                                    fontFamily: "Poppins, sans-serif",
+                                    fontFamily: "Red Hat Display, sans-serif",
                                 }}>
                                     ${quote.total.toFixed(2)}
                                 </span>
                             </div>
                         </div>
                     </div>
+
+                    {documentType === "invoice" && (
+                        <div style={{ display: "flex", justifyContent: "flex-start", marginTop: 20 }}>
+                            <div style={{ minWidth: 260 }}>
+                                <div style={{
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    background: "#008D1F",
+                                    padding: "6px 14px",
+                                    marginBottom: 8,
+                                }}>
+                                    <span style={{
+                                        fontSize: 14,
+                                        fontWeight: 800,
+                                        color: "white",
+                                        fontFamily: "Red Hat Display, sans-serif",
+                                        letterSpacing: "0.02em",
+                                    }}>
+                                        PAYMENT DETAILS
+                                    </span>
+                                </div>
+
+                                {[
+                                    { label: "Bank Name :", value: bankName },
+                                    { label: "Account Name :", value: accountName },
+                                    { label: "Account Number :", value: accountNumber },
+                                    { label: "BSB Number :", value: bsbNumber },
+                                ].map(row => (
+                                    <div key={row.label} style={{
+                                        display: "flex",
+                                        justifyContent: "space-between",
+                                        padding: "1px 14px",
+                                    }}>
+                                        <span style={{ fontSize: 12, color: "#000000", textAlign: "right", fontWeight: 800 }}>{row.label}</span>
+                                        <span style={{ fontSize: 12, fontWeight: 700, color: "#001122" }}>{row.value}</span>
+                                    </div>
+                                ))}
+
+                                <div style={{
+                                    width: "100%",
+                                    height: 1,
+                                    background: "#001122",
+                                    marginTop: 8,
+                                }} />
+
+                                <span style={{
+                                    fontSize: 14,
+                                    color: "#000000",
+                                    fontWeight: 800,
+                                    marginTop: 8,
+                                    padding: "1px 14px",
+                                }}>
+                                    Thank You for trusting us!
+                                </span>
+                                {isPaid && (
+                                    <Image
+                                        src="/Paid.png"
+                                        alt="PAID"
+                                        width={360}
+                                        height={360}
+                                        style={{
+                                            position: "absolute",
+                                            top: "30%",
+                                            right: "27%",
+                                            transform: "rotate(-5deg)",
+                                            opacity: 0.95,
+                                            zIndex: 10,
+                                        }}
+                                    />
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <div style={{ marginTop: "auto" }}>
@@ -916,55 +1106,54 @@ const QuoteTemplate: FC = () => {
                                 width: "36px",
                                 height: "36px",
                                 borderRadius: "50%",
-                                border: "1.5px solid #008D1F",
                                 display: "flex",
                                 alignItems: "center",
                                 justifyContent: "center",
                                 flexShrink: 0
                             }}>
-                                <svg style={{ width: "24px", height: "24px", fill: "#008D1F" }} viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z" /></svg>
+                                <svg style={{ width: "36px", height: "36px", fill: "#008D1F" }} viewBox="0 0 24 24"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z" /></svg>
                             </div>
                             <div>
-                                <p style={{ fontSize: "12px", color: "#008D1F", margin: 0, fontWeight: 500 }}>Email us now</p>
+                                <p style={{ fontSize: "8px", color: "#008D1F", margin: 0, fontWeight: 500 }}>Email us now</p>
                                 <p style={{
-                                    fontSize: "11px",
+                                    fontSize: "12px",
                                     color: "#008D1F",
-                                    margin: "2px 0 0",
+                                    margin: "1px 0 0",
                                     fontWeight: "800",
-                                    fontFamily: "'Poppins', sans-serif"
+                                    fontFamily: "'Red Hat Display', sans-serif"
                                 }}>
                                     admin@skillcityfs.com.au</p>
                             </div>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                            <div style={{ width: "36px", height: "36px", borderRadius: "50%", border: "1.5px solid #008D1F", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                <svg style={{ width: "24px", height: "24px", fill: "#008D1F" }} viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm-1 17.93V18a1 1 0 0 0-1-1H8l-2-2v-2.5l2-2h4l2 2v1.5l-2 2v1.43zM17.5 16H16v-2l-1.5-1.5V11l1.5-1.5V8h1.5a8.02 8.02 0 0 1 0 8z" /></svg>
+                            <div style={{ width: "36px", height: "36px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                <svg style={{ width: "36px", height: "36px", fill: "#008D1F" }} viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm-1 17.93V18a1 1 0 0 0-1-1H8l-2-2v-2.5l2-2h4l2 2v1.5l-2 2v1.43zM17.5 16H16v-2l-1.5-1.5V11l1.5-1.5V8h1.5a8.02 8.02 0 0 1 0 8z" /></svg>
                             </div>
                             <div>
-                                <p style={{ fontSize: "12px", color: "#008D1F", margin: 0, fontWeight: 500 }}>Visit Our Website</p>
+                                <p style={{ fontSize: "8px", color: "#008D1F", margin: 0, fontWeight: 500 }}>Visit Our Website</p>
                                 <p style={{
-                                    fontSize: "11px",
+                                    fontSize: "12px",
                                     color: "#008D1F",
-                                    margin: "2px 0 0",
+                                    margin: "1px 0 0",
                                     fontWeight: "800",
-                                    fontFamily: "'Poppins', sans-serif"
+                                    fontFamily: "'Red Hat Display', sans-serif"
                                 }}>
                                     www.skillcityfs.com.au
                                 </p>
                             </div>
                         </div>
                         <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                            <div style={{ width: "36px", height: "36px", borderRadius: "50%", border: "1.5px solid #008D1F", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                                <svg style={{ width: "24px", height: "24px", fill: "#008D1F" }} viewBox="0 0 24 24"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z" /></svg>
+                            <div style={{ width: "36px", height: "36px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                <svg style={{ width: "36px", height: "36px", fill: "#008D1F" }} viewBox="0 0 24 24"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z" /></svg>
                             </div>
                             <div>
-                                <p style={{ fontSize: "12px", color: "#008D1F", margin: 0, fontWeight: 500 }}>Call us now</p>
+                                <p style={{ fontSize: "8px", color: "#008D1F", margin: 0, fontWeight: 500 }}>Call us now</p>
                                 <p style={{
-                                    fontSize: "11px",
+                                    fontSize: "12px",
                                     color: "#008D1F",
-                                    margin: "2px 0 0",
+                                    margin: "1px 0 0",
                                     fontWeight: "800",
-                                    fontFamily: "'Poppins', sans-serif"
+                                    fontFamily: "'Red Hat Display', sans-serif"
                                 }}>
                                     03 96 34 6492
                                 </p>
@@ -972,7 +1161,7 @@ const QuoteTemplate: FC = () => {
                         </div>
                     </div>
                 </div>
-            </div >
+            </div>
         </>
     );
 };
