@@ -61,7 +61,7 @@ const mainNavItems: NavItem[] = [
   { title: "Cleaning Tracker", url: "/cleaning-tracker", icon: <Sparkles /> },
   { title: "Audit Review", url: "/audit-review", icon: <ClipboardCheck /> },
   { title: "Activity Log", url: "/activity-log", icon: <History /> },
-  { title: "Equipments", url: "/products", icon: <Package /> },
+  { title: "Vehicles", url: "/vehicles", icon: <Package /> },
   { title: "Categories", url: "/categories", icon: <FolderTree /> },
   {title: "Quote Templates", url: "/quote-template", icon: <FileText />},
 ];

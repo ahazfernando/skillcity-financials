@@ -42,6 +42,19 @@ const docToProduct = (doc: any): Product => {
     })) || [],
     siteIds: data.siteIds || [],
     employeeIds: data.employeeIds || [],
+    vehicleStatus: data.vehicleStatus || undefined,
+    make: data.make || undefined,
+    body: data.body || undefined,
+    colour: data.colour || undefined,
+    year: data.year ?? undefined,
+    expiry: data.expiry || undefined,
+    vin: data.vin || undefined,
+    engine: data.engine || undefined,
+    registrationSerial: data.registrationSerial || undefined,
+    compliancePlate: data.compliancePlate || undefined,
+    sanctions: data.sanctions || undefined,
+    goodsCarryingVehicle: data.goodsCarryingVehicle ?? undefined,
+    transferInDispute: data.transferInDispute ?? undefined,
     createdAt: data.createdAt?.toDate(),
     updatedAt: data.updatedAt?.toDate(),
   };
@@ -78,6 +91,19 @@ const productToDoc = (product: Omit<Product, "id" | "createdAt" | "updatedAt">):
     })) || [],
     siteIds: product.siteIds || [],
     employeeIds: product.employeeIds || [],
+    ...(product.vehicleStatus !== undefined && { vehicleStatus: product.vehicleStatus }),
+    ...(product.make !== undefined && { make: product.make }),
+    ...(product.body !== undefined && { body: product.body }),
+    ...(product.colour !== undefined && { colour: product.colour }),
+    ...(product.year !== undefined && { year: product.year }),
+    ...(product.expiry !== undefined && { expiry: product.expiry }),
+    ...(product.vin !== undefined && { vin: product.vin }),
+    ...(product.engine !== undefined && { engine: product.engine }),
+    ...(product.registrationSerial !== undefined && { registrationSerial: product.registrationSerial }),
+    ...(product.compliancePlate !== undefined && { compliancePlate: product.compliancePlate }),
+    ...(product.sanctions !== undefined && { sanctions: product.sanctions }),
+    ...(product.goodsCarryingVehicle !== undefined && { goodsCarryingVehicle: product.goodsCarryingVehicle }),
+    ...(product.transferInDispute !== undefined && { transferInDispute: product.transferInDispute }),
     createdAt: Timestamp.now(),
     updatedAt: Timestamp.now(),
   };
@@ -170,6 +196,19 @@ export const updateProduct = async (
     await updateDoc(productRef, updateData);
   } catch (error) {
     console.error("Error updating product:", error);
+    throw error;
+  }
+};
+
+// Delete all products
+export const deleteAllProducts = async (): Promise<number> => {
+  try {
+    const productsRef = collection(db, PRODUCTS_COLLECTION);
+    const querySnapshot = await getDocs(productsRef);
+    await Promise.all(querySnapshot.docs.map((productDoc) => deleteDoc(productDoc.ref)));
+    return querySnapshot.size;
+  } catch (error) {
+    console.error("Error deleting all products:", error);
     throw error;
   }
 };

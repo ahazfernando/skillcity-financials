@@ -401,8 +401,8 @@ export interface Repair {
 
 export interface Product {
   id?: string;
-  equipmentCode: string;
-  name: string;
+  equipmentCode: string; // Registration plate
+  name: string; // Vehicle model
   category: string; // Category ID reference
   quantity: number;
   description?: string;
@@ -410,6 +410,20 @@ export interface Product {
   repairs?: Repair[]; // Nested array
   siteIds?: string[]; // Array of site IDs this product is assigned to
   employeeIds?: string[]; // Array of employee IDs this product is assigned to
+  // Vehicle registration fields
+  vehicleStatus?: string;
+  make?: string;
+  body?: string;
+  colour?: string;
+  year?: number;
+  expiry?: string;
+  vin?: string;
+  engine?: string;
+  registrationSerial?: string;
+  compliancePlate?: string;
+  sanctions?: string;
+  goodsCarryingVehicle?: boolean;
+  transferInDispute?: boolean;
   createdAt?: Date;
   updatedAt?: Date;
 }

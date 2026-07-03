@@ -34,6 +34,7 @@ import {
   Target,
   ChevronsUpDown,
   Check,
+  BarChart3,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -70,6 +71,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import {
   Pagination,
   PaginationContent,
+  PaginationEllipsis,
   PaginationItem,
   PaginationLink,
   PaginationNext,
@@ -95,11 +97,12 @@ import { getAllEmployees } from "@/lib/firebase/employees";
 import { getAllocationsBySite } from "@/lib/firebase/siteEmployeeAllocations";
 import { getEmployeePayRateBySiteAndEmployee } from "@/lib/firebase/employeePayRates";
 import { toast } from "sonner";
-import { format } from "date-fns";
+import { format, subMonths, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { cn } from "@/lib/utils";
 
 const TABLE_ROWS_PER_PAGE = 10;
+const EARNINGS_ROWS_PER_PAGE = 10;
 
 const isoDateStringToLocalDate = (iso: string): Date | undefined => {
   if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return undefined;
@@ -145,6 +148,55 @@ function chunkCleaningEntriesByTableRows(
 }
 
 type ViewMode = "table" | "card";
+type EarningsPeriodMode = "previous_month" | "custom";
+
+interface CleanerEarningsSummary {
+  cleanerName: string;
+  totalHours: number;
+  totalEarnings: number;
+  jobCount: number;
+  sites: string[];
+}
+
+const aggregateCleanerEarnings = (list: CleaningTrackerEntry[]): CleanerEarningsSummary[] => {
+  const map = new Map<string, CleanerEarningsSummary>();
+
+  for (const entry of list) {
+    for (const cleaner of entry.cleaners) {
+      const existing = map.get(cleaner.cleanerName) ?? {
+        cleanerName: cleaner.cleanerName,
+        totalHours: 0,
+        totalEarnings: 0,
+        jobCount: 0,
+        sites: [] as string[],
+      };
+      existing.totalHours += cleaner.workedHours;
+      existing.totalEarnings += cleaner.serviceCharge;
+      existing.jobCount += 1;
+      if (!existing.sites.includes(entry.siteName)) {
+        existing.sites.push(entry.siteName);
+      }
+      map.set(cleaner.cleanerName, existing);
+    }
+  }
+
+  return Array.from(map.values()).sort((a, b) => b.totalEarnings - a.totalEarnings);
+};
+
+const filterEntriesByDateRange = (
+  list: CleaningTrackerEntry[],
+  from: Date,
+  to: Date
+): CleaningTrackerEntry[] => {
+  const rangeStart = startOfDay(from);
+  const rangeEnd = endOfDay(to);
+
+  return list.filter((entry) => {
+    const entryDate = isoDateStringToLocalDate(entry.workDate);
+    if (!entryDate) return false;
+    return entryDate >= rangeStart && entryDate <= rangeEnd;
+  });
+};
 
 const CleaningTracker = () => {
   const [entries, setEntries] = useState<CleaningTrackerEntry[]>([]);
@@ -153,6 +205,11 @@ const CleaningTracker = () => {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isEarningsDialogOpen, setIsEarningsDialogOpen] = useState(false);
+  const [earningsPeriodMode, setEarningsPeriodMode] = useState<EarningsPeriodMode>("previous_month");
+  const [earningsDateRange, setEarningsDateRange] = useState<DateRange | undefined>(undefined);
+  const [selectedEarningsCleaner, setSelectedEarningsCleaner] = useState<string>("all");
+  const [earningsPage, setEarningsPage] = useState(1);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -585,6 +642,225 @@ const CleaningTracker = () => {
     workedHoursRange[1] !== 10 ||
     photosFilter !== "all";
 
+  const activeFilterCount = useMemo(() => {
+    let count = 0;
+    if (searchValue) count++;
+    if (dateRange?.from || dateRange?.to) count++;
+    if (selectedSite !== "all") count++;
+    if (workedHoursRange[0] !== 0 || workedHoursRange[1] !== 10) count++;
+    if (photosFilter !== "all") count++;
+    return count;
+  }, [searchValue, dateRange, selectedSite, workedHoursRange, photosFilter]);
+
+  const earningsPeriod = useMemo(() => {
+    if (earningsPeriodMode === "previous_month") {
+      const previousMonth = subMonths(new Date(), 1);
+      return {
+        from: startOfMonth(previousMonth),
+        to: endOfMonth(previousMonth),
+      };
+    }
+    if (earningsDateRange?.from) {
+      return {
+        from: earningsDateRange.from,
+        to: earningsDateRange.to ?? earningsDateRange.from,
+      };
+    }
+    return null;
+  }, [earningsPeriodMode, earningsDateRange]);
+
+  const earningsPeriodLabel = useMemo(() => {
+    if (!earningsPeriod) return "Select a date range";
+    if (earningsPeriodMode === "previous_month") {
+      return format(earningsPeriod.from, "MMMM yyyy");
+    }
+    if (format(earningsPeriod.from, "yyyy") === format(earningsPeriod.to, "yyyy")) {
+      return `${format(earningsPeriod.from, "dd MMM")} – ${format(earningsPeriod.to, "dd MMM yyyy")}`;
+    }
+    return `${format(earningsPeriod.from, "dd MMM yyyy")} – ${format(earningsPeriod.to, "dd MMM yyyy")}`;
+  }, [earningsPeriod, earningsPeriodMode]);
+
+  const earningsEntries = useMemo(() => {
+    if (!earningsPeriod) return [];
+    return filterEntriesByDateRange(entries, earningsPeriod.from, earningsPeriod.to);
+  }, [entries, earningsPeriod]);
+
+  const cleanerEarningsSummaries = useMemo(
+    () => aggregateCleanerEarnings(earningsEntries),
+    [earningsEntries]
+  );
+
+  const displayedEarnings = useMemo(() => {
+    if (selectedEarningsCleaner === "all") return cleanerEarningsSummaries;
+    return cleanerEarningsSummaries.filter(
+      (summary) => summary.cleanerName === selectedEarningsCleaner
+    );
+  }, [cleanerEarningsSummaries, selectedEarningsCleaner]);
+
+  const earningsTotals = useMemo(() => {
+    return displayedEarnings.reduce(
+      (acc, summary) => ({
+        hours: acc.hours + summary.totalHours,
+        earnings: acc.earnings + summary.totalEarnings,
+        jobs: acc.jobs + summary.jobCount,
+      }),
+      { hours: 0, earnings: 0, jobs: 0 }
+    );
+  }, [displayedEarnings]);
+
+  const selectedCleanerJobBreakdown = useMemo(() => {
+    if (selectedEarningsCleaner === "all") return [];
+
+    return earningsEntries
+      .flatMap((entry) =>
+        entry.cleaners
+          .filter((cleaner) => cleaner.cleanerName === selectedEarningsCleaner)
+          .map((cleaner) => ({
+            entryId: entry.id,
+            workId: entry.workId,
+            workDate: entry.workDate,
+            siteName: entry.siteName,
+            workedHours: cleaner.workedHours,
+            serviceCharge: cleaner.serviceCharge,
+          }))
+      )
+      .sort((a, b) => b.workDate.localeCompare(a.workDate));
+  }, [earningsEntries, selectedEarningsCleaner]);
+
+  const earningsTableItems = useMemo(
+    () => (selectedEarningsCleaner === "all" ? displayedEarnings : selectedCleanerJobBreakdown),
+    [selectedEarningsCleaner, displayedEarnings, selectedCleanerJobBreakdown]
+  );
+
+  const earningsTotalPages = useMemo(
+    () => Math.ceil(earningsTableItems.length / EARNINGS_ROWS_PER_PAGE),
+    [earningsTableItems]
+  );
+
+  const paginatedEarningsTableItems = useMemo(() => {
+    const start = (earningsPage - 1) * EARNINGS_ROWS_PER_PAGE;
+    return earningsTableItems.slice(start, start + EARNINGS_ROWS_PER_PAGE);
+  }, [earningsTableItems, earningsPage]);
+
+  const paginatedDisplayedEarnings = useMemo(
+    () =>
+      selectedEarningsCleaner === "all"
+        ? (paginatedEarningsTableItems as CleanerEarningsSummary[])
+        : [],
+    [selectedEarningsCleaner, paginatedEarningsTableItems]
+  );
+
+  const paginatedCleanerJobBreakdown = useMemo(
+    () =>
+      selectedEarningsCleaner !== "all"
+        ? (paginatedEarningsTableItems as typeof selectedCleanerJobBreakdown)
+        : [],
+    [selectedEarningsCleaner, paginatedEarningsTableItems]
+  );
+
+  useEffect(() => {
+    setEarningsPage(1);
+  }, [earningsPeriodMode, earningsDateRange, selectedEarningsCleaner]);
+
+  useEffect(() => {
+    if (earningsTotalPages > 0 && earningsPage > earningsTotalPages) {
+      setEarningsPage(earningsTotalPages);
+    }
+  }, [earningsPage, earningsTotalPages]);
+
+  const openEarningsDialog = () => {
+    setEarningsPeriodMode("previous_month");
+    setEarningsDateRange(undefined);
+    setSelectedEarningsCleaner("all");
+    setEarningsPage(1);
+    setIsEarningsDialogOpen(true);
+  };
+
+  const renderEarningsPagination = () => {
+    if (earningsTotalPages <= 1) return null;
+
+    const pages: (number | "ellipsis")[] = [];
+    if (earningsTotalPages <= 7) {
+      for (let i = 1; i <= earningsTotalPages; i++) pages.push(i);
+    } else {
+      pages.push(1);
+      if (earningsPage <= 3) {
+        for (let i = 2; i <= 4; i++) pages.push(i);
+        pages.push("ellipsis");
+        pages.push(earningsTotalPages);
+      } else if (earningsPage >= earningsTotalPages - 2) {
+        pages.push("ellipsis");
+        for (let i = earningsTotalPages - 3; i <= earningsTotalPages; i++) pages.push(i);
+      } else {
+        pages.push("ellipsis");
+        for (let i = earningsPage - 1; i <= earningsPage + 1; i++) pages.push(i);
+        pages.push("ellipsis");
+        pages.push(earningsTotalPages);
+      }
+    }
+
+    return (
+      <div className="mt-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <p className="text-sm text-muted-foreground text-center sm:text-left">
+          Page {earningsPage} of {earningsTotalPages}
+          <span className="hidden sm:inline">
+            {" "}
+            · Showing {(earningsPage - 1) * EARNINGS_ROWS_PER_PAGE + 1}–
+            {Math.min(earningsPage * EARNINGS_ROWS_PER_PAGE, earningsTableItems.length)} of{" "}
+            {earningsTableItems.length}
+          </span>
+        </p>
+        <Pagination className="mx-0 w-full sm:w-auto justify-center sm:justify-end">
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (earningsPage > 1) setEarningsPage(earningsPage - 1);
+                }}
+                className={earningsPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+              />
+            </PaginationItem>
+            {pages.map((page, index) =>
+              page === "ellipsis" ? (
+                <PaginationItem key={`earnings-ellipsis-${index}`}>
+                  <PaginationEllipsis />
+                </PaginationItem>
+              ) : (
+                <PaginationItem key={page}>
+                  <PaginationLink
+                    href="#"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setEarningsPage(page);
+                    }}
+                    isActive={earningsPage === page}
+                    className="cursor-pointer"
+                  >
+                    {page}
+                  </PaginationLink>
+                </PaginationItem>
+              )
+            )}
+            <PaginationItem>
+              <PaginationNext
+                href="#"
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (earningsPage < earningsTotalPages) setEarningsPage(earningsPage + 1);
+                }}
+                className={
+                  earningsPage === earningsTotalPages ? "pointer-events-none opacity-50" : "cursor-pointer"
+                }
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-6 sm:space-y-8">
       {/* Header */}
@@ -599,141 +875,284 @@ const CleaningTracker = () => {
               Track cleaning jobs, hours worked, and service charges
             </p>
           </div>
-          <Button
-            onClick={() => {
-              resetForm();
-              setIsAddDialogOpen(true);
-            }}
-            className="w-full sm:w-auto shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
-            size="lg"
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Entry
-          </Button>
+          <div className="flex flex-col sm:flex-row sm:items-stretch gap-2 w-full sm:w-auto">
+            <Button
+              variant="outline"
+              size="lg"
+              onClick={openEarningsDialog}
+              className="w-full sm:w-auto h-11 min-h-11 max-h-11 rounded-[24px] px-6 py-0 text-sm font-medium leading-none border"
+            >
+              <BarChart3 className="mr-2 h-4 w-4 shrink-0" />
+              Cleaner Earnings
+            </Button>
+            <Button
+              size="lg"
+              onClick={() => {
+                resetForm();
+                setIsAddDialogOpen(true);
+              }}
+              className="w-full sm:w-auto h-11 min-h-11 max-h-11 rounded-[24px] px-6 py-0 text-sm font-medium leading-none shadow-lg hover:shadow-xl transition-all duration-300 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
+            >
+              <Plus className="mr-2 h-4 w-4 shrink-0" />
+              Add Entry
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* Filters Card */}
       <Card className="border-2 shadow-xl">
         <CardHeader className="bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-muted/30 border-b-2">
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle className="text-xl font-bold flex items-center gap-2">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-400">
                 <Filter className="h-5 w-5" />
-                Filters
-              </CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
-                Filter cleaning tracker entries
-              </p>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <CardTitle className="text-xl font-bold">Filters</CardTitle>
+                  {activeFilterCount > 0 && (
+                    <Badge variant="secondary" className="font-semibold">
+                      {activeFilterCount} active
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Narrow entries by site, date, hours, or photos
+                </p>
+              </div>
             </div>
             {hasActiveFilters && (
-              <Button variant="outline" size="sm" onClick={clearFilters}>
+              <Button variant="outline" size="sm" onClick={clearFilters} className="shrink-0">
                 <X className="mr-2 h-4 w-4" />
-                Clear Filters
+                Clear all
               </Button>
             )}
           </div>
         </CardHeader>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* Search */}
-            <div className="space-y-2">
-              <Label>Search by Name</Label>
+        <CardContent className="pt-6 space-y-5">
+          {/* Primary filters */}
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
+            <div className="flex-1 space-y-2">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                <Search className="h-3.5 w-3.5" />
+                Search
+              </Label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search cleaner or site..."
+                  placeholder="Search by cleaner or site name..."
                   value={searchValue}
                   onChange={(e) => setSearchValue(e.target.value)}
-                  className="pl-9"
+                  className="pl-9 h-11 bg-background"
                 />
               </div>
             </div>
 
-            {/* Date Range */}
-            <div className="space-y-2">
-              <Label>Date Range</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="w-full justify-start text-left font-normal"
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dateRange?.from ? (
-                      dateRange.to ? (
-                        <>
-                          {format(dateRange.from, "LLL dd, y")} -{" "}
-                          {format(dateRange.to, "LLL dd, y")}
-                        </>
-                      ) : (
-                        format(dateRange.from, "LLL dd, y")
-                      )
-                    ) : (
-                      <span>Pick a date range</span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    initialFocus
-                    mode="range"
-                    defaultMonth={dateRange?.from}
-                    selected={dateRange}
-                    onSelect={setDateRange}
-                    numberOfMonths={2}
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 lg:w-auto lg:shrink-0">
+              <div className="space-y-2 sm:w-[220px]">
+                <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                  <CalendarIcon className="h-3.5 w-3.5" />
+                  Date Range
+                </Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full h-11 justify-start text-left font-normal bg-background",
+                        !dateRange?.from && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                      <span className="truncate">
+                        {dateRange?.from ? (
+                          dateRange.to ? (
+                            <>
+                              {format(dateRange.from, "dd MMM yyyy")} –{" "}
+                              {format(dateRange.to, "dd MMM yyyy")}
+                            </>
+                          ) : (
+                            format(dateRange.from, "dd MMM yyyy")
+                          )
+                        ) : (
+                          "Any date"
+                        )}
+                      </span>
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      initialFocus
+                      mode="range"
+                      defaultMonth={dateRange?.from}
+                      selected={dateRange}
+                      onSelect={setDateRange}
+                      numberOfMonths={2}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
 
-            {/* Site Filter */}
-            <div className="space-y-2">
-              <Label>Site</Label>
-              <Select value={selectedSite} onValueChange={setSelectedSite}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All sites" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Sites</SelectItem>
-                  {sites.map((site) => (
-                    <SelectItem key={site.id} value={site.name}>
-                      {site.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="space-y-2 sm:w-[220px]">
+                <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                  <Building2 className="h-3.5 w-3.5" />
+                  Site
+                </Label>
+                <Select value={selectedSite} onValueChange={setSelectedSite}>
+                  <SelectTrigger className="h-11 bg-background">
+                    <SelectValue placeholder="All sites" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Sites</SelectItem>
+                    {sites.map((site) => (
+                      <SelectItem key={site.id} value={site.name}>
+                        {site.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
+          </div>
 
-            {/* Worked Hours Range */}
-            <div className="space-y-2">
-              <Label>Worked Hours: {workedHoursRange[0]} - {workedHoursRange[1]} hrs</Label>
+          {/* Secondary filters */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="rounded-xl border bg-muted/20 p-4 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <Label className="text-sm font-semibold flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-primary" />
+                  Worked Hours
+                </Label>
+                <Badge variant="outline" className="font-mono text-xs">
+                  {workedHoursRange[0]} – {workedHoursRange[1]} hrs
+                </Badge>
+              </div>
               <Slider
                 value={workedHoursRange}
                 onValueChange={(value) => setWorkedHoursRange(value as [number, number])}
                 min={0}
                 max={10}
                 step={0.25}
-                className="w-full mt-2"
+                className="w-full"
               />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>0 hrs</span>
+                <span>10 hrs</span>
+              </div>
             </div>
 
-            {/* Photos Filter */}
-            <div className="space-y-2">
-              <Label>Photos Uploaded</Label>
-              <Select value={photosFilter} onValueChange={setPhotosFilter}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="yes">Yes</SelectItem>
-                  <SelectItem value="no">No</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="rounded-xl border bg-muted/20 p-4 space-y-4">
+              <Label className="text-sm font-semibold flex items-center gap-2">
+                <ImageIcon className="h-4 w-4 text-primary" />
+                Photos Uploaded
+              </Label>
+              <ToggleGroup
+                type="single"
+                value={photosFilter}
+                onValueChange={(value) => value && setPhotosFilter(value)}
+                className="grid grid-cols-3 w-full gap-2"
+              >
+                <ToggleGroupItem
+                  value="all"
+                  aria-label="All entries"
+                  className="h-10 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+                >
+                  All
+                </ToggleGroupItem>
+                <ToggleGroupItem
+                  value="yes"
+                  aria-label="With photos"
+                  className="h-10 data-[state=on]:bg-green-600 data-[state=on]:text-white"
+                >
+                  With Photos
+                </ToggleGroupItem>
+                <ToggleGroupItem
+                  value="no"
+                  aria-label="No photos"
+                  className="h-10 data-[state=on]:bg-orange-600 data-[state=on]:text-white"
+                >
+                  No Photos
+                </ToggleGroupItem>
+              </ToggleGroup>
             </div>
-
           </div>
+
+          {/* Active filter chips */}
+          {hasActiveFilters && (
+            <div className="flex flex-wrap items-center gap-2 border-t pt-4">
+              <span className="text-xs font-medium text-muted-foreground mr-1">Active filters:</span>
+              {searchValue && (
+                <Badge variant="secondary" className="gap-1 pl-2.5 pr-1 py-1 font-normal">
+                  Search: {searchValue}
+                  <button
+                    type="button"
+                    onClick={() => setSearchValue("")}
+                    className="rounded-full p-0.5 hover:bg-background/80"
+                    aria-label="Remove search filter"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              {(dateRange?.from || dateRange?.to) && (
+                <Badge variant="secondary" className="gap-1 pl-2.5 pr-1 py-1 font-normal">
+                  {dateRange?.from && dateRange?.to
+                    ? `${format(dateRange.from, "dd MMM")} – ${format(dateRange.to, "dd MMM yyyy")}`
+                    : dateRange?.from
+                      ? `From ${format(dateRange.from, "dd MMM yyyy")}`
+                      : "Date range"}
+                  <button
+                    type="button"
+                    onClick={() => setDateRange(undefined)}
+                    className="rounded-full p-0.5 hover:bg-background/80"
+                    aria-label="Remove date filter"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              {selectedSite !== "all" && (
+                <Badge variant="secondary" className="gap-1 pl-2.5 pr-1 py-1 font-normal">
+                  Site: {selectedSite}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSite("all")}
+                    className="rounded-full p-0.5 hover:bg-background/80"
+                    aria-label="Remove site filter"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              {(workedHoursRange[0] !== 0 || workedHoursRange[1] !== 10) && (
+                <Badge variant="secondary" className="gap-1 pl-2.5 pr-1 py-1 font-normal">
+                  Hours: {workedHoursRange[0]}–{workedHoursRange[1]}
+                  <button
+                    type="button"
+                    onClick={() => setWorkedHoursRange([0, 10])}
+                    className="rounded-full p-0.5 hover:bg-background/80"
+                    aria-label="Remove hours filter"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              {photosFilter !== "all" && (
+                <Badge variant="secondary" className="gap-1 pl-2.5 pr-1 py-1 font-normal">
+                  Photos: {photosFilter === "yes" ? "With photos" : "No photos"}
+                  <button
+                    type="button"
+                    onClick={() => setPhotosFilter("all")}
+                    className="rounded-full p-0.5 hover:bg-background/80"
+                    aria-label="Remove photos filter"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -770,7 +1189,7 @@ const CleaningTracker = () => {
             </div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-6">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-6 w-6 animate-spin mr-2" />
@@ -1059,21 +1478,54 @@ const CleaningTracker = () => {
                           className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
                         />
                       </PaginationItem>
-                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
-                        <PaginationItem key={page}>
-                          <PaginationLink
-                            href="#"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              setCurrentPage(page);
-                            }}
-                            isActive={currentPage === page}
-                            className="cursor-pointer"
-                          >
-                            {page}
-                          </PaginationLink>
-                        </PaginationItem>
-                      ))}
+                      {(() => {
+                        const pages: (number | "ellipsis")[] = [];
+
+                        if (totalPages <= 7) {
+                          for (let i = 1; i <= totalPages; i++) pages.push(i);
+                        } else {
+                          pages.push(1);
+
+                          if (currentPage <= 3) {
+                            for (let i = 2; i <= 4; i++) pages.push(i);
+                            pages.push("ellipsis");
+                            pages.push(totalPages);
+                          } else if (currentPage >= totalPages - 2) {
+                            pages.push("ellipsis");
+                            for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+                          } else {
+                            pages.push("ellipsis");
+                            for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
+                            pages.push("ellipsis");
+                            pages.push(totalPages);
+                          }
+                        }
+
+                        return pages.map((page, index) => {
+                          if (page === "ellipsis") {
+                            return (
+                              <PaginationItem key={`ellipsis-${index}`}>
+                                <PaginationEllipsis />
+                              </PaginationItem>
+                            );
+                          }
+                          return (
+                            <PaginationItem key={page}>
+                              <PaginationLink
+                                href="#"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  setCurrentPage(page);
+                                }}
+                                isActive={currentPage === page}
+                                className="cursor-pointer"
+                              >
+                                {page}
+                              </PaginationLink>
+                            </PaginationItem>
+                          );
+                        });
+                      })()}
                       <PaginationItem>
                         <PaginationNext
                           href="#"
@@ -1656,6 +2108,226 @@ const CleaningTracker = () => {
               ) : (
                 "Add Entry"
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cleaner Earnings Dialog */}
+      <Dialog open={isEarningsDialogOpen} onOpenChange={setIsEarningsDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <BarChart3 className="h-5 w-5 text-primary" />
+              Cleaner Earnings
+            </DialogTitle>
+            <DialogDescription>
+              Review how much each cleaner earned over a selected period.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5 py-2">
+            <div className="space-y-3">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Period
+              </Label>
+              <ToggleGroup
+                type="single"
+                value={earningsPeriodMode}
+                onValueChange={(value) => value && setEarningsPeriodMode(value as EarningsPeriodMode)}
+                className="grid grid-cols-2 w-full rounded-xl border border-input bg-muted/20 p-1 gap-1"
+              >
+                <ToggleGroupItem
+                  value="previous_month"
+                  className="h-10 rounded-lg border border-input bg-background/40 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
+                >
+                  Previous Month
+                </ToggleGroupItem>
+                <ToggleGroupItem
+                  value="custom"
+                  className="h-10 rounded-lg border border-input bg-background/40 data-[state=on]:bg-primary data-[state=on]:text-primary-foreground data-[state=on]:border-primary"
+                >
+                  Custom Range
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+
+            {earningsPeriodMode === "custom" && (
+              <div className="space-y-2">
+                <Label>Date Range</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !earningsDateRange?.from && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4 shrink-0" />
+                      {earningsDateRange?.from ? (
+                        earningsDateRange.to ? (
+                          <>
+                            {format(earningsDateRange.from, "dd MMM yyyy")} –{" "}
+                            {format(earningsDateRange.to, "dd MMM yyyy")}
+                          </>
+                        ) : (
+                          format(earningsDateRange.from, "dd MMM yyyy")
+                        )
+                      ) : (
+                        "Pick a date range"
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      initialFocus
+                      mode="range"
+                      defaultMonth={earningsDateRange?.from}
+                      selected={earningsDateRange}
+                      onSelect={setEarningsDateRange}
+                      numberOfMonths={2}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
+
+            <div className="rounded-xl border bg-muted/20 px-4 py-3 flex items-center gap-2 text-sm">
+              <CalendarIcon className="h-4 w-4 text-primary shrink-0" />
+              <span className="text-muted-foreground">Showing earnings for</span>
+              <span className="font-semibold">{earningsPeriodLabel}</span>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1.5">
+                <User className="h-4 w-4 text-primary" />
+                Cleaner
+              </Label>
+              <Select value={selectedEarningsCleaner} onValueChange={setSelectedEarningsCleaner}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All cleaners" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Cleaners</SelectItem>
+                  {cleanerEarningsSummaries.map((summary) => (
+                    <SelectItem key={summary.cleanerName} value={summary.cleanerName}>
+                      {summary.cleanerName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {!earningsPeriod ? (
+              <div className="rounded-xl border border-dashed py-10 text-center text-muted-foreground">
+                <CalendarIcon className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                <p className="font-medium">Select a date range to view earnings</p>
+              </div>
+            ) : displayedEarnings.length === 0 ? (
+              <div className="rounded-xl border border-dashed py-10 text-center text-muted-foreground">
+                <User className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                <p className="font-medium">No earnings found for this period</p>
+                <p className="text-sm mt-1">Try a different date range or cleaner.</p>
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="rounded-xl border bg-emerald-500/5 p-4">
+                    <p className="text-xs text-muted-foreground font-medium">Total Earned</p>
+                    <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 mt-1">
+                      ${earningsTotals.earnings.toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border bg-muted/20 p-4">
+                    <p className="text-xs text-muted-foreground font-medium">Total Hours</p>
+                    <p className="text-2xl font-bold mt-1">{earningsTotals.hours.toFixed(2)}</p>
+                  </div>
+                  <div className="rounded-xl border bg-muted/20 p-4">
+                    <p className="text-xs text-muted-foreground font-medium">Jobs</p>
+                    <p className="text-2xl font-bold mt-1">{earningsTotals.jobs}</p>
+                  </div>
+                </div>
+
+                {selectedEarningsCleaner === "all" ? (
+                  <div className="rounded-xl border-2 overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/40">
+                          <TableHead className="font-bold">Cleaner</TableHead>
+                          <TableHead className="font-bold text-right">Jobs</TableHead>
+                          <TableHead className="font-bold text-right">Hours</TableHead>
+                          <TableHead className="font-bold text-right">Earned</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {paginatedDisplayedEarnings.map((summary) => (
+                          <TableRow key={summary.cleanerName}>
+                            <TableCell>
+                              <div className="flex flex-col gap-1">
+                                <span className="font-medium">{summary.cleanerName}</span>
+                                <span className="text-xs text-muted-foreground">
+                                  {summary.sites.length} site{summary.sites.length !== 1 ? "s" : ""}
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">{summary.jobCount}</TableCell>
+                            <TableCell className="text-right">{summary.totalHours.toFixed(2)}</TableCell>
+                            <TableCell className="text-right font-semibold text-emerald-600 dark:text-emerald-400">
+                              ${summary.totalEarnings.toFixed(2)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="rounded-xl border bg-gradient-to-r from-emerald-500/10 to-transparent p-4">
+                      <p className="text-sm text-muted-foreground">Selected cleaner</p>
+                      <p className="text-lg font-bold mt-1">{selectedEarningsCleaner}</p>
+                      <p className="text-sm text-emerald-600 dark:text-emerald-400 font-semibold mt-2">
+                        ${earningsTotals.earnings.toFixed(2)} earned across {earningsTotals.jobs} job
+                        {earningsTotals.jobs !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl border-2 overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/40">
+                            <TableHead className="font-bold">Date</TableHead>
+                            <TableHead className="font-bold">Site</TableHead>
+                            <TableHead className="font-bold text-right">Hours</TableHead>
+                            <TableHead className="font-bold text-right">Earned</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {paginatedCleanerJobBreakdown.map((job) => (
+                            <TableRow key={`${job.entryId}-${job.workId}`}>
+                              <TableCell>
+                                {formatWorkDate(job.workDate, "dd MMM yyyy")}
+                              </TableCell>
+                              <TableCell>{job.siteName}</TableCell>
+                              <TableCell className="text-right">{job.workedHours.toFixed(2)}</TableCell>
+                              <TableCell className="text-right font-semibold text-emerald-600 dark:text-emerald-400">
+                                ${job.serviceCharge.toFixed(2)}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                )}
+                {renderEarningsPagination()}
+              </>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEarningsDialogOpen(false)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>

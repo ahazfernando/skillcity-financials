@@ -10,7 +10,8 @@
     "start": "next start",
     "lint": "eslint .",
     "verify-env": "node verify-nextjs-env.js",
-    "delete-collections": "tsx scripts/delete-all-collections-except-users.ts"
+    "delete-collections": "tsx scripts/delete-all-collections-except-users.ts",
+    "seed-vehicles": "tsx scripts/seed-vehicles.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

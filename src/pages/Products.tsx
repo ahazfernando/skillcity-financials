@@ -51,6 +51,7 @@ import {
   Zap,
   Shield,
   CalendarIcon,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -58,11 +59,13 @@ import {
   addProduct,
   updateProduct,
   deleteProduct,
+  deleteAllProducts,
   addRepair,
   updateRepair,
   deleteRepair,
   getProductById,
 } from "@/lib/firebase/products";
+import { vehicleSeedData } from "@/lib/vehicle-seed-data";
 import {
   getAllCategories,
 } from "@/lib/firebase/categories";
@@ -91,6 +94,31 @@ import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 
+const defaultFormData = {
+  name: "",
+  equipmentCode: "",
+  description: "",
+  category: "",
+  image: "",
+  selectedSites: [] as string[],
+  selectedEmployees: [] as string[],
+  vehicleStatus: "",
+  make: "",
+  body: "",
+  colour: "",
+  year: "",
+  expiry: "",
+  vin: "",
+  engine: "",
+  registrationSerial: "",
+  compliancePlate: "",
+  sanctions: "None",
+  goodsCarryingVehicle: false,
+  transferInDispute: false,
+};
+
+const formatYesNo = (value?: boolean) => (value ? "Yes" : "No");
+
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -99,6 +127,7 @@ export default function ProductsPage() {
   const [siteEmployees, setSiteEmployees] = useState<SiteEmployeeAllocation[]>([]);
   const [isLoadingSiteEmployees, setIsLoadingSiteEmployees] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSeeding, setIsSeeding] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"card" | "table">("table");
@@ -124,15 +153,7 @@ export default function ProductsPage() {
   });
   const [assigneePopoverOpen, setAssigneePopoverOpen] = useState(false);
   const [assigneeSearchValue, setAssigneeSearchValue] = useState("");
-  const [formData, setFormData] = useState({
-    name: "",
-    equipmentCode: "",
-    description: "",
-    category: "",
-    image: "",
-    selectedSites: [] as string[],
-    selectedEmployees: [] as string[],
-  });
+  const [formData, setFormData] = useState(defaultFormData);
 
   useEffect(() => {
     loadProducts();
@@ -249,12 +270,25 @@ export default function ProductsPage() {
       const productData = {
         name: formData.name,
         equipmentCode: formData.equipmentCode,
-        quantity: 0, // Default quantity
+        quantity: 0,
         description: formData.description,
         category: formData.category,
         imageUrl: formData.image,
         siteIds: formData.selectedSites,
         employeeIds: formData.selectedEmployees,
+        vehicleStatus: formData.vehicleStatus || undefined,
+        make: formData.make || undefined,
+        body: formData.body || undefined,
+        colour: formData.colour || undefined,
+        year: formData.year ? parseInt(formData.year, 10) : undefined,
+        expiry: formData.expiry || undefined,
+        vin: formData.vin || undefined,
+        engine: formData.engine || undefined,
+        registrationSerial: formData.registrationSerial || undefined,
+        compliancePlate: formData.compliancePlate || undefined,
+        sanctions: formData.sanctions || undefined,
+        goodsCarryingVehicle: formData.goodsCarryingVehicle,
+        transferInDispute: formData.transferInDispute,
       };
 
       if (editingProduct) {
@@ -266,15 +300,7 @@ export default function ProductsPage() {
       }
 
       setIsDialogOpen(false);
-      setFormData({
-        name: "",
-        equipmentCode: "",
-        description: "",
-        category: "",
-        image: "",
-        selectedSites: [],
-        selectedEmployees: [],
-      });
+      setFormData(defaultFormData);
       setEditingProduct(null);
       await loadProducts();
     } catch (error) {
@@ -297,6 +323,19 @@ export default function ProductsPage() {
       image: product.imageUrl || "",
       selectedSites: product.siteIds || [],
       selectedEmployees: product.employeeIds || [],
+      vehicleStatus: product.vehicleStatus || "",
+      make: product.make || "",
+      body: product.body || "",
+      colour: product.colour || "",
+      year: product.year?.toString() || "",
+      expiry: product.expiry || "",
+      vin: product.vin || "",
+      engine: product.engine || "",
+      registrationSerial: product.registrationSerial || "",
+      compliancePlate: product.compliancePlate || "",
+      sanctions: product.sanctions || "None",
+      goodsCarryingVehicle: product.goodsCarryingVehicle ?? false,
+      transferInDispute: product.transferInDispute ?? false,
     });
     setIsDialogOpen(true);
   };
@@ -314,16 +353,33 @@ export default function ProductsPage() {
 
   const handleAdd = () => {
     setEditingProduct(null);
-    setFormData({
-      name: "",
-      equipmentCode: "",
-      description: "",
-      category: "",
-      image: "",
-      selectedSites: [],
-      selectedEmployees: [],
-    });
+    setFormData(defaultFormData);
     setIsDialogOpen(true);
+  };
+
+  const handleSeedVehicles = async () => {
+    if (
+      !confirm(
+        "This will delete ALL existing vehicle/equipment records and replace them with the 16 seeded vehicles. Continue?",
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setIsSeeding(true);
+      const deleted = await deleteAllProducts();
+      for (const vehicle of vehicleSeedData) {
+        await addProduct(vehicle);
+      }
+      await loadProducts();
+      toast.success(`Replaced ${deleted} record(s) with ${vehicleSeedData.length} vehicles.`);
+    } catch (error) {
+      console.error("Error seeding vehicles:", error);
+      toast.error("Failed to seed vehicles. Ensure you are logged in as an admin.");
+    } finally {
+      setIsSeeding(false);
+    }
   };
 
   // Repair form handlers
@@ -456,9 +512,13 @@ export default function ProductsPage() {
   };
 
   const filteredProducts = products.filter((prod) => {
+    const q = searchQuery.toLowerCase();
     const matchesSearch =
-      prod.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      prod.equipmentCode.toLowerCase().includes(searchQuery.toLowerCase());
+      prod.name.toLowerCase().includes(q) ||
+      prod.equipmentCode.toLowerCase().includes(q) ||
+      (prod.make?.toLowerCase().includes(q) ?? false) ||
+      (prod.vin?.toLowerCase().includes(q) ?? false) ||
+      (prod.vehicleStatus?.toLowerCase().includes(q) ?? false);
     const matchesCategory =
       selectedCategory === "all" || prod.category === selectedCategory;
     return matchesSearch && matchesCategory;
@@ -480,23 +540,33 @@ export default function ProductsPage() {
   };
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold">Equipment</h1>
-        <p className="text-muted-foreground mt-2">
-          Manage your equipment inventory
-        </p>
+    <div className="space-y-6 sm:space-y-8">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-red-500/10 via-orange-500/5 to-background border border-red-500/20 p-6 sm:p-8">
+        <div className="absolute inset-0 bg-grid-pattern opacity-5" />
+        <div className="relative flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="space-y-2">
+            <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+              Vehicles
+            </h1>
+            <p className="text-sm sm:text-base text-muted-foreground">
+              Manage vehicle registrations, expiry dates, and fleet details
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {filteredProducts.length} of {products.length} vehicles
+            </p>
+          </div>
+        </div>
       </div>
 
       <Card>
         <CardHeader>
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <CardTitle>All Equipment</CardTitle>
+            <CardTitle className="sr-only">Vehicle list</CardTitle>
             <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
               <div className="relative flex-1 md:w-64">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search products..."
+                  placeholder="Search plate, model, make, VIN..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
@@ -521,6 +591,21 @@ export default function ProductsPage() {
               <div className="flex gap-2">
                 <Button
                   type="button"
+                  variant="outline"
+                  onClick={handleSeedVehicles}
+                  disabled={isSeeding}
+                >
+                  {isSeeding ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Seeding...
+                    </>
+                  ) : (
+                    "Seed Fleet Data"
+                  )}
+                </Button>
+                <Button
+                  type="button"
                   variant={viewMode === "table" ? "default" : "outline"}
                   size="icon"
                   onClick={() => setViewMode("table")}
@@ -540,7 +625,7 @@ export default function ProductsPage() {
                 <DialogTrigger asChild>
                   <Button onClick={handleAdd}>
                     <Plus className="h-4 w-4 mr-2" />
-                    Add Product
+                    Add Vehicle
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-6xl w-full p-0 gap-0 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] sm:rounded-lg">
@@ -587,18 +672,7 @@ export default function ProductsPage() {
                         <div className="space-y-4 flex-1">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label htmlFor="name">Product Name</Label>
-                          <Input
-                            id="name"
-                            value={formData.name}
-                            onChange={(e) =>
-                              setFormData({ ...formData, name: e.target.value })
-                            }
-                            required
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="equipmentCode">Equipment Code</Label>
+                          <Label htmlFor="equipmentCode">Registration</Label>
                           <Input
                             id="equipmentCode"
                             value={formData.equipmentCode}
@@ -611,20 +685,186 @@ export default function ProductsPage() {
                             required
                           />
                         </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="name">Vehicle Model</Label>
+                          <Input
+                            id="name"
+                            value={formData.name}
+                            onChange={(e) =>
+                              setFormData({ ...formData, name: e.target.value })
+                            }
+                            required
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="vehicleStatus">Status</Label>
+                          <Input
+                            id="vehicleStatus"
+                            value={formData.vehicleStatus}
+                            onChange={(e) =>
+                              setFormData({ ...formData, vehicleStatus: e.target.value })
+                            }
+                            placeholder="e.g. EXPIRED, CANCELLED"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="make">Make</Label>
+                          <Input
+                            id="make"
+                            value={formData.make}
+                            onChange={(e) =>
+                              setFormData({ ...formData, make: e.target.value })
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="body">Body</Label>
+                          <Input
+                            id="body"
+                            value={formData.body}
+                            onChange={(e) =>
+                              setFormData({ ...formData, body: e.target.value })
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="colour">Colour</Label>
+                          <Input
+                            id="colour"
+                            value={formData.colour}
+                            onChange={(e) =>
+                              setFormData({ ...formData, colour: e.target.value })
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="year">Year</Label>
+                          <Input
+                            id="year"
+                            type="number"
+                            value={formData.year}
+                            onChange={(e) =>
+                              setFormData({ ...formData, year: e.target.value })
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="expiry">Expiry</Label>
+                          <Input
+                            id="expiry"
+                            value={formData.expiry}
+                            onChange={(e) =>
+                              setFormData({ ...formData, expiry: e.target.value })
+                            }
+                            placeholder="e.g. 19 June 2026"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="compliancePlate">Compliance Plate</Label>
+                          <Input
+                            id="compliancePlate"
+                            value={formData.compliancePlate}
+                            onChange={(e) =>
+                              setFormData({ ...formData, compliancePlate: e.target.value })
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="vin">VIN</Label>
+                          <Input
+                            id="vin"
+                            value={formData.vin}
+                            onChange={(e) =>
+                              setFormData({ ...formData, vin: e.target.value })
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="engine">Engine</Label>
+                          <Input
+                            id="engine"
+                            value={formData.engine}
+                            onChange={(e) =>
+                              setFormData({ ...formData, engine: e.target.value })
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="registrationSerial">Registration Serial</Label>
+                          <Input
+                            id="registrationSerial"
+                            value={formData.registrationSerial}
+                            onChange={(e) =>
+                              setFormData({ ...formData, registrationSerial: e.target.value })
+                            }
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="sanctions">Sanctions</Label>
+                          <Input
+                            id="sanctions"
+                            value={formData.sanctions}
+                            onChange={(e) =>
+                              setFormData({ ...formData, sanctions: e.target.value })
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="goodsCarryingVehicle"
+                            checked={formData.goodsCarryingVehicle}
+                            onCheckedChange={(checked) =>
+                              setFormData({
+                                ...formData,
+                                goodsCarryingVehicle: checked === true,
+                              })
+                            }
+                          />
+                          <Label htmlFor="goodsCarryingVehicle" className="cursor-pointer">
+                            Goods Carrying Vehicle
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            id="transferInDispute"
+                            checked={formData.transferInDispute}
+                            onCheckedChange={(checked) =>
+                              setFormData({
+                                ...formData,
+                                transferInDispute: checked === true,
+                              })
+                            }
+                          />
+                          <Label htmlFor="transferInDispute" className="cursor-pointer">
+                            Transfer in Dispute
+                          </Label>
+                        </div>
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="category">Category</Label>
+                        <Label htmlFor="category">Category (optional)</Label>
                         <Select
-                          value={formData.category}
+                          value={formData.category || "none"}
                           onValueChange={(value) =>
-                            setFormData({ ...formData, category: value })
+                            setFormData({ ...formData, category: value === "none" ? "" : value })
                           }
-                          required
                         >
                           <SelectTrigger id="category">
                             <SelectValue placeholder="Select a category" />
                           </SelectTrigger>
                           <SelectContent>
+                            <SelectItem value="none">None</SelectItem>
                             {categories.map((category) => (
                               <SelectItem
                                 key={category.id}
@@ -638,7 +878,7 @@ export default function ProductsPage() {
                       </div>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-2">
-                          <Label>Assign to Sites</Label>
+                          <Label>Assign to Sites (optional)</Label>
                           <Popover open={sitePopoverOpen} onOpenChange={setSitePopoverOpen}>
                             <PopoverTrigger asChild>
                               <Button
@@ -1394,64 +1634,49 @@ export default function ProductsPage() {
             </div>
           ) : filteredProducts.length === 0 ? (
             <div className="text-center text-muted-foreground py-8">
-              No products found
+              No vehicles found
             </div>
           ) : viewMode === "table" ? (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Equipment Code</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Sites</TableHead>
-                  <TableHead>Employees</TableHead>
+                  <TableHead>Registration</TableHead>
+                  <TableHead>Vehicle Model</TableHead>
+                  <TableHead>Make</TableHead>
+                  <TableHead>Body</TableHead>
+                  <TableHead>Colour</TableHead>
+                  <TableHead>Year</TableHead>
+                  <TableHead>Expiry</TableHead>
+                  <TableHead>VIN</TableHead>
+                  <TableHead>Engine</TableHead>
+                  <TableHead>Registration Serial</TableHead>
+                  <TableHead>Compliance Plate</TableHead>
+                  <TableHead>Sanctions</TableHead>
+                  <TableHead>Goods Carrying Vehicle</TableHead>
+                  <TableHead>Transfer in Dispute</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filteredProducts.map((product) => (
                   <TableRow key={product.id}>
-                    <TableCell className="font-medium">
+                    <TableCell className="font-medium whitespace-nowrap">
                       {product.equipmentCode}
                     </TableCell>
-                    <TableCell>{product.name}</TableCell>
-                    <TableCell>{getCategoryName(product.category)}</TableCell>
-                    <TableCell>
-                      {product.siteIds && product.siteIds.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {product.siteIds.slice(0, 2).map((siteId) => (
-                            <Badge key={siteId} variant="outline" className="text-xs">
-                              {getSiteName(siteId)}
-                            </Badge>
-                          ))}
-                          {product.siteIds.length > 2 && (
-                            <Badge variant="outline" className="text-xs">
-                              +{product.siteIds.length - 2} more
-                            </Badge>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground text-sm">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      {product.employeeIds && product.employeeIds.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {product.employeeIds.slice(0, 2).map((employeeId) => (
-                            <Badge key={employeeId} variant="outline" className="text-xs">
-                              {getEmployeeName(employeeId)}
-                            </Badge>
-                          ))}
-                          {product.employeeIds.length > 2 && (
-                            <Badge variant="outline" className="text-xs">
-                              +{product.employeeIds.length - 2} more
-                            </Badge>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground text-sm">—</span>
-                      )}
-                    </TableCell>
+                    <TableCell className="whitespace-nowrap">{product.name}</TableCell>
+                    <TableCell>{product.make || "—"}</TableCell>
+                    <TableCell>{product.body || "—"}</TableCell>
+                    <TableCell>{product.colour || "—"}</TableCell>
+                    <TableCell>{product.year ?? "—"}</TableCell>
+                    <TableCell className="whitespace-nowrap">{product.expiry || "—"}</TableCell>
+                    <TableCell className="font-mono text-xs whitespace-nowrap">{product.vin || "—"}</TableCell>
+                    <TableCell className="font-mono text-xs whitespace-nowrap">{product.engine || "—"}</TableCell>
+                    <TableCell>{product.registrationSerial || "—"}</TableCell>
+                    <TableCell>{product.compliancePlate || "—"}</TableCell>
+                    <TableCell>{product.sanctions || "—"}</TableCell>
+                    <TableCell>{formatYesNo(product.goodsCarryingVehicle)}</TableCell>
+                    <TableCell>{formatYesNo(product.transferInDispute)}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
                         <Button
@@ -1482,6 +1707,7 @@ export default function ProductsPage() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredProducts.map((product) => (

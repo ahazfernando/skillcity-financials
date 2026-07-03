@@ -225,6 +225,18 @@ service cloud.firestore {
       allow read: if isAuthenticated() && isApproved();
       allow write: if isAdmin();
     }
+
+    // Products / Vehicles collection
+    match /products/{productId} {
+      allow read: if isAuthenticated() && isApproved();
+      allow write: if isAdmin();
+    }
+
+    // Categories collection
+    match /categories/{categoryId} {
+      allow read: if isAuthenticated() && isApproved();
+      allow write: if isAdmin();
+    }
     
     // Site Audits collection
     match /siteAudits/{auditId} {
